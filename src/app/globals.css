@@ -46,46 +46,47 @@
 /* Update root selector and light theme variables */
 :root {
   --radius: 0.625rem;
-  --background: #F1E8EA;
+  --background: #ffffff;
   /* Keep text black */
   --foreground: #000000;
-  --card: #F1E8EA;
+  --card: #ffffff;
   /* Keep text black */
   --card-foreground: #000000;
-  --popover: #F1E8EA;
+  --popover: #ffffff;
   /* Keep text black */
   --popover-foreground: #000000;
   /* Buttons */
   --primary: #751A29;
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.97 0 0);
+  --secondary: #f8f9fa;
   /* Keep text black */
   --secondary-foreground: #000000;
-  --muted: oklch(0.97 0 0);
+  --muted: #f8f9fa;
   /* Paragraph */
   --muted-foreground: #6E6E6E;
-  --accent: oklch(0.97 0 0);
+  --accent: #f1f5f9;
   /* Keep text black */
   --accent-foreground: #000000;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: #e2e8f0;
+  --input: #f1f5f9;
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #F1E8EA;
+  --sidebar: #ffffff;
   /* Keep sidebar text black */
   --sidebar-foreground: #000000;
   /* Sidebar active/primary elements */
   --sidebar-primary: #751A29;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.97 0 0);
+  /* Sidebar hover/accent with better contrast */
+  --sidebar-accent: #f1f5f9;
   /* Keep sidebar text black */
   --sidebar-accent-foreground: #000000;
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-border: #e2e8f0;
   --sidebar-ring: oklch(0.708 0 0);
 }
 

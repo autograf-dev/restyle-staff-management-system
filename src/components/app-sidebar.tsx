@@ -1,10 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Infinity, Database, LayoutDashboard as IconDashboard, Users } from "lucide-react"
+import { Infinity, Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Users, Scissors } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
@@ -25,14 +24,7 @@ const data = {
     email: "sutej@autgraph.com",
     avatar: "/avatars/shadcn.jpg",
   },
-  projects: [
-    {
-      name: "Meta",
-      url: "#",
-      icon: Infinity,
-    },
-   
-  ],
+  projects: [],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -74,32 +66,58 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         isActive: false,
       },
       {
-        title: "CRM",
-        url: "#",
-        icon: Database,
-        isActive: true,
-        items: [
-          {
-            title: "Contacts",
-            url: `${prefix}/contacts`,
-          },
-          {
-            title: "Opportunities",
-            url: `${prefix}/opportunities`,
-          },
-        ],
+        title: "Appointments",
+        url: `${prefix}/appointments`,
+        icon: Clock,
+        isActive: false,
+      },
+      {
+        title: "Customers",
+        url: `${prefix}/customers`,
+        icon: UsersRound,
+        isActive: false,
       },
     ]
 
-    // Add Teams menu item only for admin users
+    // Add Teams menu item only for admin users (before Settings)
     if (user?.role === "admin") {
       items.push({
         title: "Teams",
         url: "/teams",
-        icon: Users,
+        icon: Scissors,
         isActive: false,
       })
     }
+
+    // Add Settings as the last item with isActive: true to open by default
+    items.push({
+      title: "Settings",
+      url: "#",
+      icon: Settings,
+      isActive: true,
+      items: [
+        {
+          title: "Salon Hours",
+          url: `${prefix}/settings/salon-hours`,
+        },
+        {
+          title: "Salon Staff",
+          url: `${prefix}/settings/salon-staff`,
+        },
+        {
+          title: "Staff Hours",
+          url: `${prefix}/settings/staff-hours`,
+        },
+        {
+          title: "Leaves",
+          url: `${prefix}/settings/leaves`,
+        },
+        {
+          title: "Breaks",
+          url: `${prefix}/settings/breaks`,
+        },
+      ],
+    })
 
     return items
   }, [getTeamPrefix, user?.role])
@@ -111,7 +129,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />
-        <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={authUser} />

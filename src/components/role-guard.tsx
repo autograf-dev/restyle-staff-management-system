@@ -6,7 +6,7 @@ import { useEffect } from "react"
 
 interface RoleGuardProps {
   children: React.ReactNode
-  requiredRole?: "admin" | "legal" | "labs"
+  requiredRole?: "admin" | "barber"
   requiredTeamPrefix?: string
   fallbackUrl?: string
 }

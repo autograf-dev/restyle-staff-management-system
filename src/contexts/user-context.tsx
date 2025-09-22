@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 
-export type UserRole = "admin" | "legal" | "labs"
+export type UserRole = "admin" | "barber"
 
 export type User = {
   id: string
@@ -97,10 +97,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     switch (user.role) {
       case "admin":
         return true // Admin has access to all teams
-      case "legal":
-        return teamPrefix === "/legal" // Legal only has access to legal team
-      case "labs":
-        return teamPrefix === "/lab" // Labs only has access to labs team
+      case "barber":
+        return teamPrefix === "" // Barber has access to main team only
       default:
         return false
     }

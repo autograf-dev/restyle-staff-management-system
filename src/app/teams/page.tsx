@@ -33,7 +33,7 @@ type User = {
   id: string
   email: string
   full_name: string
-  role: "admin" | "legal" | "labs"
+  role: "admin" | "barber"
   created_at: string
   last_sign_in_at: string | null
 }
@@ -64,7 +64,7 @@ function useUsers() {
         id: u.id,
         email: u.email,
         full_name: u.user_metadata?.full_name || "",
-        role: (u.user_metadata?.role as "admin" | "legal" | "labs") || "admin",
+        role: (u.user_metadata?.role as "admin" | "barber") || "admin",
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at,
       }))
@@ -104,7 +104,7 @@ export default function Page() {
     email: "",
     password: "",
     full_name: "",
-    role: "admin" as "admin" | "legal" | "labs",
+    role: "admin" as "admin" | "barber",
   })
 
   const resetForm = () => {
@@ -499,7 +499,7 @@ export default function Page() {
                   <Label htmlFor="add-role">Role</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(value: "admin" | "legal" | "labs") =>
+                    onValueChange={(value: "admin" | "barber") =>
                       setFormData({ ...formData, role: value })
                     }
                   >
@@ -508,8 +508,7 @@ export default function Page() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="legal">Legal</SelectItem>
-                      <SelectItem value="labs">Labs</SelectItem>
+                      <SelectItem value="barber">Barber</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -563,7 +562,7 @@ export default function Page() {
                   <Label htmlFor="edit-role">Role</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(value: "admin" | "legal" | "labs") =>
+                    onValueChange={(value: "admin" | "barber") =>
                       setFormData({ ...formData, role: value })
                     }
                   >
@@ -572,8 +571,7 @@ export default function Page() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="legal">Legal</SelectItem>
-                      <SelectItem value="labs">Labs</SelectItem>
+                      <SelectItem value="barber">Barber</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

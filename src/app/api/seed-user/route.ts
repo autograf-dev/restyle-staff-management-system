@@ -17,16 +17,10 @@ export async function POST() {
       role: "admin"
     },
     {
-      email: "legal@lawyervantage.com", 
-      password: "legal@secret",
-      full_name: "Legal Team User",
-      role: "legal"
-    },
-    {
-      email: "labs@lawyervantage.com",
-      password: "labs@secret", 
-      full_name: "Labs Team User",
-      role: "labs"
+      email: "barber@restyle.com", 
+      password: "barber@secret",
+      full_name: "Barber User",
+      role: "barber"
     }
   ];
 
