@@ -123,7 +123,7 @@ export default function SalonHoursPage() {
     }
     timeoutRef.current = setTimeout(async () => {
       // Send both open_time and close_time to ensure both are updated
-      const updateData: any = {
+      const updateData: Partial<Pick<BusinessHour, 'open_time' | 'close_time'>> = {
         [field]: minutes
       }
       
@@ -180,7 +180,7 @@ export default function SalonHoursPage() {
               <div>
                 <h2 className="text-2xl font-semibold">Business Hours Management</h2>
                 <p className="text-muted-foreground">
-                  Configure your salon's operating hours for each day of the week
+                  Configure your salon&apos;s operating hours for each day of the week
                 </p>
               </div>
               <Button 
