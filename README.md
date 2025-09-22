@@ -1,7 +1,7 @@
 # Restyle Staff Management System
 
 ### App URL
-- `https://app-restyle,entlify.app`
+- `https://app-restyle.netlify.app`
 
 ### Credits
 - **Developer**: Tarun Kumar
