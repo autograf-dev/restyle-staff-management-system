@@ -95,10 +95,9 @@ export default function SalonStaffPage() {
   }
 
   // Navigate to staff hours management
-  const manageAvailability = (staffId: string) => {
-    // Store the selected staff ID in sessionStorage to pre-select in staff hours page
-    sessionStorage.setItem('selectedStaffId', staffId)
-    router.push('/settings/staff-hours')
+  const manageAvailability = (staff: BarberStaff) => {
+    // Navigate directly to the staff-specific URL using ghl_id
+    router.push(`/settings/staff-hours/${staff.ghl_id}`)
   }
 
   if (loading) {
@@ -300,7 +299,7 @@ export default function SalonStaffPage() {
                           <TableCell className="text-right">
                             <Button
                               size="sm"
-                              onClick={() => manageAvailability(getRowId(staff))}
+                              onClick={() => manageAvailability(staff)}
                               className="bg-primary hover:bg-primary/90"
                             >
                               <Settings className="h-4 w-4 mr-2" />

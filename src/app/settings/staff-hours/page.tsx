@@ -9,20 +9,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { TimePicker } from "@/components/ui/time-picker"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { 
-  Clock, 
   RefreshCw, 
   User, 
   Calendar,
   CheckCircle2,
   XCircle,
-  Scissors
+  Scissors,
+  ExternalLink
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { minutesToDisplayTime } from "@/lib/timeUtils"
+import { useRouter } from "next/navigation"
 
 type BarberHour = {
   "🔒 Row ID"?: string
@@ -59,20 +59,12 @@ const DAYS = [
 ]
 
 export default function StaffHoursPage() {
+  const router = useRouter()
   const [barberHours, setBarberHours] = useState<BarberHour[]>([])
   const [selectedBarber, setSelectedBarber] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
-  
-  // Initialize preselected staff on mount
-  useEffect(() => {
-    const preSelectedId = sessionStorage.getItem('selectedStaffId')
-    if (preSelectedId) {
-      console.log('Component mounted with preselected ID:', preSelectedId)
-      setSelectedBarber(preSelectedId)
-    }
-  }, [])
 
   // Fetch barber hours
   const fetchBarberHours = async () => {
@@ -84,41 +76,8 @@ export default function StaffHoursPage() {
       if (result.ok) {
         setBarberHours(result.data)
         
-        // If we already have a selectedBarber from sessionStorage, validate it exists in data
-        if (selectedBarber && result.data.length > 0) {
-          const staffExists = result.data.some((staff: BarberHour) => getRowId(staff) === selectedBarber)
-          console.log('Validating existing selected barber:', selectedBarber, 'exists:', staffExists)
-          
-          if (staffExists) {
-            // Clear sessionStorage since we successfully validated
-            sessionStorage.removeItem('selectedStaffId')
-            return // Keep the current selection
-          } else {
-            // Selected staff doesn't exist, reset
-            setSelectedBarber(null)
-          }
-        }
-        
-        // Check for pre-selected staff from sessionStorage
-        const preSelectedId = sessionStorage.getItem('selectedStaffId')
-        console.log('Pre-selected ID from sessionStorage:', preSelectedId)
-        
-        if (preSelectedId && result.data.length > 0) {
-          // Verify the preselected ID exists in the data
-          const staffExists = result.data.some((staff: BarberHour) => getRowId(staff) === preSelectedId)
-          console.log('Staff exists for preselected ID:', staffExists)
-          
-          if (staffExists) {
-            console.log('Setting selected barber to preselected:', preSelectedId)
-            setSelectedBarber(preSelectedId)
-            sessionStorage.removeItem('selectedStaffId') // Clear after use
-            return // Exit here to prevent fallback
-          }
-        }
-        
-        // Only set first staff if no selection at all
-        if (result.data.length > 0 && !selectedBarber) {
-          console.log('No selection, setting first staff:', getRowId(result.data[0]))
+        // Only set first staff if no current selection
+        if (result.data.length > 0 && selectedBarber === null) {
           setSelectedBarber(getRowId(result.data[0]))
         }
       } else {
@@ -179,8 +138,8 @@ export default function StaffHoursPage() {
       const currentEnd = currentBarber?.[endField]
       
       // Use previous values if they exist and aren't 0, otherwise use defaults
-      const startTime = (currentStart && currentStart !== '0') ? currentStart : '600' // 10:00 AM
-      const endTime = (currentEnd && currentEnd !== '0') ? currentEnd : '1080'   // 6:00 PM
+      const startTime = (currentStart && String(currentStart) !== '0') ? String(currentStart) : '600' // 10:00 AM
+      const endTime = (currentEnd && String(currentEnd) !== '0') ? String(currentEnd) : '1080'   // 6:00 PM
       
       updateBarberHour(barberId, {
         [startField]: startTime,
@@ -238,6 +197,11 @@ export default function StaffHoursPage() {
       start: parseInt(String(startValue || '600')),
       end: parseInt(String(endValue || '1080'))
     }
+  }
+
+  // Navigate to individual staff page
+  const openStaffPage = (ghlId: string) => {
+    router.push(`/settings/staff-hours/${ghlId}`)
   }
 
   if (loading) {
@@ -305,40 +269,52 @@ export default function StaffHoursPage() {
                     const workingDays = DAYS.filter(day => isDayWorking(barber, day)).length
                     const isSelected = getRowId(barber) === selectedBarber
                     return (
-                      <button
-                        key={getRowId(barber)}
-                        onClick={() => setSelectedBarber(getRowId(barber))}
-                        className={`
-                          flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:shadow-md
-                          ${isSelected 
-                            ? 'border-primary bg-primary text-primary-foreground shadow-lg' 
-                            : 'border-border bg-card hover:border-primary/50'
-                          }
-                        `}
-                      >
-                        <Avatar className="h-12 w-12">
-                          <AvatarFallback className={`text-sm font-semibold ${
-                            isSelected ? 'bg-primary-foreground text-primary' : 'bg-primary/10 text-primary'
-                          }`}>
-                            {barber["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="text-center space-y-1">
-                          <div className="font-medium text-sm leading-tight">
-                            {barber["Barber/Name"]}
+                      <div key={getRowId(barber)} className="relative">
+                        <button
+                          onClick={() => setSelectedBarber(getRowId(barber))}
+                          className={`
+                            w-full flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:shadow-md
+                            ${isSelected 
+                              ? 'border-primary bg-primary text-primary-foreground shadow-lg' 
+                              : 'border-border bg-card hover:border-primary/50'
+                            }
+                          `}
+                        >
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className={`text-sm font-semibold ${
+                              isSelected ? 'bg-primary-foreground text-primary' : 'bg-primary/10 text-primary'
+                            }`}>
+                              {barber["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="text-center space-y-1">
+                            <div className="font-medium text-sm leading-tight">
+                              {barber["Barber/Name"]}
+                            </div>
+                            <Badge 
+                              variant={isSelected ? "secondary" : "outline"} 
+                              className={`text-xs ${
+                                isSelected 
+                                  ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30' 
+                                  : ''
+                              }`}
+                            >
+                              {workingDays} days
+                            </Badge>
                           </div>
-                          <Badge 
-                            variant={isSelected ? "secondary" : "outline"} 
-                            className={`text-xs ${
-                              isSelected 
-                                ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30' 
-                                : ''
-                            }`}
-                          >
-                            {workingDays} days
-                          </Badge>
-                        </div>
-                      </button>
+                        </button>
+                        
+                        {/* Quick link to individual page */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="absolute -top-2 -right-2 h-6 w-6 p-0 bg-white border-primary/50 hover:bg-primary hover:text-primary-foreground"
+                          onClick={() => openStaffPage(barber.ghl_id)}
+                          title="Open in dedicated page"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
                     )
                   })}
                 </div>
@@ -373,6 +349,15 @@ export default function StaffHoursPage() {
                               <User className="h-3 w-3 mr-1" />
                               Staff Member
                             </Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openStaffPage(selectedBarberData.ghl_id)}
+                              className="ml-auto"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              Open Dedicated Page
+                            </Button>
                           </div>
                         </div>
                       </div>
