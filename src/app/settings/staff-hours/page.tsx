@@ -17,12 +17,14 @@ import {
   CheckCircle2,
   XCircle,
   Scissors,
-  ExternalLink
+  ExternalLink,
+  CalendarPlus
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { minutesToDisplayTime } from "@/lib/timeUtils"
 import { useRouter } from "next/navigation"
+import { LeaveDialog } from "@/components/leave-dialog"
 
 type BarberHour = {
   "🔒 Row ID"?: string
@@ -64,6 +66,7 @@ export default function StaffHoursPage() {
   const [selectedBarber, setSelectedBarber] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
 
   // Fetch barber hours
@@ -202,6 +205,21 @@ export default function StaffHoursPage() {
   // Navigate to individual staff page
   const openStaffPage = (ghlId: string) => {
     router.push(`/settings/staff-hours/${ghlId}`)
+  }
+
+  // Open leave dialog for selected staff
+  const openLeaveDialog = () => {
+    if (!selectedBarberData) {
+      toast.error('Please select a staff member first')
+      return
+    }
+    setLeaveDialogOpen(true)
+  }
+
+  // Handle leave dialog success
+  const handleLeaveSuccess = () => {
+    toast.success('Leave added successfully')
+    // Optionally refresh data or navigate to leaves page
   }
 
   if (loading) {
@@ -352,8 +370,16 @@ export default function StaffHoursPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={openLeaveDialog}
+                              className="mr-2"
+                            >
+                              <CalendarPlus className="h-4 w-4 mr-2" />
+                              Add Leave
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => openStaffPage(selectedBarberData.ghl_id)}
-                              className="ml-auto"
                             >
                               <ExternalLink className="h-4 w-4 mr-2" />
                               Open Dedicated Page
@@ -489,6 +515,15 @@ export default function StaffHoursPage() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* Leave Dialog */}
+      <LeaveDialog
+        open={leaveDialogOpen}
+        onOpenChange={setLeaveDialogOpen}
+        staff={barberHours}
+        preSelectedStaffId={selectedBarberData?.ghl_id}
+        onSuccess={handleLeaveSuccess}
+      />
     </RoleGuard>
   )
 }

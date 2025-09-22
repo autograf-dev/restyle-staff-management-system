@@ -17,12 +17,14 @@ import {
   CheckCircle2,
   XCircle,
   Scissors,
-  ArrowLeft
+  ArrowLeft,
+  CalendarPlus
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { minutesToDisplayTime } from "@/lib/timeUtils"
 import { useParams, useRouter } from "next/navigation"
+import { LeaveDialog } from "@/components/leave-dialog"
 
 type BarberHour = {
   "🔒 Row ID"?: string
@@ -64,8 +66,10 @@ export default function StaffHoursDetailPage() {
   const ghlId = params.ghl_id as string
   
   const [staffData, setStaffData] = useState<BarberHour | null>(null)
+  const [allStaff, setAllStaff] = useState<BarberHour[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
 
   // Fetch specific staff data by ghl_id
@@ -76,6 +80,7 @@ export default function StaffHoursDetailPage() {
       const result = await response.json()
       
       if (result.ok) {
+        setAllStaff(result.data)
         const staff = result.data.find((barber: BarberHour) => barber.ghl_id === ghlId)
         if (staff) {
           setStaffData(staff)
@@ -197,6 +202,17 @@ export default function StaffHoursDetailPage() {
       start: parseInt(String(startValue || '600')),
       end: parseInt(String(endValue || '1080'))
     }
+  }
+
+  // Open leave dialog for current staff
+  const openLeaveDialog = () => {
+    setLeaveDialogOpen(true)
+  }
+
+  // Handle leave dialog success
+  const handleLeaveSuccess = () => {
+    toast.success('Leave added successfully')
+    // Optionally refresh data or navigate to leaves page
   }
 
   if (loading) {
@@ -329,6 +345,15 @@ export default function StaffHoursDetailPage() {
                         <Badge variant="outline" className="bg-white/50 font-mono text-xs">
                           ID: {staffData.ghl_id}
                         </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={openLeaveDialog}
+                          className="ml-auto"
+                        >
+                          <CalendarPlus className="h-4 w-4 mr-2" />
+                          Add Leave
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -435,6 +460,15 @@ export default function StaffHoursDetailPage() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* Leave Dialog */}
+      <LeaveDialog
+        open={leaveDialogOpen}
+        onOpenChange={setLeaveDialogOpen}
+        staff={allStaff}
+        preSelectedStaffId={staffData?.ghl_id}
+        onSuccess={handleLeaveSuccess}
+      />
     </RoleGuard>
   )
 }
