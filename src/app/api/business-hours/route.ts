@@ -16,7 +16,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ ok: true, data });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { ok: false, error: "Failed to fetch business hours" },
       { status: 500 }

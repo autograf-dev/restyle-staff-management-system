@@ -20,7 +20,7 @@ import {
   ArrowLeft,
   CalendarPlus
 } from "lucide-react"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { minutesToDisplayTime } from "@/lib/timeUtils"
 import { useParams, useRouter } from "next/navigation"
@@ -73,7 +73,7 @@ export default function StaffHoursDetailPage() {
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
 
   // Fetch specific staff data by ghl_id
-  const fetchStaffData = async () => {
+  const fetchStaffData = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch('/api/barber-hours')
@@ -91,18 +91,18 @@ export default function StaffHoursDetailPage() {
       } else {
         toast.error('Failed to load staff data')
       }
-    } catch (error) {
+    } catch {
       toast.error('Error loading staff data')
     } finally {
       setLoading(false)
     }
-  }
+  }, [ghlId, router])
 
   useEffect(() => {
     if (ghlId) {
       fetchStaffData()
     }
-  }, [ghlId])
+  }, [ghlId, fetchStaffData])
 
   // Update barber hour
   const updateBarberHour = async (updates: Partial<BarberHour>) => {

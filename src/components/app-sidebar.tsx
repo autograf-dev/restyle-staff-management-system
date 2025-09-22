@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Infinity, Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Users, Scissors } from "lucide-react"
+import { Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Scissors } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"

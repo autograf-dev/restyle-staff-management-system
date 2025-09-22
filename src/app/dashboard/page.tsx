@@ -45,9 +45,9 @@ export default function Page() {
   useEffect(() => { fetchAll() }, [])
 
   const todayKey = useMemo(() => new Date().toDateString(), [])
-  const now = new Date()
 
   const kpis = useMemo(() => {
+    const now = new Date()
     // Staff
     const totalStaff = staff.length
 
@@ -62,13 +62,16 @@ export default function Page() {
 
     // Leaves
     const activeLeaves = leaves.filter((l) => {
-      const start = parseMaybe(l["Event/Start"]) || parseMaybe(String(l["Event/Start"]))
-      const end = parseMaybe(l["Event/End"]) || parseMaybe(String(l["Event/End"]))
+      const startValue = l["Event/Start"]
+      const endValue = l["Event/End"]
+      const start = parseMaybe(typeof startValue === 'string' ? startValue : String(startValue || ''))
+      const end = parseMaybe(typeof endValue === 'string' ? endValue : String(endValue || ''))
       return start && end && now >= start && now <= end
     }).length
 
     const upcomingLeaves7 = leaves.filter((l) => {
-      const start = parseMaybe(l["Event/Start"]) || parseMaybe(String(l["Event/Start"]))
+      const startValue = l["Event/Start"]
+      const start = parseMaybe(typeof startValue === 'string' ? startValue : String(startValue || ''))
       if (!start) return false
       const diffDays = Math.floor((start.getTime() - now.getTime()) / (1000*60*60*24))
       return diffDays >= 0 && diffDays <= 7
@@ -79,12 +82,13 @@ export default function Page() {
 
     const todaysOneTimeBreaks = blocks.filter((b) => {
       if (String(b['Block/Recurring']) === 'true') return false
-      const d = parseMaybe(b['Block/Date'])
+      const dateValue = b['Block/Date']
+      const d = parseMaybe(typeof dateValue === 'string' ? dateValue : String(dateValue || ''))
       return d?.toDateString() === todayKey
     }).length
 
     return { totalStaff, workingToday, activeLeaves, upcomingLeaves7, recurringBlocks, todaysOneTimeBreaks }
-  }, [staff, leaves, blocks, todayKey, now])
+  }, [staff, leaves, blocks, todayKey])
 
   return (
     <RoleGuard requiredTeamPrefix="">

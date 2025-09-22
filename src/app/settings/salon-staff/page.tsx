@@ -71,7 +71,7 @@ export default function SalonStaffPage() {
       } else {
         toast.error('Failed to load staff data')
       }
-    } catch (error) {
+    } catch {
       toast.error('Error loading staff data')
     } finally {
       setLoading(false)

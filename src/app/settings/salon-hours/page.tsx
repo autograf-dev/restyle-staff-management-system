@@ -43,7 +43,7 @@ export default function SalonHoursPage() {
       } else {
         toast.error('Failed to load business hours')
       }
-    } catch (error) {
+    } catch {
       toast.error('Error loading business hours')
     } finally {
       setLoading(false)

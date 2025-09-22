@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { minutesToTime, timeToMinutes, minutesToDisplayTime } from "@/lib/timeUtils"
+import { minutesToDisplayTime } from "@/lib/timeUtils"
 
 interface TimePickerProps {
   value?: number // minutes since midnight

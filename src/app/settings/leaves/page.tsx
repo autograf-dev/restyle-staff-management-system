@@ -20,7 +20,7 @@ import {
   Clock,
   AlertCircle
 } from "lucide-react"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { format, parseISO, isAfter, isBefore, isValid, parse } from "date-fns"
 import { LeaveDialog } from "@/components/leave-dialog"
@@ -82,7 +82,7 @@ export default function LeavesPage() {
   const [deletingLeave, setDeletingLeave] = useState<Leave | null>(null)
 
   // Fetch leaves data
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
     try {
       const response = await fetch('/api/leaves')
       const result = await response.json()
@@ -92,13 +92,13 @@ export default function LeavesPage() {
       } else {
         toast.error('Failed to load leaves data')
       }
-    } catch (error) {
+    } catch {
       toast.error('Error loading leaves data')
     }
-  }
+  }, [])
 
   // Fetch staff data
-  const fetchStaff = async () => {
+  const fetchStaff = useCallback(async () => {
     try {
       const response = await fetch('/api/barber-hours')
       const result = await response.json()
@@ -108,21 +108,21 @@ export default function LeavesPage() {
       } else {
         toast.error('Failed to load staff data')
       }
-    } catch (error) {
+    } catch {
       toast.error('Error loading staff data')
     }
-  }
+  }, [])
 
   // Fetch all data
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true)
     await Promise.all([fetchLeaves(), fetchStaff()])
     setLoading(false)
-  }
+  }, [fetchLeaves, fetchStaff])
 
   useEffect(() => {
     fetchAllData()
-  }, [/* keep stable */])
+  }, [fetchAllData])
 
   // Get staff member by ghl_id
   const getStaffByGhlId = (ghlId: string): Staff | undefined => {
@@ -175,7 +175,7 @@ export default function LeavesPage() {
       } else {
         toast.error(`Failed to delete leave: ${result.error}`)
       }
-    } catch (error) {
+    } catch {
       toast.error('Error deleting leave')
     } finally {
       setSaving(false)

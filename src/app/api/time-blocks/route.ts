@@ -34,7 +34,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ ok: true, data })
-  } catch (_error) {
+  } catch {
     return NextResponse.json({ ok: false, error: 'Failed to fetch time blocks' }, { status: 500 })
   }
 }
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, data })
-  } catch (_error) {
+  } catch {
     return NextResponse.json({ ok: false, error: 'Failed to create time block' }, { status: 500 })
   }
 }
@@ -102,7 +102,7 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ ok: true, data })
-  } catch (_error) {
+  } catch {
     return NextResponse.json({ ok: false, error: 'Failed to update time block' }, { status: 500 })
   }
 }
@@ -125,7 +125,7 @@ export async function DELETE(request: Request) {
     }
 
     return NextResponse.json({ ok: true })
-  } catch (_error) {
+  } catch {
     return NextResponse.json({ ok: false, error: 'Failed to delete time block' }, { status: 500 })
   }
 }

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { RefreshCw, Plus, CalendarIcon, User } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { format, parseISO, isAfter, isValid, parse } from "date-fns"
 
@@ -79,12 +79,12 @@ export function LeaveDialog({
   const [endDate, setEndDate] = useState<Date | undefined>(undefined)
 
   // Reset form
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setSelectedStaff(preSelectedStaffId || "")
     setLeaveReason("")
     setStartDate(undefined)
     setEndDate(undefined)
-  }
+  }, [preSelectedStaffId])
 
   // Initialize form when dialog opens
   useEffect(() => {
@@ -102,7 +102,7 @@ export function LeaveDialog({
         resetForm()
       }
     }
-  }, [open, editingLeave, preSelectedStaffId])
+  }, [open, editingLeave, preSelectedStaffId, resetForm])
 
   // Save leave (create or update)
   const saveLeave = async () => {
@@ -147,7 +147,7 @@ export function LeaveDialog({
       } else {
         toast.error(`Failed to ${editingLeave ? 'update' : 'add'} leave: ${result.error}`)
       }
-    } catch (error) {
+    } catch {
       toast.error(`Error ${editingLeave ? 'updating' : 'adding'} leave`)
     } finally {
       setSaving(false)

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { RefreshCw, Plus, Trash2, Edit } from "lucide-react"
 
 type Staff = { ghl_id: string; "Barber/Name"?: string; "Barber/Email"?: string; [key: string]: unknown }
@@ -22,22 +22,25 @@ export default function BreaksPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  const fetchBlocks = async () => {
+  const fetchBlocks = useCallback(async () => {
     const res = await fetch('/api/time-blocks')
     const r = await res.json()
     if (r.ok) setBlocks(r.data || [])
-  }
-  const fetchStaff = async () => {
+  }, [])
+  
+  const fetchStaff = useCallback(async () => {
     const res = await fetch('/api/barber-hours')
     const r = await res.json()
     if (r.ok) setStaff(r.data || [])
-  }
-  const refreshAll = async () => {
+  }, [])
+  
+  const refreshAll = useCallback(async () => {
     setLoading(true)
     await Promise.all([fetchBlocks(), fetchStaff()])
     setLoading(false)
-  }
-  useEffect(() => { refreshAll() }, [])
+  }, [fetchBlocks, fetchStaff])
+  
+  useEffect(() => { refreshAll() }, [refreshAll])
 
   const deleteBlock = async (row: Block) => {
     try {
