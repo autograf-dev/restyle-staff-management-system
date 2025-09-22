@@ -11,11 +11,14 @@ import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useEffect, useState } from "react"
 import { RefreshCw, Plus, Trash2, Edit } from "lucide-react"
 
+type Staff = { ghl_id: string; "Barber/Name"?: string; "Barber/Email"?: string; [key: string]: unknown }
+type Block = Record<string, unknown>
+
 export default function BreaksPage() {
-  const [blocks, setBlocks] = useState<any[]>([])
-  const [staff, setStaff] = useState<any[]>([])
+  const [blocks, setBlocks] = useState<Block[]>([])
+  const [staff, setStaff] = useState<Staff[]>([])
   const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<any | null>(null)
+  const [editing, setEditing] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -36,10 +39,10 @@ export default function BreaksPage() {
   }
   useEffect(() => { refreshAll() }, [])
 
-  const deleteBlock = async (row: any) => {
+  const deleteBlock = async (row: Block) => {
     try {
       setSaving(true)
-      const res = await fetch(`/api/time-blocks?id=${encodeURIComponent(row['🔒 Row ID'])}`, { method: 'DELETE' })
+      const res = await fetch(`/api/time-blocks?id=${encodeURIComponent(String(row['🔒 Row ID']))}`, { method: 'DELETE' })
       const r = await res.json()
       if (r.ok) refreshAll()
     } finally {
@@ -90,16 +93,16 @@ export default function BreaksPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {blocks.map(b => {
-                      const member = staff.find((s: any) => s.ghl_id === b.ghl_id)
+                    {blocks.map((b) => {
+                      const member = staff.find((s) => s.ghl_id === String(b['ghl_id'] as string))
                       return (
-                        <TableRow key={b['🔒 Row ID']}>
-                          <TableCell>{member?.['Barber/Name'] || b.ghl_id}</TableCell>
-                          <TableCell>{b['Block/Name']}</TableCell>
+                        <TableRow key={String(b['🔒 Row ID'])}>
+                          <TableCell>{String(member?.['Barber/Name'] || String(b['ghl_id'] as string))}</TableCell>
+                          <TableCell>{String(b['Block/Name'] || '')}</TableCell>
                           <TableCell>{String(b['Block/Recurring']) === 'true' ? 'Yes' : 'No'}</TableCell>
-                          <TableCell>{String(b['Block/Recurring']) === 'true' ? (b['Block/Recurring Day'] || '-') : (b['Block/Date'] || '-')}</TableCell>
-                          <TableCell>{b['Block/Start']}</TableCell>
-                          <TableCell>{b['Block/End']}</TableCell>
+                          <TableCell>{String(b['Block/Recurring']) === 'true' ? String(b['Block/Recurring Day'] || '-') : String(b['Block/Date'] || '-')}</TableCell>
+                          <TableCell>{String(b['Block/Start'] || '')}</TableCell>
+                          <TableCell>{String(b['Block/End'] || '')}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button size="sm" variant="outline" onClick={() => { setEditing(b); setOpen(true) }} disabled={saving}><Edit className="h-4 w-4"/></Button>

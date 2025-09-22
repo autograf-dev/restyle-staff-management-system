@@ -122,7 +122,7 @@ export default function LeavesPage() {
 
   useEffect(() => {
     fetchAllData()
-  }, [])
+  }, [/* keep stable */])
 
   // Get staff member by ghl_id
   const getStaffByGhlId = (ghlId: string): Staff | undefined => {

@@ -39,7 +39,7 @@ export async function PUT(request: Request) {
     }
 
     // Prepare update object - only include fields that are provided
-    const updateData: any = {
+    const updateData: Record<string, number | boolean | null | string> = {
       updated_at: new Date().toISOString()
     };
 

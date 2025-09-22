@@ -8,34 +8,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { minutesToDisplayTime, timeToMinutes } from "@/lib/timeUtils"
 import { RefreshCw, Plus, CalendarIcon, User, Clock } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-
-type Staff = {
-  "🔒 Row ID"?: string
-  "ð Row ID"?: string
-  "Barber/Name": string
-  "ghl_id": string
-  "Barber/Email": string
-}
-
-type TimeBlock = {
-  "🔒 Row ID": string
-  "Block/Name": string
-  "Block/Recurring": string
-  "Block/Recurring Day": string
-  "Block/Start": string
-  "Block/End": string
-  "ghl_id": string
-  "Block/Date": string
-}
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
-  staff?: Staff[]
-  editingBlock?: TimeBlock | null
+  staff?: Array<Record<string, unknown>>
+  editingBlock?: Record<string, unknown> | null
   onSuccess: () => void
 }
 
@@ -54,14 +35,15 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
   useEffect(() => {
     if (!open) return
     if (editingBlock) {
-      setSelectedStaff(editingBlock.ghl_id)
-      setName(editingBlock["Block/Name"] || "")
-      const isRecurring = (editingBlock["Block/Recurring"] || "").toString() === "true"
+      const eb = editingBlock as Record<string, unknown>
+      setSelectedStaff(String(eb.ghl_id || ""))
+      setName(String(eb["Block/Name"] || ""))
+      const isRecurring = String(eb["Block/Recurring"] || "") === "true"
       setRecurring(isRecurring)
-      setDays((editingBlock["Block/Recurring Day"] || "").split(',').filter(Boolean))
-      setDate(isRecurring ? undefined : (editingBlock["Block/Date"] ? new Date(editingBlock["Block/Date"]) : undefined))
-      setStart(minutesToDisplayTime(Number(editingBlock["Block/Start"])) .replace(/\s?(AM|PM)$/,'').padStart(5,'0'))
-      setEnd(minutesToDisplayTime(Number(editingBlock["Block/End"])) .replace(/\s?(AM|PM)$/,'').padStart(5,'0'))
+      setDays(String(eb["Block/Recurring Day"] || "").split(',').filter(Boolean))
+      setDate(isRecurring ? undefined : (eb["Block/Date"] ? new Date(String(eb["Block/Date"])) : undefined))
+      setStart(minutesToDisplayTime(Number(eb["Block/Start"])) .replace(/\s?(AM|PM)$/,'').padStart(5,'0'))
+      setEnd(minutesToDisplayTime(Number(eb["Block/End"])) .replace(/\s?(AM|PM)$/,'').padStart(5,'0'))
     } else {
       setName("Lunch")
       setRecurring(false)
@@ -125,7 +107,7 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
       } else {
         toast.error(result.error || 'Failed to save break')
       }
-    } catch (e) {
+    } catch {
       toast.error('Error saving break')
     } finally {
       setSaving(false)
@@ -150,9 +132,9 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
                 </div>
               </SelectTrigger>
               <SelectContent>
-                {staff.map(m => (
-                  <SelectItem key={m.ghl_id} value={m.ghl_id}>
-                    {m["Barber/Name"]}
+                {staff.map((m) => (
+                  <SelectItem key={String((m as Record<string, unknown>).ghl_id)} value={String((m as Record<string, unknown>).ghl_id)}>
+                    {String((m as Record<string, unknown>)["Barber/Name"] || '')}
                   </SelectItem>
                 ))}
               </SelectContent>

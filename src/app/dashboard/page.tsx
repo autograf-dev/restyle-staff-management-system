@@ -5,7 +5,6 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
 import { useEffect, useMemo, useState } from "react"
 
 // Local date parser to handle legacy formats
@@ -17,9 +16,12 @@ function parseMaybe(dateString: string | null | undefined): Date | null {
 
 export default function Page() {
   const [loading, setLoading] = useState(true)
-  const [staff, setStaff] = useState<any[]>([])
-  const [leaves, setLeaves] = useState<any[]>([])
-  const [blocks, setBlocks] = useState<any[]>([])
+  type Staff = Record<string, unknown>
+  type Leave = Record<string, unknown>
+  type Block = Record<string, unknown>
+  const [staff, setStaff] = useState<Staff[]>([])
+  const [leaves, setLeaves] = useState<Leave[]>([])
+  const [blocks, setBlocks] = useState<Block[]>([])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -82,7 +84,7 @@ export default function Page() {
     }).length
 
     return { totalStaff, workingToday, activeLeaves, upcomingLeaves7, recurringBlocks, todaysOneTimeBreaks }
-  }, [staff, leaves, blocks, todayKey])
+  }, [staff, leaves, blocks, todayKey, now])
 
   return (
     <RoleGuard requiredTeamPrefix="">

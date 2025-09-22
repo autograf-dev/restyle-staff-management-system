@@ -33,7 +33,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id, ...updateData }: { id: string } & Record<string, unknown> = body;
 
     console.log('API PUT received:', { id, updateData });
 
@@ -45,10 +45,10 @@ export async function PUT(request: Request) {
     }
 
     // Convert time values to integers and handle 0/null for off days
-    const processedData: any = {};
+    const processedData: Record<string, string | number | boolean | null> = {};
     
     Object.keys(updateData).forEach(key => {
-      const value = updateData[key];
+      const value = updateData[key as keyof typeof updateData];
       
       // Handle time fields (Start Value, End Value, Lunch times)
       if (key.includes('/Start Value') || key.includes('/End Value') || 
@@ -57,10 +57,11 @@ export async function PUT(request: Request) {
         if (value === 0 || value === null || value === undefined) {
           processedData[key] = value === 0 ? '0' : null;
         } else {
-          processedData[key] = String(parseInt(value));
+          const num = parseInt(String(value));
+          processedData[key] = String(Number.isFinite(num) ? num : 0);
         }
       } else {
-        processedData[key] = value;
+        processedData[key] = (value as string | number | boolean | null) ?? null;
       }
     });
 

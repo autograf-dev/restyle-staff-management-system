@@ -95,7 +95,7 @@ export default function StaffHoursPage() {
 
   useEffect(() => {
     fetchBarberHours()
-  }, [])
+  }, [/* stable */])
 
   // Update barber hour
   const updateBarberHour = async (id: string, updates: Partial<BarberHour>) => {
