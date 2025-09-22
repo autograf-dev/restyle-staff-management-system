@@ -11,8 +11,8 @@ export async function POST() {
 
   const users = [
     {
-      email: "admin@lawyervantage.com",
-      password: "admin@secret",
+      email: "admin@restyle.com",
+      password: "adminrestyle@",
       full_name: "Admin User",
       role: "admin"
     },

@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lawyer Vantage Dashboard",
-  description: "Manage your law firm's CRM and opportunities",
+  title: "Restyke Staff Management",
+  description: "Manage your staff, contacts, and opportunities",
 };
 
 export default function RootLayout({

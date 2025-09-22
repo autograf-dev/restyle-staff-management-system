@@ -25,19 +25,19 @@ const TeamContext = createContext<TeamContextType | undefined>(undefined)
 
 const teams: Team[] = [
   {
-    name: "Lawyer Vantage",
+    name: "Restyke Staff Management",
     logo: Scale,
-    plan: "LawFirm",
+    plan: "Main",
     prefix: ""
   },
   {
-    name: "Lawyer Vantage Legal Lab",
+    name: "Restyke Legal Lab",
     logo: FlaskConical,
     plan: "Legal Lab",
     prefix: "/lab"
   },
   {
-    name: "Lawyer Vantage Tc Legal",
+    name: "Restyke Tc Legal",
     logo: Building2,
     plan: "Tc Legal",
     prefix: "/legal"
