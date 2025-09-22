@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Infinity, Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Users, Scissors } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -58,7 +59,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Generate navigation items based on current team
   const navMain = React.useMemo(() => {
     const prefix = getTeamPrefix()
-    const items = [
+    const items: {
+      title: string
+      url: string
+      icon?: LucideIcon
+      isActive?: boolean
+      items?: { title: string; url: string }[]
+    }[] = [
       {
         title: "Dashboard",
         url: `${prefix}/dashboard`,
