@@ -25,7 +25,7 @@ const TeamContext = createContext<TeamContextType | undefined>(undefined)
 
 const teams: Team[] = [
   {
-    name: "Restyke Staff Management",
+    name: "Restyle Staff Management",
     logo: Scissors,
     plan: "Main",
     prefix: ""

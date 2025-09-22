@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Restyke Staff Management",
+  title: "Restyle Staff Management",
   description: "Manage your staff, contacts, and opportunities",
 };
 
