@@ -231,10 +231,10 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     fetchStaff()
   }, [])
 
-  // Generate time slots from 8 AM to 8 PM (12 hours)
+  // Generate time slots from 8 AM to 9 PM (13 hours)
   const generateTimeSlots = () => {
     const slots = []
-    for (let hour = 8; hour < 20; hour++) {
+    for (let hour = 8; hour < 21; hour++) {
       slots.push(`${hour}:00`)
       slots.push(`${hour}:30`)
     }
@@ -243,8 +243,8 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
 
   const timeSlots = generateTimeSlots()
 
-  // Helper function to get appointment position and height
-  const getAppointmentStyle = (appointment: Appointment) => {
+  // Helper function to get appointment position and height (improved with 60px slots)
+  const getAppointmentStyleImproved = (appointment: Appointment) => {
     if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
     
     const start = new Date(appointment.startTime)
@@ -260,18 +260,20 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
-    const topOffset = ((startMinutes - dayStartMinutes) / 30) * 40 // 40px per 30min slot
-    const height = ((endMinutes - startMinutes) / 30) * 40
+    const topOffset = ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    const height = ((endMinutes - startMinutes) / 30) * 60
     
     return {
       position: 'absolute' as const,
       top: `${Math.max(0, topOffset)}px`,
-      height: `${Math.max(20, height - 2)}px`,
-      left: '2px',
-      right: '2px',
+      height: `${Math.max(30, height - 4)}px`,
+      left: '4px',
+      right: '4px',
       zIndex: 10
     }
   }
+
+
 
   // Get appointments for a specific staff member
   const getStaffAppointments = (staffGhlId: string) => {
@@ -300,95 +302,113 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
   }
 
   return (
-    <div className="bg-white rounded-lg border overflow-hidden">
-      {/* Header with staff names */}
-      <div className="grid border-b bg-gray-50" style={{ gridTemplateColumns: '80px ' + 'repeat(' + staff.length + ', 1fr)' }}>
-        <div className="p-3 border-r font-medium text-sm text-center bg-gray-100">
-          Time
-        </div>
-        {staff.map((staffMember) => (
-          <div key={staffMember.ghl_id} className="p-3 border-r last:border-r-0 text-center">
-            <div className="font-medium text-sm truncate" title={staffMember.name}>
-              {staffMember.name}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {getStaffAppointments(staffMember.ghl_id).length} appointments
-            </div>
+    <div className="bg-background rounded-lg border shadow-sm overflow-hidden">
+      {/* Header with staff names - Fixed position */}
+      <div className="sticky top-0 z-20 bg-background border-b">
+        <div className="grid" style={{ gridTemplateColumns: '120px ' + 'repeat(' + staff.length + ', minmax(180px, 1fr))' }}>
+          <div className="p-4 border-r font-semibold text-sm bg-muted/50 flex items-center justify-center">
+            <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+            Time
           </div>
-        ))}
+          {staff.map((staffMember) => (
+            <div key={staffMember.ghl_id} className="p-4 border-r last:border-r-0 bg-background">
+              <div className="text-center">
+                <div className="font-medium text-sm truncate mb-1" title={staffMember.name}>
+                  {staffMember.name}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {getStaffAppointments(staffMember.ghl_id).length} appointments
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Time grid */}
-      <div className="relative" style={{ height: '960px' }}> {/* 24 slots * 40px = 960px */}
-        {/* Time labels and grid lines */}
-        <div className="absolute inset-0 grid border-r" style={{ gridTemplateColumns: '80px ' + 'repeat(' + staff.length + ', 1fr)' }}>
-          <div className="relative">
-            {timeSlots.map((time, index) => (
-              <div
-                key={time}
-                className="absolute left-0 right-0 border-b text-xs text-gray-500 bg-gray-50 px-2 flex items-center justify-center"
-                style={{ 
-                  top: `${index * 40}px`, 
-                  height: '40px',
-                  borderBottomColor: time.endsWith(':00') ? '#e5e7eb' : '#f3f4f6'
-                }}
-              >
-                {time.endsWith(':00') && (
-                  <span className="font-medium">
-                    {parseInt(time) > 12 ? `${parseInt(time) - 12}:00 PM` : `${time} AM`}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Staff columns */}
-          {staff.map((staffMember) => (
-            <div key={staffMember.ghl_id} className="relative border-r last:border-r-0">
-              {/* Grid lines for this staff column */}
+      {/* Scrollable Time grid container */}
+      <div className="max-h-[600px] overflow-y-auto">
+        <div className="relative" style={{ height: `${timeSlots.length * 60}px` }}>
+          {/* Background grid */}
+          <div className="absolute inset-0 grid" style={{ gridTemplateColumns: '120px ' + 'repeat(' + staff.length + ', minmax(180px, 1fr))' }}>
+            {/* Time column */}
+            <div className="relative border-r bg-muted/30">
               {timeSlots.map((time, index) => (
                 <div
                   key={time}
-                  className="absolute left-0 right-0 border-b"
+                  className="absolute left-0 right-0 border-b border-border/50 px-3 flex items-center justify-end"
                   style={{ 
-                    top: `${index * 40}px`, 
-                    height: '40px',
-                    borderBottomColor: time.endsWith(':00') ? '#e5e7eb' : '#f3f4f6'
+                    top: `${index * 60}px`, 
+                    height: '60px'
                   }}
-                />
+                >
+                  {time.endsWith(':00') && (
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {parseInt(time) > 12 ? `${parseInt(time) - 12}:00 PM` : `${time} AM`}
+                    </span>
+                  )}
+                </div>
               ))}
-
-              {/* Appointments for this staff member */}
-              {getStaffAppointments(staffMember.ghl_id).map((appointment) => {
-                const style = getAppointmentStyle(appointment)
-                if (style.display === 'none') return null
-
-                return (
-                  <div
-                    key={appointment.id}
-                    className="bg-blue-100 border border-blue-300 rounded px-2 py-1 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm"
-                    style={style}
-                    onClick={() => {
-                      // Navigate to appointment details
-                      window.location.href = `/appointments?view=details&id=${appointment.id}`
-                    }}
-                    title={`${appointment.serviceName} - ${appointment.contactName}`}
-                  >
-                    <div className="text-xs font-medium text-blue-800 truncate">
-                      {appointment.serviceName}
-                    </div>
-                    <div className="text-xs text-blue-600 truncate">
-                      {appointment.contactName}
-                    </div>
-                    <div className="text-xs text-blue-500 mt-1">
-                      {appointment.startTime && formatTime(appointment.startTime)}
-                      {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
-                    </div>
-                  </div>
-                )
-              })}
             </div>
-          ))}
+
+            {/* Staff columns */}
+            {staff.map((staffMember) => (
+              <div key={staffMember.ghl_id} className="relative border-r last:border-r-0 bg-background">
+                {/* Hour lines for this staff column */}
+                {timeSlots.map((time, index) => (
+                  <div
+                    key={time}
+                    className={`absolute left-0 right-0 ${
+                      time.endsWith(':00') ? 'border-b border-border' : 'border-b border-border/30'
+                    }`}
+                    style={{ 
+                      top: `${index * 60}px`, 
+                      height: '60px'
+                    }}
+                  />
+                ))}
+
+                {/* Appointments for this staff member */}
+                {getStaffAppointments(staffMember.ghl_id).map((appointment) => {
+                  const style = getAppointmentStyleImproved(appointment)
+                  if (style.display === 'none') return null
+
+                  return (
+                    <div
+                      key={appointment.id}
+                      className="absolute rounded-md px-3 py-2 cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 border-l-primary bg-primary/10 hover:bg-primary/20 backdrop-blur-sm"
+                      style={style}
+                      onClick={() => {
+                        window.location.href = `/appointments?view=details&id=${appointment.id}`
+                      }}
+                      title={`${appointment.serviceName} - ${appointment.contactName}`}
+                    >
+                      <div className="text-sm font-medium text-primary truncate">
+                        {appointment.serviceName}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate mt-1">
+                        {appointment.contactName}
+                      </div>
+                      <div className="text-xs text-primary/80 mt-1 font-medium">
+                        {appointment.startTime && formatTime(appointment.startTime)}
+                        {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
+                      </div>
+                      <div className="text-xs mt-1">
+                        <span className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                          appointment.appointment_status === 'confirmed' 
+                            ? 'bg-green-100 text-green-700' 
+                            : appointment.appointment_status === 'cancelled'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {appointment.appointment_status}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
