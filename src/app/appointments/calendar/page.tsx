@@ -185,7 +185,7 @@ function formatDate(date: Date) {
   })
 }
 
-// Staff Overview Component
+// Staff Overview Component - Acuity-style time grid calendar
 const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) => {
   const [staff, setStaff] = React.useState<{
     id: string;
@@ -236,83 +236,166 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     fetchStaff()
   }, [])
 
-  // Group appointments by staff
-  const appointmentsByStaff = React.useMemo(() => {
-    return staff.map((staffMember) => ({
-      ...staffMember,
-      appointments: appointments
-        .filter((apt) => apt.assigned_user_id === staffMember.ghl_id)
-        .sort((a, b) => new Date(a.startTime || '').getTime() - new Date(b.startTime || '').getTime())
-    }))
-  }, [staff, appointments])
+  // Generate time slots from 8 AM to 8 PM (12 hours)
+  const generateTimeSlots = () => {
+    const slots = []
+    for (let hour = 8; hour < 20; hour++) {
+      slots.push(`${hour}:00`)
+      slots.push(`${hour}:30`)
+    }
+    return slots
+  }
+
+  const timeSlots = generateTimeSlots()
+
+  // Helper function to get appointment position and height
+  const getAppointmentStyle = (appointment: Appointment) => {
+    if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
+    
+    const start = new Date(appointment.startTime)
+    const end = new Date(appointment.endTime)
+    
+    const startHour = start.getHours()
+    const startMinute = start.getMinutes()
+    const endHour = end.getHours()
+    const endMinute = end.getMinutes()
+    
+    // Calculate position from 8 AM (480 minutes)
+    const dayStartMinutes = 8 * 60 // 8 AM in minutes
+    const startMinutes = startHour * 60 + startMinute
+    const endMinutes = endHour * 60 + endMinute
+    
+    const topOffset = ((startMinutes - dayStartMinutes) / 30) * 40 // 40px per 30min slot
+    const height = ((endMinutes - startMinutes) / 30) * 40
+    
+    return {
+      position: 'absolute' as const,
+      top: `${Math.max(0, topOffset)}px`,
+      height: `${Math.max(20, height - 2)}px`,
+      left: '2px',
+      right: '2px',
+      zIndex: 10
+    }
+  }
+
+  // Get appointments for a specific staff member
+  const getStaffAppointments = (staffGhlId: string) => {
+    return appointments.filter(apt => apt.assigned_user_id === staffGhlId)
+  }
 
   if (loading) {
-    return <div className="text-center py-4">Loading staff overview...</div>
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Loading staff calendar...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (staff.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <h3 className="font-medium mb-2">No Staff Members Found</h3>
+        <p className="text-sm">Staff members with the &apos;barber&apos; role will appear here.</p>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      {appointmentsByStaff.map((staffMember) => (
-        <div key={staffMember.ghl_id} className="border rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="font-semibold text-lg">{staffMember.name}</h3>
-              <p className="text-sm text-gray-500">{staffMember.appointments.length} appointments</p>
+    <div className="bg-white rounded-lg border overflow-hidden">
+      {/* Header with staff names */}
+      <div className="grid border-b bg-gray-50" style={{ gridTemplateColumns: '80px ' + 'repeat(' + staff.length + ', 1fr)' }}>
+        <div className="p-3 border-r font-medium text-sm text-center bg-gray-100">
+          Time
+        </div>
+        {staff.map((staffMember) => (
+          <div key={staffMember.ghl_id} className="p-3 border-r last:border-r-0 text-center">
+            <div className="font-medium text-sm truncate" title={staffMember.name}>
+              {staffMember.name}
             </div>
-            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-              {staffMember.role}
-            </Badge>
+            <div className="text-xs text-muted-foreground mt-1">
+              {getStaffAppointments(staffMember.ghl_id).length} appointments
+            </div>
           </div>
-          
-          {staffMember.appointments.length === 0 ? (
-            <div className="text-center py-6 text-gray-400">
-              <User className="h-8 w-8 mx-auto mb-2" />
-              <p className="text-sm">No appointments today</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {staffMember.appointments.map((appointment) => (
-                <div 
-                  key={appointment.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded border-l-4 border-blue-500 cursor-pointer hover:bg-gray-100 transition-colors"
-                  onClick={() => {
-                    // Navigate to appointment details
-                    window.location.href = `/appointments?view=details&id=${appointment.id}`
+        ))}
+      </div>
+
+      {/* Time grid */}
+      <div className="relative" style={{ height: '960px' }}> {/* 24 slots * 40px = 960px */}
+        {/* Time labels and grid lines */}
+        <div className="absolute inset-0 grid border-r" style={{ gridTemplateColumns: '80px ' + 'repeat(' + staff.length + ', 1fr)' }}>
+          <div className="relative">
+            {timeSlots.map((time, index) => (
+              <div
+                key={time}
+                className="absolute left-0 right-0 border-b text-xs text-gray-500 bg-gray-50 px-2 flex items-center justify-center"
+                style={{ 
+                  top: `${index * 40}px`, 
+                  height: '40px',
+                  borderBottomColor: time.endsWith(':00') ? '#e5e7eb' : '#f3f4f6'
+                }}
+              >
+                {time.endsWith(':00') && (
+                  <span className="font-medium">
+                    {parseInt(time) > 12 ? `${parseInt(time) - 12}:00 PM` : `${time} AM`}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Staff columns */}
+          {staff.map((staffMember) => (
+            <div key={staffMember.ghl_id} className="relative border-r last:border-r-0">
+              {/* Grid lines for this staff column */}
+              {timeSlots.map((time, index) => (
+                <div
+                  key={time}
+                  className="absolute left-0 right-0 border-b"
+                  style={{ 
+                    top: `${index * 40}px`, 
+                    height: '40px',
+                    borderBottomColor: time.endsWith(':00') ? '#e5e7eb' : '#f3f4f6'
                   }}
-                >
-                  <div>
-                    <div className="font-medium">{appointment.serviceName}</div>
-                    <div className="text-sm text-gray-600">{appointment.contactName}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium">
-                      {appointment.startTime && formatTime(appointment.startTime)} 
+                />
+              ))}
+
+              {/* Appointments for this staff member */}
+              {getStaffAppointments(staffMember.ghl_id).map((appointment) => {
+                const style = getAppointmentStyle(appointment)
+                if (style.display === 'none') return null
+
+                return (
+                  <div
+                    key={appointment.id}
+                    className="bg-blue-100 border border-blue-300 rounded px-2 py-1 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm"
+                    style={style}
+                    onClick={() => {
+                      // Navigate to appointment details
+                      window.location.href = `/appointments?view=details&id=${appointment.id}`
+                    }}
+                    title={`${appointment.serviceName} - ${appointment.contactName}`}
+                  >
+                    <div className="text-xs font-medium text-blue-800 truncate">
+                      {appointment.serviceName}
+                    </div>
+                    <div className="text-xs text-blue-600 truncate">
+                      {appointment.contactName}
+                    </div>
+                    <div className="text-xs text-blue-500 mt-1">
+                      {appointment.startTime && formatTime(appointment.startTime)}
                       {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
                     </div>
-                    <div className="text-xs">
-                      <span className={`inline-block px-2 py-1 rounded text-xs ${
-                        appointment.appointment_status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                        appointment.appointment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {appointment.appointment_status}
-                      </span>
-                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
-          )}
+          ))}
         </div>
-      ))}
-      
-      {appointmentsByStaff.length === 0 && (
-        <div className="text-center py-8 text-gray-400">
-          <User className="h-12 w-12 mx-auto mb-4" />
-          <p>No staff members found</p>
-          <p className="text-sm">Staff members need to have the &apos;barber&apos; role to appear here.</p>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
