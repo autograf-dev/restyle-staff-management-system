@@ -195,6 +195,7 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     role: string;
   }[]>([])
   const [loading, setLoading] = React.useState(true)
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
     const fetchStaff = async () => {
@@ -231,10 +232,10 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     fetchStaff()
   }, [])
 
-  // Generate time slots from 8 AM to 9 PM (13 hours)
+  // Generate time slots for full 24 hours
   const generateTimeSlots = () => {
     const slots = []
-    for (let hour = 8; hour < 21; hour++) {
+    for (let hour = 0; hour < 24; hour++) {
       slots.push(`${hour}:00`)
       slots.push(`${hour}:30`)
     }
@@ -243,7 +244,7 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
 
   const timeSlots = generateTimeSlots()
 
-  // Helper function to get appointment position and height (improved with 60px slots)
+  // Helper function to get appointment position and height (improved with 60px slots for 24 hours)
   const getAppointmentStyleImproved = (appointment: Appointment) => {
     if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
     
@@ -255,8 +256,8 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     const endHour = end.getHours()
     const endMinute = end.getMinutes()
     
-    // Calculate position from 8 AM (480 minutes)
-    const dayStartMinutes = 8 * 60 // 8 AM in minutes
+    // Calculate position from midnight (0 minutes)
+    const dayStartMinutes = 0 // Start from midnight
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
@@ -343,7 +344,13 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
                 >
                   {time.endsWith(':00') && (
                     <span className="text-sm font-medium text-muted-foreground">
-                      {parseInt(time) > 12 ? `${parseInt(time) - 12}:00 PM` : `${time} AM`}
+                      {(() => {
+                        const hour = parseInt(time)
+                        if (hour === 0) return '12:00 AM'
+                        if (hour < 12) return `${hour}:00 AM`
+                        if (hour === 12) return '12:00 PM'
+                        return `${hour - 12}:00 PM`
+                      })()}
                     </span>
                   )}
                 </div>
