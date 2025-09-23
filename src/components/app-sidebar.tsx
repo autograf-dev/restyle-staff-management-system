@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Scissors } from "lucide-react"
+import { Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Scissors, Calendar as CalendarIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -76,6 +76,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: "Appointments",
         url: `${prefix}/appointments`,
         icon: Clock,
+        isActive: false,
+      },
+      {
+        title: "Calendar",
+        url: `${prefix}/calendar`,
+        icon: CalendarIcon,
         isActive: false,
       },
       {

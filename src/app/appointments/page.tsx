@@ -28,6 +28,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { toast } from "sonner"
 import { Dialog as ConfirmDialog, DialogContent as ConfirmContent, DialogHeader as ConfirmHeader, DialogTitle as ConfirmTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { useRouter, useSearchParams } from "next/navigation"
 
 type Appointment = {
   id: string
@@ -371,6 +372,8 @@ function getStatusBadgeClasses(status: string) {
 }
 
 export default function AppointmentsPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const {
     data,
     loading,
@@ -384,6 +387,7 @@ export default function AppointmentsPage() {
 
   const [selected, setSelected] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
+  // (moved) Effects for deep-linking placed after new-appointment state
   const [cancelConfirmOpen, setCancelConfirmOpen] = React.useState(false)
   const [appointmentToCancel, setAppointmentToCancel] = React.useState<Appointment | null>(null)
   const [cancelLoading, setCancelLoading] = React.useState(false)
@@ -440,6 +444,42 @@ export default function AppointmentsPage() {
   const [newAppLoadingServices, setNewAppLoadingServices] = React.useState(false)
   const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
   const [newAppLoadingSlots, setNewAppLoadingSlots] = React.useState(false)
+
+  // Open details dialog or new appointment dialog when query params exist
+  React.useEffect(() => {
+    const view = searchParams?.get("view")
+    const id = searchParams?.get("id")
+    if (view === "details" && id && data.length > 0) {
+      const found = data.find((a) => a.id === id)
+      if (found) {
+        setSelected(found)
+        setDetailsOpen(true)
+      }
+    } else if (view === "new") {
+      setNewAppointmentOpen(true)
+    }
+  }, [searchParams, data])
+
+  // Keep URL in sync when dialog opens/closes
+  React.useEffect(() => {
+    if (detailsOpen && selected) {
+      const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
+      params.set("view", "details")
+      params.set("id", selected.id)
+      router.replace(`?${params.toString()}`)
+    } else if (newAppointmentOpen) {
+      const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
+      params.set("view", "new")
+      router.replace(`?${params.toString()}`)
+    } else {
+      const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
+      params.delete("view")
+      params.delete("id")
+      const qs = params.toString()
+      router.replace(qs ? `?${qs}` : "")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailsOpen, selected, newAppointmentOpen])
 
   // Helper function to check if appointment is within 2 hours
   const isWithinTwoHours = (startTime?: string) => {
