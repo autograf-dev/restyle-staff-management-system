@@ -838,7 +838,6 @@ export default function AppointmentsPage() {
     setAvailableDates([])
     setAvailableSlots([])
     setWorkingSlots({})
-    setCurrentDateIndex(0)
   }
 
   // Effect to fetch staff when reschedule dialog opens
@@ -880,7 +879,7 @@ export default function AppointmentsPage() {
       const res = await fetch('https://restyle-api.netlify.app/.netlify/functions/supabasegroups')
       const data = await res.json()
       
-      const departments = data.groups.map((group: { id: string; name: string }) => ({
+      const departments = data.groups.map((group: { id: string; name: string; description?: string }) => ({
         label: group.name,
         value: group.id,
         description: group.description || '',
@@ -905,7 +904,7 @@ export default function AppointmentsPage() {
       const res = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
       
-      const services = (data.calendars || []).map((service: { id: string; name: string; duration?: number }) => ({
+      const services = (data.calendars || []).map((service: { id: string; name: string; duration?: number; slotDuration?: number; teamMembers?: Array<{ userId: string; name: string }> }) => ({
         label: service.name,
         value: service.id,
         description: `Duration: ${service.slotDuration} mins | Staff: ${service.teamMembers?.length ?? 0}`
