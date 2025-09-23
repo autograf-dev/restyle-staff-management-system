@@ -422,11 +422,11 @@ export default function AppointmentsPage() {
   // New appointment state
   const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false)
   const [newAppCurrentStep, setNewAppCurrentStep] = React.useState(1)
-  const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id: string; name: string }>>([])
+  const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id?: string; name?: string; label?: string; value?: string; description?: string; icon?: string }>>([])
   const [newAppSelectedDepartment, setNewAppSelectedDepartment] = React.useState<string>("")
-  const [newAppServices, setNewAppServices] = React.useState<Array<{ id: string; name: string; duration?: number }>>([])
+  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; label?: string; value?: string; description?: string }>>([])
   const [newAppSelectedService, setNewAppSelectedService] = React.useState<string>("")
-  const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id: string; name: string; email?: string }>>([])
+  const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id?: string; name?: string; email?: string; label?: string; value?: string; badge?: string; icon?: string }>>([])
   const [newAppSelectedStaff, setNewAppSelectedStaff] = React.useState<string>("")
   const [newAppDates, setNewAppDates] = React.useState<DateInfo[]>([])
   const [newAppSelectedDate, setNewAppSelectedDate] = React.useState<string>("")
@@ -1187,7 +1187,7 @@ export default function AppointmentsPage() {
 
       // Get service duration
       const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
-      const durationMatch = selectedServiceObj?.description.match(/Duration: (\d+) mins/)
+      const durationMatch = selectedServiceObj?.description?.match(/Duration: (\d+) mins/)
       const duration = durationMatch ? parseInt(durationMatch[1]) : 120
       const utcEndTime = new Date(utcStartTime.getTime() + duration * 60 * 1000)
 
@@ -1198,7 +1198,7 @@ export default function AppointmentsPage() {
       if (assignedUserId === 'any' || !assignedUserId) {
         const realStaff = newAppStaff.filter(item => item.value !== 'any')
         if (realStaff.length > 0) {
-          assignedUserId = realStaff[Math.floor(Math.random() * realStaff.length)].value
+          assignedUserId = realStaff[Math.floor(Math.random() * realStaff.length)].value || ''
         } else {
           throw new Error('No staff available for this service')
         }
