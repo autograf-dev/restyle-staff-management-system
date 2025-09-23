@@ -199,30 +199,25 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
   React.useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const staffRes = await fetch('/api/getUsers')
+        const staffRes = await fetch('/api/barber-hours')
         const staffJson = await staffRes.json()
         
         if (staffJson.ok) {
-          const users = staffJson.users || []
-          const staffMembers = users
-            .filter((user: { user_metadata?: { role?: string; ghl_id?: string; firstName?: string; lastName?: string } }) => 
-              user.user_metadata?.role === 'barber' && user.user_metadata?.ghl_id)
-            .map((user: { 
-              id: string; 
-              email: string; 
-              user_metadata: { 
-                ghl_id: string; 
-                firstName?: string; 
-                lastName?: string; 
-                role: string 
-              } 
-            }) => ({
-              id: user.id,
-              ghl_id: user.user_metadata.ghl_id,
-              name: `${user.user_metadata.firstName || ''} ${user.user_metadata.lastName || ''}`.trim() || user.email,
-              email: user.email,
-              role: user.user_metadata.role
-            }))
+          const staffData = staffJson.data || []
+          const staffMembers = staffData.map((barber: {
+            "🔒 Row ID"?: string;
+            "ð Row ID"?: string;
+            "Barber/Name": string;
+            "ghl_id": string;
+            "Barber/Email": string;
+            [key: string]: any;
+          }) => ({
+            id: barber["🔒 Row ID"] || barber["ð Row ID"] || barber.ghl_id,
+            ghl_id: barber.ghl_id,
+            name: barber["Barber/Name"],
+            email: barber["Barber/Email"],
+            role: 'barber'
+          }))
           
           setStaff(staffMembers)
         }
