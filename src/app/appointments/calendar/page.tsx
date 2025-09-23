@@ -186,8 +186,14 @@ function formatDate(date: Date) {
 }
 
 // Staff Overview Component
-const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
-  const [staff, setStaff] = React.useState<any[]>([])
+const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) => {
+  const [staff, setStaff] = React.useState<{
+    id: string;
+    ghl_id: string;
+    name: string;
+    email: string;
+    role: string;
+  }[]>([])
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -199,8 +205,18 @@ const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
         if (staffJson.ok) {
           const users = staffJson.users || []
           const staffMembers = users
-            .filter((user: any) => user.user_metadata?.role === 'barber' && user.user_metadata?.ghl_id)
-            .map((user: any) => ({
+            .filter((user: { user_metadata?: { role?: string; ghl_id?: string; firstName?: string; lastName?: string } }) => 
+              user.user_metadata?.role === 'barber' && user.user_metadata?.ghl_id)
+            .map((user: { 
+              id: string; 
+              email: string; 
+              user_metadata: { 
+                ghl_id: string; 
+                firstName?: string; 
+                lastName?: string; 
+                role: string 
+              } 
+            }) => ({
               id: user.id,
               ghl_id: user.user_metadata.ghl_id,
               name: `${user.user_metadata.firstName || ''} ${user.user_metadata.lastName || ''}`.trim() || user.email,
@@ -222,11 +238,11 @@ const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
 
   // Group appointments by staff
   const appointmentsByStaff = React.useMemo(() => {
-    return staff.map((staffMember: any) => ({
+    return staff.map((staffMember) => ({
       ...staffMember,
       appointments: appointments
-        .filter((apt: any) => apt.assigned_user_id === staffMember.ghl_id)
-        .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        .filter((apt) => apt.assigned_user_id === staffMember.ghl_id)
+        .sort((a, b) => new Date(a.startTime || '').getTime() - new Date(b.startTime || '').getTime())
     }))
   }, [staff, appointments])
 
@@ -236,7 +252,7 @@ const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
 
   return (
     <div className="space-y-4">
-      {appointmentsByStaff.map((staffMember: any) => (
+      {appointmentsByStaff.map((staffMember) => (
         <div key={staffMember.ghl_id} className="border rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -255,7 +271,7 @@ const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {staffMember.appointments.map((appointment: any) => (
+              {staffMember.appointments.map((appointment) => (
                 <div 
                   key={appointment.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded border-l-4 border-blue-500 cursor-pointer hover:bg-gray-100 transition-colors"
@@ -270,7 +286,7 @@ const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
                   </div>
                   <div className="text-right">
                     <div className="font-medium">
-                      {formatTime(appointment.startTime)} 
+                      {appointment.startTime && formatTime(appointment.startTime)} 
                       {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
                     </div>
                     <div className="text-xs">
@@ -292,9 +308,9 @@ const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
       
       {appointmentsByStaff.length === 0 && (
         <div className="text-center py-8 text-gray-400">
-          <Users className="h-12 w-12 mx-auto mb-4" />
+          <User className="h-12 w-12 mx-auto mb-4" />
           <p>No staff members found</p>
-          <p className="text-sm">Staff members need to have the 'barber' role to appear here.</p>
+          <p className="text-sm">Staff members need to have the &apos;barber&apos; role to appear here.</p>
         </div>
       )}
     </div>
@@ -593,8 +609,8 @@ export default function CalendarPage() {
                       ) : (
                         <div className="space-y-3">
                           {dayAppointments
-                            .sort((a: any, b: any) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
-                            .map((appointment: any) => (
+                            .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                            .map((appointment) => (
                               <div
                                 key={appointment.id}
                                 onClick={() => openAppointmentDetails(appointment)}
