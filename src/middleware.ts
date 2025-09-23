@@ -10,7 +10,7 @@ export function middleware(request: NextRequest) {
   // Protected routes that require authentication
   const protectedRoutes = [
     "/dashboard",
-    "/contacts", 
+    "/customers", 
     "/opportunities",
     "/lab",
     "/legal",
@@ -32,7 +32,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
-    "/contacts/:path*", 
+    "/customers/:path*", 
     "/opportunities/:path*",
     "/lab/:path*",
     "/legal/:path*",

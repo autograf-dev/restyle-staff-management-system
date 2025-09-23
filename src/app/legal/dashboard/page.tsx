@@ -310,7 +310,7 @@ export default function Page() {
                     <CardTitle>Recent contacts</CardTitle>
                     <CardDescription>Newest 3 contacts</CardDescription>
                   </div>
-                  <Link href="/legal/contacts" className="text-sm font-medium underline underline-offset-4">View all</Link>
+                  <Link href="/legal/customers" className="text-sm font-medium underline underline-offset-4">View all</Link>
                 </CardHeader>
                 <CardContent>
                   <div className="rounded-md border overflow-hidden">
