@@ -75,8 +75,6 @@ type RawContact = {
 function useContacts() {
   const [data, setData] = React.useState<Contact[]>([])
   const [loading, setLoading] = React.useState<boolean>(true)
-  const [currentPage, setCurrentPage] = React.useState<number>(1)
-  const [totalPages, setTotalPages] = React.useState<number>(1)
   const [total, setTotal] = React.useState<number>(0)
   const isInitialMount = React.useRef(true)
   const isMounted = React.useRef(false)
@@ -88,13 +86,14 @@ function useContacts() {
     }
   }, [])
 
-  const fetchContacts = React.useCallback(async (page: number = 1) => {
+  const fetchContacts = React.useCallback(async () => {
     if (!isMounted.current) return
     setLoading(true)
     const controller = new AbortController()
     const { signal } = controller
     try {
-      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=${page}` , { signal })
+      // Fetch all contacts for client-side pagination
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=1&limit=1000`, { signal })
       if (!res.ok) throw new Error("Failed to fetch contacts")
       const json = await res.json()
       const arr = (
@@ -112,8 +111,7 @@ function useContacts() {
       }))
       if (isMounted.current) {
       setData(mapped)
-        setTotal(json.total || 0)
-        setTotalPages(Math.ceil((json.total || 0) / 10)) // Assuming 10 items per page
+        setTotal(mapped.length)
       }
     } catch {
       // Error handling removed - could add logging here if needed
@@ -127,19 +125,17 @@ function useContacts() {
   React.useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
-      fetchContacts(1)
-    } else {
-      fetchContacts(currentPage)
+    fetchContacts()
     }
-  }, [currentPage, fetchContacts])
+  }, [fetchContacts])
 
-  return { data, loading, setData, currentPage, setCurrentPage, totalPages, total, fetchContacts }
+  return { data, loading, setData, total, fetchContacts }
 }
 
 // Supabase sync removed per request
 
 export default function Page() {
-  const { data, loading, setData, currentPage, setCurrentPage, totalPages, total, fetchContacts } = useContacts()
+  const { data, loading, setData, total, fetchContacts } = useContacts()
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -160,6 +156,9 @@ export default function Page() {
   const [bookingCancelOpen, setBookingCancelOpen] = React.useState(false)
   const [bookingToCancel, setBookingToCancel] = React.useState<ContactBooking | null>(null)
   const [bookingCancelLoading, setBookingCancelLoading] = React.useState(false)
+  
+  // Search state
+  const [globalFilter, setGlobalFilter] = React.useState("")
   
   // Add isMounted ref for the main component to prevent state updates on unmounted components
   const isMounted = React.useRef(false)
@@ -683,14 +682,28 @@ export default function Page() {
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    state: { 
+      sorting, 
+      columnFilters, 
+      columnVisibility, 
+      rowSelection,
+      globalFilter,
+    },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    globalFilterFn: "includesString",
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
   })
 
   return (
@@ -731,8 +744,8 @@ export default function Page() {
             <div className="flex items-center gap-2">
               <Input
                 placeholder="Search customers..."
-                value={(table.getColumn("contactName")?.getFilterValue() as string) ?? ""}
-                onChange={(e) => table.getColumn("contactName")?.setFilterValue(e.target.value)}
+                value={globalFilter ?? ""}
+                onChange={(e) => setGlobalFilter(e.target.value)}
                 className="w-[280px] h-9"
               />
             </div>
@@ -789,31 +802,106 @@ export default function Page() {
               </Table>
             </div>
 
-            <div className="flex items-center justify-between py-2">
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between py-4">
               <div className="text-muted-foreground text-sm">
-                Page {currentPage} of {totalPages} ({total} total customers)
+                Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
+                {Math.min(
+                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                  table.getFilteredRowModel().rows.length
+                )}{" "}
+                of {table.getFilteredRowModel().rows.length} entries
+                {globalFilter && ` (filtered from ${data.length} total entries)`}
               </div>
-              <div className="flex items-center gap-1.5">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-8" 
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
-                  disabled={currentPage <= 1}
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
+                  className="h-8 w-8 p-0"
                 >
-                  Previous
+                  {"<<"}
                 </Button>
-                <span className="text-sm text-muted-foreground px-2">
-                  {currentPage} / {totalPages}
-                </span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-8" 
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
-                  disabled={currentPage >= totalPages}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="h-8 w-8 p-0"
                 >
-                  Next
+                  {"<"}
+                </Button>
+                
+                {/* Page Numbers */}
+                {(() => {
+                  const currentPage = table.getState().pagination.pageIndex + 1
+                  const totalPages = table.getPageCount()
+                  const pages = []
+                  
+                  // Always show first page
+                  if (totalPages > 0) pages.push(1)
+                  
+                  // Show pages around current page
+                  const start = Math.max(2, currentPage - 1)
+                  const end = Math.min(totalPages - 1, currentPage + 1)
+                  
+                  // Add ellipsis if there's a gap
+                  if (start > 2) pages.push("...")
+                  
+                  // Add pages around current
+                  for (let i = start; i <= end; i++) {
+                    if (i !== 1 && i !== totalPages) pages.push(i)
+                  }
+                  
+                  // Add ellipsis if there's a gap
+                  if (end < totalPages - 1) pages.push("...")
+                  
+                  // Always show last page
+                  if (totalPages > 1) pages.push(totalPages)
+                  
+                  return pages.map((page, index) => {
+                    if (page === "...") {
+                      return (
+                        <span key={index} className="px-2 text-muted-foreground">
+                          ...
+                        </span>
+                      )
+                    }
+                    
+                    const isActive = page === currentPage
+                    return (
+                      <Button
+                        key={page}
+                        variant={isActive ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => table.setPageIndex((page as number) - 1)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  })
+                })()}
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="h-8 w-8 p-0"
+                >
+                  {">"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                  disabled={!table.getCanNextPage()}
+                  className="h-8 w-8 p-0"
+                >
+                  {">>"}
                 </Button>
               </div>
             </div>
@@ -908,7 +996,7 @@ export default function Page() {
                             </div>
                           )}
                           
-                          <div className="text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                             {b.startTime ? new Date(b.startTime).toLocaleString('en-US', {
                               timeZone: 'America/Edmonton',
                               year: 'numeric',
@@ -918,7 +1006,7 @@ export default function Page() {
                               minute: '2-digit',
                               timeZoneName: 'short'
                             }) : 'Time not set'}
-                          </div>
+                        </div>
                           <div className="text-xs text-muted-foreground">
                             {b.startTime && b.endTime ? (() => {
                               const mins = Math.max(0, Math.round((new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 60000))
@@ -945,9 +1033,9 @@ export default function Page() {
                           </div>
                           {b.address && b.address !== 'Zoom' && (
                             <div className="text-xs text-muted-foreground mt-1">Location: {b.address}</div>
-                          )}
-                        </div>
-                      </li>
+                        )}
+                      </div>
+                    </li>
                     )
                   })}
                 </ul>
