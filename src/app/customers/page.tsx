@@ -20,7 +20,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Pencil, Trash2, Plus } from "lucide-react"
+import { ArrowUpDown, Pencil, Trash2, Plus, Trash } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet"
@@ -32,7 +32,6 @@ type Contact = {
   contactName: string
   firstName: string
   lastName: string
-  email: string | null
   phone: string | null
   dateAdded: string
 }
@@ -40,25 +39,28 @@ type Contact = {
 type ContactBooking = {
   id: string
   serviceName: string
-  appointmentDate: string
-  appointmentTime: string
+  startTime: string
+  endTime: string
   status: string
-  notes?: string
+  appointment_status: string
+  assignedStaffFirstName?: string
+  assignedStaffLastName?: string
+  address: string
   createdAt: string
   updatedAt: string
 }
 
 type RawBooking = {
   id?: string | number
-  serviceName?: string
-  appointmentDate?: string
-  appointmentTime?: string
+  calendar_id?: string
+  contact_id?: string
+  title?: string
   status?: string
-  notes?: string
-  createdAt?: string
-  updatedAt?: string
-  contactId?: string | number
-  contact?: { id?: string | number } | null
+  appointment_status?: string
+  assigned_user_id?: string
+  address?: string
+  is_recurring?: boolean
+  trace_id?: string
 }
 
 type RawContact = {
@@ -66,7 +68,6 @@ type RawContact = {
   contactName?: string
   firstName?: string
   lastName?: string
-  email?: string | null
   phone?: string | null
   dateAdded?: string
 }
@@ -74,40 +75,71 @@ type RawContact = {
 function useContacts() {
   const [data, setData] = React.useState<Contact[]>([])
   const [loading, setLoading] = React.useState<boolean>(true)
+  const [currentPage, setCurrentPage] = React.useState<number>(1)
+  const [totalPages, setTotalPages] = React.useState<number>(1)
+  const [total, setTotal] = React.useState<number>(0)
+  const isInitialMount = React.useRef(true)
+  const isMounted = React.useRef(false)
 
-  const fetchContacts = React.useCallback(async () => {
+  React.useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  const fetchContacts = React.useCallback(async (page: number = 1) => {
+    if (!isMounted.current) return
     setLoading(true)
+    const controller = new AbortController()
+    const { signal } = controller
     try {
-      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getcontacts")
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=${page}` , { signal })
       if (!res.ok) throw new Error("Failed to fetch contacts")
       const json = await res.json()
-      const arr = (json?.contacts?.contacts || []) as RawContact[]
+      const arr = (
+        Array.isArray(json?.contacts)
+          ? (json?.contacts as RawContact[])
+          : ((json?.contacts?.contacts || []) as RawContact[])
+      )
       const mapped: Contact[] = arr.map((c) => ({
         id: String(c.id ?? ""),
         contactName: c.contactName || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
         firstName: c.firstName || "",
         lastName: c.lastName || "",
-        email: c.email ?? null,
         phone: c.phone ?? null,
         dateAdded: c.dateAdded || new Date().toISOString(),
       }))
+      if (isMounted.current) {
       setData(mapped)
+        setTotal(json.total || 0)
+        setTotalPages(Math.ceil((json.total || 0) / 10)) // Assuming 10 items per page
+      }
     } catch {
       // Error handling removed - could add logging here if needed
     } finally {
-      setLoading(false)
+      if (isMounted.current) setLoading(false)
     }
+    return () => controller.abort()
   }, [])
 
-  React.useEffect(() => {
-    fetchContacts()
-  }, [fetchContacts])
 
-  return { data, loading, setData }
+  React.useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      fetchContacts(1)
+    } else {
+      fetchContacts(currentPage)
+    }
+  }, [currentPage, fetchContacts])
+
+  return { data, loading, setData, currentPage, setCurrentPage, totalPages, total, fetchContacts }
 }
 
+// Supabase sync removed per request
+
 export default function Page() {
-  const { data, loading, setData } = useContacts()
+  const { data, loading, setData, currentPage, setCurrentPage, totalPages, total, fetchContacts } = useContacts()
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -118,13 +150,76 @@ export default function Page() {
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [formFirst, setFormFirst] = React.useState("")
   const [formLast, setFormLast] = React.useState("")
-  const [formEmail, setFormEmail] = React.useState("")
   const [formPhone, setFormPhone] = React.useState("")
   const [confirmOpen, setConfirmOpen] = React.useState(false)
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null)
   const [addLoading, setAddLoading] = React.useState(false)
   const [contactBookings, setContactBookings] = React.useState<ContactBooking[]>([])
   const [contactBookingsLoading, setContactBookingsLoading] = React.useState(false)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bookingCancelOpen, setBookingCancelOpen] = React.useState(false)
+  const [bookingToCancel, setBookingToCancel] = React.useState<ContactBooking | null>(null)
+  const [bookingCancelLoading, setBookingCancelLoading] = React.useState(false)
+  
+  // Add isMounted ref for the main component to prevent state updates on unmounted components
+  const isMounted = React.useRef(false)
+  
+  React.useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  // Helper function to check if booking is within 2 hours
+  const isBookingWithinTwoHours = (startTime?: string) => {
+    if (!startTime) return false
+    const start = new Date(startTime)
+    const now = new Date()
+    return start.getTime() <= now.getTime() + 2 * 60 * 60 * 1000
+  }
+
+  // Cancel booking function for customer bookings
+  const handleCancelCustomerBooking = async (booking: ContactBooking) => {
+    if (isBookingWithinTwoHours(booking.startTime)) {
+      toast.error("Cannot cancel - booking starts within 2 hours")
+      return
+    }
+    setBookingToCancel(booking)
+    setBookingCancelOpen(true)
+  }
+
+  const confirmCancelCustomerBooking = async () => {
+    if (!bookingToCancel) return
+    
+    setBookingCancelLoading(true)
+    try {
+      const res = await fetch("https://restyle-api.netlify.app/.netlify/functions/cancelbooking", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookingId: bookingToCancel.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Cancel failed")
+      
+      // Refresh customer bookings
+      if (selected) {
+        await fetchContactBookings(selected.id)
+      }
+      toast.success("Appointment cancelled successfully")
+      setBookingCancelOpen(false)
+      setBookingToCancel(null)
+    } catch (error) {
+      console.error(error)
+      toast.error(`Cancellation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setBookingCancelLoading(false)
+    }
+  }
+
 
   const openDetails = React.useCallback((contact: Contact) => {
     setSelected(contact)
@@ -137,42 +232,148 @@ export default function Page() {
       setEditingId(contact.id)
       setFormFirst(contact.firstName || "")
       setFormLast(contact.lastName || "")
-      setFormEmail(contact.email || "")
       setFormPhone(contact.phone || "")
     } else {
       setEditingId(null)
       setFormFirst("")
       setFormLast("")
-      setFormEmail("")
       setFormPhone("")
     }
     setOpenAdd(true)
   }, [])
 
   async function fetchContactBookings(contactId: string) {
+    // Only set loading if still mounted (prevent state updates on unmounted components)
+    if (isMounted.current) {
     setContactBookingsLoading(true)
+    }
+    
+    const controller = new AbortController()
+    const { signal } = controller
+    
     try {
-      // TODO: Replace with actual bookings API endpoint
-      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getBookings")
+      // Fetch bookings for this contact using the bookings API endpoint
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/bookings?contactId=${encodeURIComponent(contactId)}`, { signal })
       if (!res.ok) throw new Error("Failed to fetch bookings")
       const json = await res.json()
-      const arr = (json?.bookings?.bookings || []) as RawBooking[]
-      const filtered = arr.filter((b) => String(b.contactId || b.contact?.id || "") === String(contactId))
-      const mapped: ContactBooking[] = filtered.map((b) => ({
-        id: String(b.id ?? ""),
-        serviceName: String(b.serviceName ?? ""),
-        appointmentDate: String(b.appointmentDate ?? ""),
-        appointmentTime: String(b.appointmentTime ?? ""),
-        status: String(b.status ?? "scheduled"),
-        notes: b.notes ? String(b.notes) : undefined,
-        createdAt: String(b.createdAt ?? new Date().toISOString()),
-        updatedAt: String(b.updatedAt ?? new Date().toISOString()),
-      }))
-      setContactBookings(mapped)
-    } catch {
+      const bookings = (json?.bookings || []) as RawBooking[]
+      
+      // Helper function to delay execution with abort check
+      const delay = (ms: number) => new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          if (signal.aborted) {
+            reject(new Error('Aborted'))
+          } else {
+            resolve(undefined)
+          }
+        }, ms)
+        
+        if (signal.aborted) {
+          clearTimeout(timeout)
+          reject(new Error('Aborted'))
+        }
+      })
+      
+      // Process bookings in smaller batches to avoid overwhelming the server
+      const enrichedBookings = []
+      const batchSize = 5 // Smaller batch for customer page since it's usually fewer bookings
+      
+      for (let i = 0; i < bookings.length; i += batchSize) {
+        // Check if aborted before processing each batch
+        if (signal.aborted) {
+          throw new Error('Aborted')
+        }
+        
+        const batch = bookings.slice(i, i + batchSize)
+        const batchResults = await Promise.all(
+          batch.map(async (booking) => {
+            // Check abort status before processing each booking
+            if (signal.aborted) {
+              throw new Error('Aborted')
+            }
+
+            const details: ContactBooking = {
+              id: String(booking.id || ""),
+              serviceName: booking.title || 'Untitled Service',
+              startTime: "",
+              endTime: "",
+              status: booking.status || "",
+              appointment_status: booking.appointment_status || "",
+              address: booking.address || "",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+
+            // Fetch appointment details for times (with abort check)
+            if (!signal.aborted) {
+              try {
+                const apptRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${booking.id}`, { signal })
+                if (apptRes.ok && !signal.aborted) {
+                  const apptData = await apptRes.json()
+                  if (apptData.appointment) {
+                    details.startTime = apptData.appointment.startTime || ""
+                    details.endTime = apptData.appointment.endTime || ""
+                    details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
+                  }
+                }
+              } catch (error) {
+                if (!signal.aborted) {
+                  console.warn(`Failed to fetch booking details for ${booking.id}:`, error)
+                }
+              }
+            }
+
+            // Fetch staff details (with abort check)
+            if (booking.assigned_user_id && !signal.aborted) {
+              try {
+                const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${booking.assigned_user_id}`, { signal })
+                if (staffRes.ok && !signal.aborted) {
+                  const staffData = await staffRes.json()
+                  if (staffData.firstName) {
+                    details.assignedStaffFirstName = staffData.firstName
+                    details.assignedStaffLastName = staffData.lastName
+                  }
+                }
+              } catch (error) {
+                if (!signal.aborted) {
+                  console.warn(`Failed to fetch staff details for ${booking.assigned_user_id}:`, error)
+                }
+              }
+            }
+
+            return details
+          })
+        )
+        
+        enrichedBookings.push(...batchResults)
+        
+        // Small delay between batches with abort check
+        if (i + batchSize < bookings.length && !signal.aborted) {
+          await delay(50)
+        }
+      }
+      
+      // Only update state if component is still mounted and request wasn't aborted
+      if (isMounted.current && !signal.aborted) {
+        setContactBookings(enrichedBookings)
+      }
+    } catch (error) {
+      if (!(error instanceof Error && error.message === 'Aborted')) {
+        console.warn('Failed to fetch contact bookings:', error)
+        if (isMounted.current) {
       setContactBookings([])
+        }
+      }
     } finally {
+      // Only update loading state if component is still mounted
+      if (isMounted.current) {
       setContactBookingsLoading(false)
+      }
+    }
+
+    // Return cleanup function to abort requests
+    return () => {
+      controller.abort()
     }
   }
 
@@ -180,24 +381,30 @@ export default function Page() {
     e.preventDefault()
     const firstName = formFirst.trim()
     const lastName = formLast.trim()
-    const email = formEmail.trim()
     const phone = formPhone.trim()
     const name = [firstName, lastName].filter(Boolean).join(" ")
-    if (!firstName || !email) {
-      toast.error("First name and email are required")
+    if (!firstName) {
+      toast.error("First name is required")
       return
     }
 
     // EDIT FLOW
     if (editingId) {
-      const payload = { firstName, lastName, name, email, phone }
+      const payload = {
+        firstName,
+        lastName,
+        name,
+        phone,
+        optionalFields: {
+          tags: ["customer"],
+        },
+      }
       const previous = data.find((c) => c.id === editingId) || null
       const optimisticUpdated: Contact = {
         id: editingId,
         contactName: name || previous?.contactName || "",
         firstName,
         lastName,
-        email,
         phone,
         dateAdded: previous?.dateAdded || new Date().toISOString(),
       }
@@ -206,18 +413,21 @@ export default function Page() {
       if (selected?.id === editingId) setSelected(optimisticUpdated)
       setOpenAdd(false)
       setAddLoading(true)
-      toast.loading("Updating contact…", { id: "edit-contact" })
+      toast.loading("Updating customer…", { id: "edit-contact" })
       try {
+        // First, update in external API
         const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/updateContact?id=${encodeURIComponent(editingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
         if (!res.ok) throw new Error("Failed to update contact")
+        
         const json = await res.json().catch(() => null)
-        try {
           const raw = (json && (json.contact || json.data || json.result || json)) || null
           const server = raw && (raw.contact ? raw.contact : raw)
+        
+        let finalContact = optimisticUpdated
           if (server) {
             const mapped: Partial<Contact> = {
               id: String(server.id ?? server.contactId ?? editingId),
@@ -228,22 +438,24 @@ export default function Page() {
                 optimisticUpdated.contactName,
               firstName: server.firstName ?? optimisticUpdated.firstName,
               lastName: server.lastName ?? optimisticUpdated.lastName,
-              email: server.email ?? optimisticUpdated.email,
               phone: server.phone ?? optimisticUpdated.phone,
               dateAdded: server.dateAdded ?? optimisticUpdated.dateAdded,
             }
             setData((prev) => prev.map((c) => (c.id === editingId ? ({ ...c, ...mapped } as Contact) : c)))
             if (selected?.id === editingId) setSelected((prevSel) => (prevSel ? ({ ...prevSel, ...mapped } as Contact) : prevSel))
-          }
-        } catch {}
-        toast.success("Contact updated", { id: "edit-contact" })
+          finalContact = { ...optimisticUpdated, ...mapped } as Contact
+        }
+        
+        // Supabase sync removed
+        
+        toast.success("Customer updated", { id: "edit-contact" })
       } catch {
         // revert optimistic edit
         if (previous) {
           setData((prev) => prev.map((c) => (c.id === editingId ? previous : c)))
           if (selected?.id === editingId) setSelected(previous)
         }
-        toast.error("Failed to update contact", { id: "edit-contact" })
+        toast.error("Failed to update customer", { id: "edit-contact" })
       } finally {
         setAddLoading(false)
         setEditingId(null)
@@ -256,11 +468,9 @@ export default function Page() {
       firstName,
       lastName,
       name,
-      email,
       phone,
       optionalFields: {
-        companyName: "Lawyer Vantage Tc Legal",
-        tags: ["new", "lead"],
+        tags: ["customer"],
       },
     }
     // optimistic add
@@ -270,26 +480,28 @@ export default function Page() {
       contactName: name,
       firstName,
       lastName,
-      email,
       phone,
       dateAdded: new Date().toISOString(),
     }
     setData((prev) => [optimistic, ...prev])
     setOpenAdd(false)
     setAddLoading(true)
-    toast.loading("Creating contact…", { id: "add-contact" })
+    toast.loading("Creating customer…", { id: "add-contact" })
     try {
+      // First, create in external API
       const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/addContact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error("Failed to create contact")
-      // Try to update the optimistic row with server data (id, etc.) without refetching
+      
+      // Get the created contact data
       const json = await res.json().catch(() => null)
-      try {
         const raw = (json && (json.contact || json.data || json.result || json)) || null
         const server = raw && (raw.contact ? raw.contact : raw)
+      
+      let finalContact = optimistic
         if (server) {
           const mapped = {
             id: String(server.id ?? server.contactId ?? server._id ?? server.uuid ?? tempId),
@@ -300,18 +512,21 @@ export default function Page() {
               optimistic.contactName,
             firstName: server.firstName ?? optimistic.firstName,
             lastName: server.lastName ?? optimistic.lastName,
-            email: server.email ?? optimistic.email,
             phone: server.phone ?? optimistic.phone,
             dateAdded: server.dateAdded ?? optimistic.dateAdded,
-          } as Partial<Contact>
-          setData((prev) => prev.map((c) => (c.id === tempId ? ({ ...c, ...mapped } as Contact) : c)))
-        }
-      } catch {}
-      toast.success("Contact created", { id: "add-contact" })
+        } as Contact
+        
+        setData((prev) => prev.map((c) => (c.id === tempId ? mapped : c)))
+        finalContact = mapped
+      }
+      
+      // Supabase sync removed
+      
+      toast.success("Customer created", { id: "add-contact" })
     } catch {
       // revert optimistic add
       setData((prev) => prev.filter((c) => c.id !== tempId))
-      toast.error("Failed to create contact", { id: "add-contact" })
+      toast.error("Failed to create customer", { id: "add-contact" })
     } finally {
       setAddLoading(false)
     }
@@ -334,17 +549,60 @@ export default function Page() {
     }
     const previousData = data
     setData((prev) => prev.filter((c) => c.id !== id))
-    toast.loading("Deleting…", { id: `del-${id}` })
+    toast.loading("Deleting customer…", { id: `del-${id}` })
     try {
+      // First, delete from external API
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteContact?id=${encodeURIComponent(id)}`)
       if (!res.ok) throw new Error("Failed to delete contact")
-      toast.success("Contact deleted", { id: `del-${id}` })
+      
+      // Supabase sync removed
+      
+      toast.success("Customer deleted", { id: `del-${id}` })
     } catch {
       // revert optimistic removal
       setData(previousData)
-      toast.error("Failed to delete contact", { id: `del-${id}` })
+      toast.error("Failed to delete customer", { id: `del-${id}` })
     } finally {
       setPendingDeleteId(null)
+    }
+  }
+
+  async function handleBulkDelete() {
+    const selectedRows = table.getFilteredSelectedRowModel().rows
+    if (selectedRows.length === 0) return
+    
+    setBulkDeleteOpen(false)
+    const selectedIds = selectedRows.map(row => row.original.id)
+    const previousData = data
+    
+    // optimistic UI: remove immediately
+    setData((prev) => prev.filter((c) => !selectedIds.includes(c.id)))
+    setRowSelection({})
+    
+    toast.loading(`Deleting ${selectedIds.length} customers…`, { id: "bulk-delete" })
+    
+    try {
+      // Delete customers one by one from external API
+      const deletePromises = selectedIds.map(async (id) => {
+        const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteContact?id=${encodeURIComponent(id)}`)
+        // Supabase sync removed
+        return res
+      })
+      
+      const results = await Promise.allSettled(deletePromises)
+      const failed = results.filter(result => result.status === 'rejected' || !result.value?.ok)
+      
+      if (failed.length === 0) {
+        toast.success(`${selectedIds.length} customers deleted`, { id: "bulk-delete" })
+      } else {
+        toast.error(`${failed.length} customers failed to delete`, { id: "bulk-delete" })
+        // revert optimistic removal for failed deletions
+        setData(previousData)
+      }
+    } catch {
+      // revert optimistic removal
+      setData(previousData)
+      toast.error("Failed to delete customers", { id: "bulk-delete" })
     }
   }
 
@@ -389,7 +647,6 @@ export default function Page() {
           </button>
         ),
       },
-      { accessorKey: "email", header: "Email", cell: ({ row }) => <div className="lowercase">{row.getValue("email") || "-"}</div> },
       { accessorKey: "phone", header: "Phone", cell: ({ row }) => <div>{row.getValue("phone") || "-"}</div> },
       { accessorKey: "dateAdded", header: "Added", cell: ({ row }) => <div>{new Date(row.getValue("dateAdded")).toLocaleString()}</div> },
       {
@@ -432,7 +689,6 @@ export default function Page() {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
@@ -451,12 +707,22 @@ export default function Page() {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-[1.4rem] font-semibold leading-none">Contacts - Tc Legal</h1>
-              <p className="text-muted-foreground">Create, update, and edit your contacts from here.</p>
+              <h1 className="text-[1.4rem] font-semibold leading-none">Customers - Restyle Salon</h1>
+              <p className="text-muted-foreground">Create, update, and edit your customers from here.</p>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+              {table.getFilteredSelectedRowModel().rows.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  onClick={() => setBulkDeleteOpen(true)}
+                  className="h-9"
+                >
+                  <Trash className="mr-2 h-4 w-4" />
+                  Delete ({table.getFilteredSelectedRowModel().rows.length})
+                </Button>
+              )}
               <Button onClick={() => openEdit()} className="h-9">
-                <Plus className="mr-2 h-4 w-4" /> Add contact
+                <Plus className="mr-2 h-4 w-4" /> Add customer
               </Button>
             </div>
           </div>
@@ -464,7 +730,7 @@ export default function Page() {
           <div className="w-full space-y-3">
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Search contacts..."
+                placeholder="Search customers..."
                 value={(table.getColumn("contactName")?.getFilterValue() as string) ?? ""}
                 onChange={(e) => table.getColumn("contactName")?.setFilterValue(e.target.value)}
                 className="w-[280px] h-9"
@@ -525,13 +791,28 @@ export default function Page() {
 
             <div className="flex items-center justify-between py-2">
               <div className="text-muted-foreground text-sm">
-                {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s) selected.
+                Page {currentPage} of {totalPages} ({total} total customers)
               </div>
               <div className="flex items-center gap-1.5">
-                <Button variant="outline" size="sm" className="h-8" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                  disabled={currentPage <= 1}
+                >
                   Previous
                 </Button>
-                <Button variant="outline" size="sm" className="h-8" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                <span className="text-sm text-muted-foreground px-2">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                  disabled={currentPage >= totalPages}
+                >
                   Next
                 </Button>
               </div>
@@ -542,7 +823,7 @@ export default function Page() {
         <Dialog open={openAdd} onOpenChange={setOpenAdd}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingId ? "Edit contact" : "Add contact"}</DialogTitle>
+              <DialogTitle>{editingId ? "Edit customer" : "Add customer"}</DialogTitle>
             </DialogHeader>
             <form className="grid gap-3" onSubmit={handleCreateSubmit}>
               <div className="grid gap-2">
@@ -552,10 +833,6 @@ export default function Page() {
               <div className="grid gap-2">
                 <label className="text-sm">Last name</label>
                 <Input name="lastName" value={formLast} onChange={(e) => setFormLast(e.target.value)} />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm">Email</label>
-                <Input type="email" name="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <label className="text-sm">Phone</label>
@@ -574,9 +851,9 @@ export default function Page() {
         <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
           <SheetContent side="right" className="w-full sm:max-w-md">
             <SheetHeader>
-          <SheetTitle className="capitalize">{(selected?.contactName || "").toLowerCase() || "Contact"}</SheetTitle>
+          <SheetTitle className="capitalize">{(selected?.contactName || "").toLowerCase() || "Customer"}</SheetTitle>
           <SheetDescription>
-            {selected?.email || "No email"}
+            Customer Details
           </SheetDescription>
             </SheetHeader>
         <div className="px-4 space-y-3">
@@ -592,20 +869,87 @@ export default function Page() {
                 <div className="p-3 text-sm text-muted-foreground">No bookings</div>
               ) : (
                 <ul className="divide-y">
-                  {contactBookings.map((b) => (
-                    <li key={b.id} className="p-3 flex items-center justify-between gap-2">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{b.serviceName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {b.appointmentDate} at {b.appointmentTime}
+                  {contactBookings.map((b) => {
+                    const isCancelled = b.appointment_status === 'cancelled'
+                    const isPast = b.startTime ? new Date(b.startTime) < new Date() : false
+                    const withinTwoHours = isBookingWithinTwoHours(b.startTime)
+                    
+                    return (
+                      <li key={b.id} className="p-3">
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium">{b.serviceName || 'Untitled Service'}</div>
+                          
+                          {/* Action buttons under service name */}
+                          {!isCancelled && !isPast && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={withinTwoHours}
+                                title={withinTwoHours ? "Cannot reschedule - booking starts within 2 hours" : "Reschedule appointment"}
+                              onClick={() => {
+                                // TODO: Implement reschedule functionality - redirect to appointments page
+                                toast.info("Please use the Appointments page to reschedule bookings")
+                              }}
+                                className="text-xs h-6 px-2"
+                              >
+                                Reschedule
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={withinTwoHours}
+                                title={withinTwoHours ? "Cannot cancel - booking starts within 2 hours" : "Cancel appointment"}
+                                onClick={() => handleCancelCustomerBooking(b)}
+                                className="text-xs h-6 px-2"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                          
+                          <div className="text-xs text-muted-foreground">
+                            {b.startTime ? new Date(b.startTime).toLocaleString('en-US', {
+                              timeZone: 'America/Edmonton',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              timeZoneName: 'short'
+                            }) : 'Time not set'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {b.startTime && b.endTime ? (() => {
+                              const mins = Math.max(0, Math.round((new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 60000))
+                              const h = Math.floor(mins / 60)
+                              const m = mins % 60
+                              if (h && m) return `Duration: ${h}h ${m}m`
+                              if (h) return `Duration: ${h}h`
+                              return `Duration: ${m} mins`
+                            })() : 'Duration unknown'}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                              b.appointment_status === 'confirmed' ? 'bg-green-100 text-green-800 border-green-200' :
+                              b.appointment_status === 'cancelled' ? 'bg-red-100 text-red-800 border-red-200' :
+                              'bg-gray-100 text-gray-800 border-gray-200'
+                            }`}>
+                              {b.appointment_status || b.status || 'Unknown'}
+                            </span>
+                            {(b.assignedStaffFirstName || b.assignedStaffLastName) && (
+                              <span className="text-xs text-muted-foreground">
+                                Staff: {`${b.assignedStaffFirstName || ''} ${b.assignedStaffLastName || ''}`.trim()}
+                              </span>
+                            )}
+                          </div>
+                          {b.address && b.address !== 'Zoom' && (
+                            <div className="text-xs text-muted-foreground mt-1">Location: {b.address}</div>
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground capitalize">{b.status}</div>
-                        {b.notes && (
-                          <div className="text-xs text-muted-foreground mt-1">{b.notes}</div>
-                        )}
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
@@ -627,12 +971,72 @@ export default function Page() {
         <ConfirmDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <ConfirmContent>
             <ConfirmHeader>
-              <ConfirmTitle>Delete contact?</ConfirmTitle>
+              <ConfirmTitle>Delete customer?</ConfirmTitle>
             </ConfirmHeader>
             <div className="px-1 text-sm text-muted-foreground">This action cannot be undone.</div>
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
               <Button variant="destructive" onClick={handleDeleteConfirmed}>Delete</Button>
+            </div>
+          </ConfirmContent>
+        </ConfirmDialog>
+
+        <ConfirmDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+          <ConfirmContent>
+            <ConfirmHeader>
+              <ConfirmTitle>Delete {table.getFilteredSelectedRowModel().rows.length} customers?</ConfirmTitle>
+            </ConfirmHeader>
+            <div className="px-1 text-sm text-muted-foreground">This action cannot be undone. All selected customers will be permanently deleted.</div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleBulkDelete}>Delete All</Button>
+            </div>
+          </ConfirmContent>
+        </ConfirmDialog>
+
+        {/* Booking Cancel Confirmation Dialog */}
+        <ConfirmDialog open={bookingCancelOpen} onOpenChange={setBookingCancelOpen}>
+          <ConfirmContent>
+            <ConfirmHeader>
+              <ConfirmTitle>Cancel Appointment</ConfirmTitle>
+            </ConfirmHeader>
+            <div className="py-4">
+              <p>Are you sure you want to cancel this appointment?</p>
+              {bookingToCancel && (
+                <div className="mt-2 p-3 bg-muted rounded-md">
+                  <p className="font-medium">{bookingToCancel.serviceName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {bookingToCancel.startTime ? new Date(bookingToCancel.startTime).toLocaleString('en-US', {
+                      timeZone: 'America/Edmonton',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZoneName: 'short'
+                    }) : 'Time not set'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Customer: {selected?.contactName || 'Unknown'}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setBookingCancelOpen(false)}
+                disabled={bookingCancelLoading}
+              >
+                Keep Appointment
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmCancelCustomerBooking}
+                disabled={bookingCancelLoading}
+              >
+                {bookingCancelLoading ? "Cancelling..." : "Cancel Appointment"}
+              </Button>
             </div>
           </ConfirmContent>
         </ConfirmDialog>
