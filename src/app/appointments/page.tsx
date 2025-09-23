@@ -1617,18 +1617,18 @@ export default function AppointmentsPage() {
                       <label className="text-sm font-medium text-muted-foreground">Assigned Staff</label>
                       <p className="mt-1 text-sm">
                         {`${selected.assignedStaffFirstName || ''} ${selected.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
-                      </p>
-                    </div>
+                </p>
+              </div>
 
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Location</label>
                       <p className="mt-1 text-sm">{selected.address || 'Not specified'}</p>
-                    </div>
+            </div>
 
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Recurring</label>
                       <p className="mt-1 text-sm">{selected.is_recurring ? 'Yes' : 'No'}</p>
-                    </div>
+          </div>
                   </div>
 
                   {/* Action Buttons */}

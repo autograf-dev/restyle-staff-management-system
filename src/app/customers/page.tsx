@@ -75,6 +75,8 @@ type RawContact = {
 function useContacts() {
   const [data, setData] = React.useState<Contact[]>([])
   const [loading, setLoading] = React.useState<boolean>(true)
+  const [currentPage, setCurrentPage] = React.useState<number>(1)
+  const [totalPages, setTotalPages] = React.useState<number>(1)
   const [total, setTotal] = React.useState<number>(0)
   const isInitialMount = React.useRef(true)
   const isMounted = React.useRef(false)
@@ -86,14 +88,14 @@ function useContacts() {
     }
   }, [])
 
-  const fetchContacts = React.useCallback(async () => {
+  const fetchContacts = React.useCallback(async (page: number = 1) => {
     if (!isMounted.current) return
     setLoading(true)
     const controller = new AbortController()
     const { signal } = controller
     try {
-      // Fetch all contacts for client-side pagination
-      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=1&limit=1000`, { signal })
+      // Fetch all contacts for the current page without limit
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=${page}` , { signal })
       if (!res.ok) throw new Error("Failed to fetch contacts")
       const json = await res.json()
       const arr = (
@@ -110,8 +112,11 @@ function useContacts() {
         dateAdded: c.dateAdded || new Date().toISOString(),
       }))
       if (isMounted.current) {
-      setData(mapped)
-        setTotal(mapped.length)
+        setData(mapped)
+        setTotal(json.total || 0)
+        // Calculate total pages based on API response
+        const pageSize = Math.max(1, mapped.length)
+        setTotalPages(Math.max(1, Math.ceil((json.total || pageSize) / pageSize)))
       }
     } catch {
       // Error handling removed - could add logging here if needed
@@ -121,21 +126,22 @@ function useContacts() {
     return () => controller.abort()
   }, [])
 
-
   React.useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
-    fetchContacts()
+      fetchContacts(1)
+    } else {
+      fetchContacts(currentPage)
     }
-  }, [fetchContacts])
+  }, [currentPage, fetchContacts])
 
-  return { data, loading, setData, total, fetchContacts }
+  return { data, loading, setData, currentPage, setCurrentPage, totalPages, total, fetchContacts }
 }
 
 // Supabase sync removed per request
 
 export default function Page() {
-  const { data, loading, setData, total, fetchContacts } = useContacts()
+  const { data, loading, setData, currentPage, setCurrentPage, totalPages, total, fetchContacts } = useContacts()
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -697,13 +703,9 @@ export default function Page() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     globalFilterFn: "includesString",
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
+    manualPagination: true, // Use server-side pagination
+    pageCount: 1, // Only one page
   })
 
   return (
@@ -743,10 +745,10 @@ export default function Page() {
           <div className="w-full space-y-3">
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Search customers..."
+                placeholder="Search customers on this page..."
                 value={globalFilter ?? ""}
                 onChange={(e) => setGlobalFilter(e.target.value)}
-                className="w-[280px] h-9"
+                className="w-[320px] h-9"
               />
             </div>
 
@@ -802,106 +804,36 @@ export default function Page() {
               </Table>
             </div>
 
-            {/* Pagination Controls */}
+            {/* Simplified Pagination Controls - Show all entries on current page with prev/next only */}
             <div className="flex items-center justify-between py-4">
               <div className="text-muted-foreground text-sm">
-                Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                  table.getFilteredRowModel().rows.length
-                )}{" "}
-                of {table.getFilteredRowModel().rows.length} entries
-                {globalFilter && ` (filtered from ${data.length} total entries)`}
+                Page {currentPage} of {totalPages} - Showing all {data.length} entries on this page ({total} total)
+                {globalFilter && " (search applied to current page only)"}
               </div>
               
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                  className="h-8 w-8 p-0"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1}
+                  className="h-8 px-3"
                 >
-                  {"<<"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                  className="h-8 w-8 p-0"
-                >
-                  {"<"}
+                  Previous
                 </Button>
                 
-                {/* Page Numbers */}
-                {(() => {
-                  const currentPage = table.getState().pagination.pageIndex + 1
-                  const totalPages = table.getPageCount()
-                  const pages = []
-                  
-                  // Always show first page
-                  if (totalPages > 0) pages.push(1)
-                  
-                  // Show pages around current page
-                  const start = Math.max(2, currentPage - 1)
-                  const end = Math.min(totalPages - 1, currentPage + 1)
-                  
-                  // Add ellipsis if there's a gap
-                  if (start > 2) pages.push("...")
-                  
-                  // Add pages around current
-                  for (let i = start; i <= end; i++) {
-                    if (i !== 1 && i !== totalPages) pages.push(i)
-                  }
-                  
-                  // Add ellipsis if there's a gap
-                  if (end < totalPages - 1) pages.push("...")
-                  
-                  // Always show last page
-                  if (totalPages > 1) pages.push(totalPages)
-                  
-                  return pages.map((page, index) => {
-                    if (page === "...") {
-                      return (
-                        <span key={index} className="px-2 text-muted-foreground">
-                          ...
-                        </span>
-                      )
-                    }
-                    
-                    const isActive = page === currentPage
-                    return (
-                      <Button
-                        key={page}
-                        variant={isActive ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => table.setPageIndex((page as number) - 1)}
-                        className="h-8 w-8 p-0"
-                      >
-                        {page}
-                      </Button>
-                    )
-                  })
-                })()}
+                <span className="text-sm text-muted-foreground mx-2">
+                  Page {currentPage}
+                </span>
                 
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                  className="h-8 w-8 p-0"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 px-3"
                 >
-                  {">"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                  disabled={!table.getCanNextPage()}
-                  className="h-8 w-8 p-0"
-                >
-                  {">>"}
+                  Next
                 </Button>
               </div>
             </div>
