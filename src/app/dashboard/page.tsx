@@ -38,6 +38,7 @@ import {
   AreaChart
 } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from "@/components/ui/chart"
+import { useUser } from "@/contexts/user-context"
 
 // Types
 type Appointment = {
@@ -296,9 +297,25 @@ function getAppointmentStatus(appointment: Appointment) {
 }
 
 export default function DashboardPage() {
+  const { user } = useUser()
   const { data: appointments, loading: appointmentsLoading, error: appointmentsError } = useAppointments()
   const { data: contacts, loading: contactsLoading, error: contactsError } = useContacts()
   const { data: staff, loading: staffLoading, error: staffError } = useStaff()
+
+  // Scope data for barbers
+  const scopedAppointments = useMemo(() => {
+    if (user?.role === 'barber' && user.ghlId) {
+      return appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
+    }
+    return appointments
+  }, [appointments, user?.role, user?.ghlId])
+
+  const scopedStaff = useMemo(() => {
+    if (user?.role === 'barber' && user.ghlId) {
+      return staff.filter((s: any) => String(s.ghl_id || '') === user.ghlId)
+    }
+    return staff
+  }, [staff, user?.role, user?.ghlId])
 
   // Calculate KPIs
   const kpis = useMemo(() => {
@@ -308,14 +325,14 @@ export default function DashboardPage() {
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     
     // Appointment metrics
-    const totalAppointments = appointments.length
-    const confirmedAppointments = appointments.filter(a => getAppointmentStatus(a) === 'confirmed').length
-    const cancelledAppointments = appointments.filter(a => getAppointmentStatus(a) === 'cancelled').length
-    const pendingAppointments = appointments.filter(a => getAppointmentStatus(a) === 'pending').length
-    const completedAppointments = appointments.filter(a => getAppointmentStatus(a) === 'completed').length
+    const totalAppointments = scopedAppointments.length
+    const confirmedAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'confirmed').length
+    const cancelledAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'cancelled').length
+    const pendingAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'pending').length
+    const completedAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'completed').length
     
     // Today's appointments
-    const todayAppointments = appointments.filter(a => {
+    const todayAppointments = scopedAppointments.filter(a => {
       if (!a.startTime) return false
       const startDate = new Date(a.startTime)
       return startDate >= today && startDate < new Date(today.getTime() + 24 * 60 * 60 * 1000)
@@ -337,7 +354,7 @@ export default function DashboardPage() {
     }).length
     
     // Staff metrics
-    const totalStaff = staff.length
+    const totalStaff = scopedStaff.length
     const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const dayName = days[new Date().getDay()]
     const workingToday = staff.filter((s) => {
@@ -366,11 +383,11 @@ export default function DashboardPage() {
       confirmationRate,
       cancellationRate
     }
-  }, [appointments, contacts, staff])
+  }, [scopedAppointments, contacts, scopedStaff])
 
   // Service popularity data
   const servicePopularity = useMemo(() => {
-    const serviceCounts = appointments.reduce((acc, appointment) => {
+    const serviceCounts = scopedAppointments.reduce((acc, appointment) => {
       const service = appointment.serviceName || 'Unknown Service'
       acc[service] = (acc[service] || 0) + 1
       return acc
@@ -380,7 +397,7 @@ export default function DashboardPage() {
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6)
-  }, [appointments])
+  }, [scopedAppointments])
 
   // Customer growth data (last 6 months)
   const customerGrowthData = useMemo(() => {
@@ -408,10 +425,10 @@ export default function DashboardPage() {
 
   // Status distribution data for pie chart
   const statusDistribution = useMemo(() => {
-    const confirmed = appointments.filter(a => getAppointmentStatus(a) === 'confirmed').length
-    const cancelled = appointments.filter(a => getAppointmentStatus(a) === 'cancelled').length
-    const pending = appointments.filter(a => getAppointmentStatus(a) === 'pending').length
-    const completed = appointments.filter(a => getAppointmentStatus(a) === 'completed').length
+    const confirmed = scopedAppointments.filter(a => getAppointmentStatus(a) === 'confirmed').length
+    const cancelled = scopedAppointments.filter(a => getAppointmentStatus(a) === 'cancelled').length
+    const pending = scopedAppointments.filter(a => getAppointmentStatus(a) === 'pending').length
+    const completed = scopedAppointments.filter(a => getAppointmentStatus(a) === 'completed').length
     
     return [
       { name: 'Confirmed', value: confirmed, color: '#10b981' },
@@ -419,11 +436,11 @@ export default function DashboardPage() {
       { name: 'Pending', value: pending, color: '#f59e0b' },
       { name: 'Cancelled', value: cancelled, color: '#ef4444' }
     ].filter(item => item.value > 0)
-  }, [appointments])
+  }, [scopedAppointments])
 
   // Staff workload data for doughnut chart
   const staffWorkloadData = useMemo(() => {
-    const staffCounts = appointments.reduce((acc, appointment) => {
+    const staffCounts = scopedAppointments.reduce((acc, appointment) => {
       const staffName = `${appointment.assignedStaffFirstName || ''} ${appointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'
       acc[staffName] = (acc[staffName] || 0) + 1
       return acc
@@ -438,7 +455,7 @@ export default function DashboardPage() {
         color: colors[index % colors.length] 
       }))
       .sort((a, b) => b.count - a.count)
-  }, [appointments])
+  }, [scopedAppointments])
 
   // Hourly booking patterns
   const hourlyBookingData = useMemo(() => {
@@ -448,7 +465,7 @@ export default function DashboardPage() {
       appointments: 0
     }))
     
-    appointments.forEach(appointment => {
+    scopedAppointments.forEach(appointment => {
       if (appointment.startTime) {
         const hour = new Date(appointment.startTime).getHours()
         if (hour >= 0 && hour < 24) {
@@ -461,7 +478,7 @@ export default function DashboardPage() {
     return hourCounts.filter(item => 
       (item.hour >= 8 && item.hour <= 20) || item.appointments > 0
     )
-  }, [appointments])
+  }, [scopedAppointments])
 
   // This week vs last week comparison
   const weeklyComparisonData = useMemo(() => {
@@ -475,13 +492,13 @@ export default function DashboardPage() {
       const thisWeekDay = new Date(thisWeekStart.getTime() + (index * 24 * 60 * 60 * 1000))
       const lastWeekDay = new Date(lastWeekStart.getTime() + (index * 24 * 60 * 60 * 1000))
       
-      const thisWeekCount = appointments.filter(a => {
+      const thisWeekCount = scopedAppointments.filter(a => {
         if (!a.startTime) return false
         const appointmentDate = new Date(a.startTime)
         return appointmentDate.toDateString() === thisWeekDay.toDateString()
       }).length
       
-      const lastWeekCount = appointments.filter(a => {
+      const lastWeekCount = scopedAppointments.filter(a => {
         if (!a.startTime) return false
         const appointmentDate = new Date(a.startTime)
         return appointmentDate.toDateString() === lastWeekDay.toDateString()
@@ -493,7 +510,7 @@ export default function DashboardPage() {
         lastWeek: lastWeekCount
       }
     })
-  }, [appointments])
+  }, [scopedAppointments])
 
   const chartConfig: ChartConfig = {
     total: { label: "Total", color: "#3b82f6" },

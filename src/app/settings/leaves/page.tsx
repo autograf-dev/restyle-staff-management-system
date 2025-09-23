@@ -21,6 +21,7 @@ import {
   AlertCircle
 } from "lucide-react"
 import React, { useState, useEffect, useCallback } from "react"
+import { useUser } from "@/contexts/user-context"
 import { toast } from "sonner"
 import { format, parseISO, isAfter, isBefore, isValid, parse } from "date-fns"
 import { LeaveDialog } from "@/components/leave-dialog"
@@ -72,6 +73,7 @@ const safeParseDateString = (dateString: string): Date | null => {
 // Note: getRowId helper available if needed for staff operations
 
 export default function LeavesPage() {
+  const { user } = useUser()
   const [leaves, setLeaves] = useState<Leave[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,14 +90,20 @@ export default function LeavesPage() {
       const result = await response.json()
       
       if (result.ok) {
-        setLeaves(result.data || [])
+        const allLeaves = result.data || []
+        // Filter leaves for barber role
+        if (user?.role === 'barber' && user.ghlId) {
+          setLeaves(allLeaves.filter((leave: Leave) => leave.ghl_id === user.ghlId))
+        } else {
+          setLeaves(allLeaves)
+        }
       } else {
         toast.error('Failed to load leaves data')
       }
     } catch {
       toast.error('Error loading leaves data')
     }
-  }, [])
+  }, [user?.role, user?.ghlId])
 
   // Fetch staff data
   const fetchStaff = useCallback(async () => {
@@ -104,14 +112,19 @@ export default function LeavesPage() {
       const result = await response.json()
       
       if (result.ok) {
-        setStaff(result.data || [])
+        const staffList = result.data || []
+        if (user?.role === 'barber' && user.ghlId) {
+          setStaff(staffList.filter((s: Staff) => s.ghl_id === user.ghlId))
+        } else {
+          setStaff(staffList)
+        }
       } else {
         toast.error('Failed to load staff data')
       }
     } catch {
       toast.error('Error loading staff data')
     }
-  }, [])
+  }, [user?.role, user?.ghlId])
 
   // Fetch all data
   const fetchAllData = useCallback(async () => {
@@ -226,7 +239,7 @@ export default function LeavesPage() {
 
   if (loading) {
     return (
-      <RoleGuard requiredRole="admin">
+      <RoleGuard requiredRole={user?.role === 'barber' ? undefined : 'admin'}>
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
@@ -249,7 +262,7 @@ export default function LeavesPage() {
   }
 
   return (
-    <RoleGuard requiredRole="admin">
+    <RoleGuard requiredRole={user?.role === 'barber' ? undefined : 'admin'}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
@@ -338,10 +351,10 @@ export default function LeavesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
-                  All Leaves
+                  {user?.role === 'barber' ? 'My Leaves' : 'All Leaves'}
                 </CardTitle>
                 <CardDescription>
-                  Complete list of staff leaves and time-off requests
+                  {user?.role === 'barber' ? 'Your leaves and time-off requests' : 'Complete list of staff leaves and time-off requests'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -543,6 +556,7 @@ export default function LeavesPage() {
         staff={staff}
         editingLeave={editingLeave}
         onSuccess={handleLeaveSuccess}
+        preSelectedStaffId={user?.role === 'barber' ? user.ghlId : undefined}
       />
     </RoleGuard>
   )

@@ -5,6 +5,9 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator"
 import { RoleGuard } from "@/components/role-guard"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -57,6 +60,10 @@ const DAYS = [
 export default function SalonStaffPage() {
   const [staffData, setStaffData] = useState<BarberStaff[]>([])
   const [loading, setLoading] = useState(true)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [selectedGhlId, setSelectedGhlId] = useState<string>("")
+  const [password, setPassword] = useState<string>("")
   const router = useRouter()
 
   // Fetch staff data
@@ -102,7 +109,7 @@ export default function SalonStaffPage() {
 
   if (loading) {
     return (
-      <RoleGuard requiredRole="admin">
+      <RoleGuard requiredRole="manager">
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
@@ -125,7 +132,7 @@ export default function SalonStaffPage() {
   }
 
   return (
-    <RoleGuard requiredRole="admin">
+    <RoleGuard requiredRole="manager">
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
@@ -153,6 +160,12 @@ export default function SalonStaffPage() {
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
+              </Button>
+            </div>
+
+            <div>
+              <Button className="bg-primary" onClick={() => setCreateDialogOpen(true)}>
+                Create Barber Users
               </Button>
             </div>
 
@@ -326,6 +339,76 @@ export default function SalonStaffPage() {
               </Card>
             )}
           </div>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Create Barber User</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Select staff</div>
+                  <Select value={selectedGhlId} onValueChange={setSelectedGhlId}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Choose staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffData.map((s) => (
+                        <SelectItem key={getRowId(s)} value={s.ghl_id}>
+                          {s["Barber/Name"]} — {s["Barber/Email"]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Password</div>
+                  <Input
+                    type="password"
+                    placeholder="Min 8 characters"
+                    className="h-9"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <div className="pt-2">
+                  <Button
+                    className="w-full"
+                    disabled={creating || !selectedGhlId || password.length < 8}
+                    onClick={async () => {
+                      const staff = staffData.find((x) => x.ghl_id === selectedGhlId)
+                      if (!staff) return
+                      setCreating(true)
+                      try {
+                        const res = await fetch('/api/create-barber-user', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            email: staff["Barber/Email"],
+                            full_name: staff["Barber/Name"],
+                            ghl_id: staff.ghl_id,
+                            role: 'barber',
+                            password,
+                          }),
+                        })
+                        const out = await res.json()
+                        if (!res.ok || !out.ok) throw new Error(out.error || 'Failed')
+                        toast.success(`User created for ${staff["Barber/Name"]}`)
+                        setSelectedGhlId("")
+                        setPassword("")
+                        setCreateDialogOpen(false)
+                      } catch (e) {
+                        toast.error('Failed to create user')
+                      } finally {
+                        setCreating(false)
+                      }
+                    }}
+                  >
+                    {creating ? 'Creating…' : 'Create Barber'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>

@@ -24,6 +24,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { minutesToDisplayTime } from "@/lib/timeUtils"
 import { useParams, useRouter } from "next/navigation"
+import { useUser } from "@/contexts/user-context"
 import { LeaveDialog } from "@/components/leave-dialog"
 
 type BarberHour = {
@@ -61,6 +62,7 @@ const DAYS = [
 ]
 
 export default function StaffHoursDetailPage() {
+  const { user } = useUser()
   const params = useParams()
   const router = useRouter()
   const ghlId = params.ghl_id as string
@@ -217,7 +219,7 @@ export default function StaffHoursDetailPage() {
 
   if (loading) {
     return (
-      <RoleGuard requiredRole="admin">
+      <RoleGuard requiredRole={user?.role === 'barber' ? undefined : 'manager'}>
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
@@ -241,7 +243,7 @@ export default function StaffHoursDetailPage() {
 
   if (!staffData) {
     return (
-      <RoleGuard requiredRole="admin">
+      <RoleGuard requiredRole={user?.role === 'barber' ? undefined : 'manager'}>
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
@@ -273,8 +275,12 @@ export default function StaffHoursDetailPage() {
     )
   }
 
+  // If barber tries to access someone else's page, redirect to own
+  if (user?.role === 'barber' && user.ghlId && user.ghlId !== ghlId) {
+    router.push(`/settings/staff-hours/${user.ghlId}`)
+  }
   return (
-    <RoleGuard requiredRole="admin">
+    <RoleGuard requiredRole={user?.role === 'barber' ? undefined : 'manager'}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>

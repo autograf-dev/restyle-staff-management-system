@@ -18,16 +18,32 @@ import {
   User, 
   MapPin,
   Plus,
-  Grid3X3,
-  MoreHorizontal,
   Eye,
   Edit,
   Trash2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useUser } from "@/contexts/user-context"
 import { toast } from "sonner"
 
 // Types
+type RawAppointment = {
+  id?: string
+  calendar_id?: string
+  contact_id?: string
+  title?: string
+  status?: string
+  appointment_status?: string
+  assigned_user_id?: string
+  address?: string
+  is_recurring?: boolean
+  trace_id?: string
+  startTime?: string
+  endTime?: string
+  notes?: string
+  customValues?: Record<string, unknown>
+}
+
 type Appointment = {
   id: string
   calendar_id: string
@@ -75,7 +91,7 @@ function useAppointments() {
         
         // Process appointments with enrichment for contact and staff
         const enrichedBookings = await Promise.all(
-          bookings.slice(0, 100).map(async (booking: any) => {
+          bookings.slice(0, 100).map(async (booking: RawAppointment) => {
             const details: Appointment = {
               id: String(booking.id || ""),
               calendar_id: String(booking.calendar_id || ""),
@@ -101,7 +117,7 @@ function useAppointments() {
                   details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
                 }
               }
-            } catch (error) {
+            } catch {
               console.warn(`Failed to fetch details for booking ${booking.id}`)
             }
 
@@ -171,7 +187,6 @@ function formatDate(date: Date) {
 
 function getCalendarDays(year: number, month: number): CalendarDay[] {
   const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
   const startDate = new Date(firstDay)
   startDate.setDate(startDate.getDate() - firstDay.getDay()) // Start from Sunday
   
@@ -209,19 +224,28 @@ function getYearMonths(year: number) {
 export default function CalendarPage() {
   const router = useRouter()
   const { data: appointments, loading } = useAppointments()
+  const { user } = useUser()
   const [currentDate, setCurrentDate] = React.useState(new Date())
   const [view, setView] = React.useState<CalendarView>('month')
-  const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null)
+  const [selectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
 
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth()
 
+  // Scope to barber's own appointments if barber
+  const scopedAppointments = React.useMemo(() => {
+    if (user?.role === 'barber' && user.ghlId) {
+      return appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
+    }
+    return appointments
+  }, [appointments, user?.role, user?.ghlId])
+
   // Group appointments by date
   const appointmentsByDate = React.useMemo(() => {
     const grouped: Record<string, Appointment[]> = {}
     
-    appointments.forEach(appointment => {
+    scopedAppointments.forEach(appointment => {
       if (appointment.startTime) {
         const dateKey = new Date(appointment.startTime).toDateString()
         if (!grouped[dateKey]) {
@@ -232,7 +256,7 @@ export default function CalendarPage() {
     })
     
     return grouped
-  }, [appointments])
+  }, [scopedAppointments])
 
   // Get calendar data with appointments
   const calendarDays = React.useMemo(() => {

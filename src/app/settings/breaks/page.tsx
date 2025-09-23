@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
+import { useUser } from "@/contexts/user-context"
 import { useEffect, useState, useCallback } from "react"
 import { RefreshCw, Plus, Trash2, Edit } from "lucide-react"
 
@@ -15,6 +16,7 @@ type Staff = { ghl_id: string; "Barber/Name"?: string; "Barber/Email"?: string; 
 type Block = Record<string, unknown>
 
 export default function BreaksPage() {
+  const { user } = useUser()
   const [blocks, setBlocks] = useState<Block[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [open, setOpen] = useState(false)
@@ -25,14 +27,28 @@ export default function BreaksPage() {
   const fetchBlocks = useCallback(async () => {
     const res = await fetch('/api/time-blocks')
     const r = await res.json()
-    if (r.ok) setBlocks(r.data || [])
-  }, [])
+    if (r.ok) {
+      const all = r.data || []
+      if (user?.role === 'barber' && user.ghlId) {
+        setBlocks(all.filter((b: TimeBlock) => String(b.ghl_id || '') === user.ghlId))
+      } else {
+        setBlocks(all)
+      }
+    }
+  }, [user?.role, user?.ghlId])
   
   const fetchStaff = useCallback(async () => {
     const res = await fetch('/api/barber-hours')
     const r = await res.json()
-    if (r.ok) setStaff(r.data || [])
-  }, [])
+    if (r.ok) {
+      const list = r.data || []
+      if (user?.role === 'barber' && user.ghlId) {
+        setStaff(list.filter((s: Staff) => s.ghl_id === user.ghlId))
+      } else {
+        setStaff(list)
+      }
+    }
+  }, [user?.role, user?.ghlId])
   
   const refreshAll = useCallback(async () => {
     setLoading(true)
@@ -54,7 +70,7 @@ export default function BreaksPage() {
   }
 
   return (
-    <RoleGuard requiredRole="admin">
+    <RoleGuard requiredRole={user?.role === 'barber' ? undefined : 'admin'}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>

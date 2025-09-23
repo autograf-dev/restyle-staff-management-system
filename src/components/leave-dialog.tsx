@@ -10,6 +10,7 @@ import { RefreshCw, Plus, CalendarIcon, User } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { format, parseISO, isAfter, isValid, parse } from "date-fns"
+import { useUser } from "@/contexts/user-context"
 
 type Leave = {
   "🔒 Row ID": string
@@ -72,6 +73,7 @@ export function LeaveDialog({
   editingLeave,
   onSuccess 
 }: LeaveDialogProps) {
+  const { user } = useUser()
   const [saving, setSaving] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState("")
   const [leaveReason, setLeaveReason] = useState("")
@@ -176,7 +178,7 @@ export function LeaveDialog({
             <Select 
               value={selectedStaff} 
               onValueChange={setSelectedStaff}
-              disabled={!!preSelectedStaffId || !!editingLeave}
+              disabled={!!preSelectedStaffId || !!editingLeave || user?.role === 'barber'}
             >
               <SelectTrigger className="h-12">
                 <div className="flex items-center gap-3">

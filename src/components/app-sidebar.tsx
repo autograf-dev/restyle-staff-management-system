@@ -84,53 +84,55 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: CalendarIcon,
         isActive: false,
       },
-      {
-        title: "Customers",
-        url: `${prefix}/customers`,
-        icon: UsersRound,
-        isActive: false,
-      },
+      // Customers stays visible for non-barbers only
+      ...(user?.role === 'barber'
+        ? []
+        : [{
+            title: "Customers",
+            url: `${prefix}/customers`,
+            icon: UsersRound,
+            isActive: false,
+          }]),
     ]
 
-    // Add Teams menu item only for admin users (before Settings)
-    if (user?.role === "admin") {
+    // Settings section varies by role
+    if (user?.role === 'barber') {
+      const myHoursUrl = user?.ghlId ? `${prefix}/settings/staff-hours/${user.ghlId}` : `${prefix}/settings/staff-hours`
       items.push({
-        title: "Teams",
-        url: "/teams",
-        icon: Scissors,
-        isActive: false,
+        title: "Settings",
+        url: "#",
+        icon: Settings,
+        isActive: true,
+        items: [
+          { title: "My Hours", url: myHoursUrl },
+          { title: "My Leaves", url: `${prefix}/settings/leaves` },
+          { title: "My Breaks", url: `${prefix}/settings/breaks` },
+        ],
+      })
+    } else {
+      // Admin/manager view
+      if (user?.role === "admin") {
+        items.push({
+          title: "Teams",
+          url: "/teams",
+          icon: Scissors,
+          isActive: false,
+        })
+      }
+      items.push({
+        title: "Settings",
+        url: "#",
+        icon: Settings,
+        isActive: true,
+        items: [
+          { title: "Salon Hours", url: `${prefix}/settings/salon-hours` },
+          { title: "Salon Staff", url: `${prefix}/settings/salon-staff` },
+          { title: "Staff Hours", url: `${prefix}/settings/staff-hours` },
+          { title: "Leaves", url: `${prefix}/settings/leaves` },
+          { title: "Breaks", url: `${prefix}/settings/breaks` },
+        ],
       })
     }
-
-    // Add Settings as the last item with isActive: true to open by default
-    items.push({
-      title: "Settings",
-      url: "#",
-      icon: Settings,
-      isActive: true,
-      items: [
-        {
-          title: "Salon Hours",
-          url: `${prefix}/settings/salon-hours`,
-        },
-        {
-          title: "Salon Staff",
-          url: `${prefix}/settings/salon-staff`,
-        },
-        {
-          title: "Staff Hours",
-          url: `${prefix}/settings/staff-hours`,
-        },
-        {
-          title: "Leaves",
-          url: `${prefix}/settings/leaves`,
-        },
-        {
-          title: "Breaks",
-          url: `${prefix}/settings/breaks`,
-        },
-      ],
-    })
 
     return items
   }, [getTeamPrefix, user?.role])

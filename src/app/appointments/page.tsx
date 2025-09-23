@@ -29,6 +29,7 @@ import { toast } from "sonner"
 import { Dialog as ConfirmDialog, DialogContent as ConfirmContent, DialogHeader as ConfirmHeader, DialogTitle as ConfirmTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useUser } from "@/contexts/user-context"
 
 type Appointment = {
   id: string
@@ -374,6 +375,7 @@ function getStatusBadgeClasses(status: string) {
 export default function AppointmentsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useUser()
   const {
     data,
     loading,
@@ -594,7 +596,7 @@ export default function AppointmentsPage() {
       const serviceRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${appointmentToReschedule.groupId || 'default'}`, { signal: controller.signal })
       const serviceData = await serviceRes.json()
       
-      const serviceObj = (serviceData.calendars || []).find((s: any) => s.id === appointmentToReschedule.calendar_id)
+      const serviceObj = (serviceData.calendars || []).find((s: { id: string }) => s.id === appointmentToReschedule.calendar_id)
       const teamMembers = serviceObj?.teamMembers || []
       console.log('Team members for service:', teamMembers)
 
@@ -1249,6 +1251,16 @@ export default function AppointmentsPage() {
   const filteredData = React.useMemo(() => {
     let filtered = data
 
+    // If barber, force filter to own assignments
+    if (user?.role === 'barber' && user.ghlId) {
+      filtered = filtered.filter(a => (a.assigned_user_id || '') === user.ghlId)
+    }
+
+    // If logged in as a barber, only show appointments assigned to their ghl_id
+    if (user?.role === 'barber' && user.ghlId) {
+      filtered = filtered.filter(a => (a.assigned_user_id || '') === user.ghlId)
+    }
+
     // Filter by status
     if (statusFilter !== "all") {
       filtered = filtered.filter(appointment => {
@@ -1431,13 +1443,13 @@ export default function AppointmentsPage() {
 
   // Count appointments by status
   const statusCounts = React.useMemo(() => {
-    const counts = { all: data.length, upcoming: 0, past: 0, cancelled: 0 }
-    data.forEach(appointment => {
+    const counts = { all: filteredData.length, upcoming: 0, past: 0, cancelled: 0 }
+    filteredData.forEach(appointment => {
       const status = getAppointmentStatus(appointment)
       counts[status as keyof typeof counts]++
     })
     return counts
-  }, [data])
+  }, [filteredData])
 
   return (
     <RoleGuard>

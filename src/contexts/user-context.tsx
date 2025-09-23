@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 
-export type UserRole = "admin" | "barber"
+export type UserRole = "admin" | "barber" | "manager"
 
 export type User = {
   id: string
@@ -11,6 +11,7 @@ export type User = {
   name: string
   avatar: string
   role: UserRole
+  ghlId?: string
 }
 
 type UserContextType = {
@@ -46,6 +47,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const derivedName = fullName || (u.email ? String(u.email).split("@")[0] : "User")
       const avatarUrl = (meta.avatar_url as string) || (meta.picture as string) || ""
       const role = (meta.role as UserRole) || "admin" // Default to admin for existing users
+      const ghlId = (meta.ghl_id as string) || undefined
 
       setUser({
         id: u.id,
@@ -53,6 +55,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         name: derivedName,
         avatar: avatarUrl,
         role: role,
+        ghlId,
       })
       setLoading(false)
     })
@@ -73,6 +76,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const derivedName = fullName || (session.user.email ? String(session.user.email).split("@")[0] : "User")
         const avatarUrl = (meta.avatar_url as string) || (meta.picture as string) || ""
         const role = (meta.role as UserRole) || "admin"
+        const ghlId = (meta.ghl_id as string) || undefined
 
         setUser({
           id: session.user.id,
@@ -80,6 +84,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           name: derivedName,
           avatar: avatarUrl,
           role: role,
+          ghlId,
         })
         setLoading(false)
       }
