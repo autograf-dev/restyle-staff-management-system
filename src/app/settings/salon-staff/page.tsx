@@ -396,7 +396,7 @@ export default function SalonStaffPage() {
                         setSelectedGhlId("")
                         setPassword("")
                         setCreateDialogOpen(false)
-                      } catch (e) {
+                      } catch {
                         toast.error('Failed to create user')
                       } finally {
                         setCreating(false)

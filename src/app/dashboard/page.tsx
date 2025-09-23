@@ -112,7 +112,7 @@ function useAppointments() {
           
           const batch = limitedBookings.slice(i, i + 5)
           const batchResults = await Promise.all(
-            batch.map(async (booking: any) => {
+            batch.map(async (booking: { id?: string; contact_id?: string; assigned_user_id?: string; title?: string; startTime?: string; endTime?: string; appointment_status?: string }) => {
               if (signal.aborted) throw new Error('Aborted')
 
               const details: Appointment = {
@@ -209,7 +209,7 @@ function useContacts() {
           ? json.contacts 
           : (json?.contacts?.contacts || [])
         
-        const mapped: Contact[] = contacts.map((c: any) => ({
+        const mapped: Contact[] = contacts.map((c: { id?: string; firstName?: string; lastName?: string; phone?: string; email?: string; dateAdded?: string }) => ({
           id: String(c.id ?? ""),
           contactName: c.contactName || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
           firstName: c.firstName || "",
@@ -312,7 +312,7 @@ export default function DashboardPage() {
 
   const scopedStaff = useMemo(() => {
     if (user?.role === 'barber' && user.ghlId) {
-      return staff.filter((s: any) => String(s.ghl_id || '') === user.ghlId)
+      return staff.filter((s: { ghl_id?: string }) => String(s.ghl_id || '') === user.ghlId)
     }
     return staff
   }, [staff, user?.role, user?.ghlId])

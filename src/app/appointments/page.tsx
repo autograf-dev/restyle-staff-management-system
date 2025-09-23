@@ -139,7 +139,7 @@ function useAppointments() {
       })
       
       // Helper function to process bookings in batches with abort checks
-      const processInBatches = async <T,>(items: T[], batchSize: number, processor: (item: T) => Promise<any>) => {
+      const processInBatches = async <T,>(items: T[], batchSize: number, processor: (item: T) => Promise<Appointment>) => {
         const results = []
         for (let i = 0; i < items.length; i += batchSize) {
           // Check if aborted before processing each batch
@@ -383,7 +383,6 @@ export default function AppointmentsPage() {
     setStatusFilter,
     searchTerm,
     setSearchTerm,
-    total,
     fetchAppointments
   } = useAppointments()
 
@@ -416,19 +415,18 @@ export default function AppointmentsPage() {
   const [selectedTime, setSelectedTime] = React.useState<string>("")
   const [availableDates, setAvailableDates] = React.useState<DateInfo[]>([])
   const [availableSlots, setAvailableSlots] = React.useState<TimeSlot[]>([])
-  const [currentDateIndex, setCurrentDateIndex] = React.useState(0)
   const [loadingStaff, setLoadingStaff] = React.useState(false)
   const [loadingSlots, setLoadingSlots] = React.useState(false)
-  const [workingSlots, setWorkingSlots] = React.useState<any>({})
+  const [workingSlots, setWorkingSlots] = React.useState<Record<string, string[]>>({})
 
   // New appointment state
   const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false)
   const [newAppCurrentStep, setNewAppCurrentStep] = React.useState(1)
-  const [newAppDepartments, setNewAppDepartments] = React.useState<any[]>([])
+  const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id: string; name: string }>>([])
   const [newAppSelectedDepartment, setNewAppSelectedDepartment] = React.useState<string>("")
-  const [newAppServices, setNewAppServices] = React.useState<any[]>([])
+  const [newAppServices, setNewAppServices] = React.useState<Array<{ id: string; name: string; duration?: number }>>([])
   const [newAppSelectedService, setNewAppSelectedService] = React.useState<string>("")
-  const [newAppStaff, setNewAppStaff] = React.useState<any[]>([])
+  const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id: string; name: string; email?: string }>>([])
   const [newAppSelectedStaff, setNewAppSelectedStaff] = React.useState<string>("")
   const [newAppDates, setNewAppDates] = React.useState<DateInfo[]>([])
   const [newAppSelectedDate, setNewAppSelectedDate] = React.useState<string>("")
@@ -441,7 +439,7 @@ export default function AppointmentsPage() {
     optIn: false
   })
   const [newAppLoading, setNewAppLoading] = React.useState(false)
-  const [newAppWorkingSlots, setNewAppWorkingSlots] = React.useState<any>({})
+  const [newAppWorkingSlots, setNewAppWorkingSlots] = React.useState<Record<string, string[]>>({})
   const [newAppLoadingDepts, setNewAppLoadingDepts] = React.useState(false)
   const [newAppLoadingServices, setNewAppLoadingServices] = React.useState(false)
   const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
@@ -608,7 +606,7 @@ export default function AppointmentsPage() {
       }]
 
       // Fetch individual staff details for each team member (use member.userId as value like Vue.js)
-      const staffPromises = teamMembers.map(async (member: any) => {
+      const staffPromises = teamMembers.map(async (member: { userId: string; name: string; email?: string }) => {
         try {
           const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`, { signal: controller.signal })
           const staffData = await staffRes.json()
@@ -618,7 +616,7 @@ export default function AppointmentsPage() {
             originalStaffId: staffData.id, // Keep original for reference
             icon: 'user'
           }
-        } catch (e) {
+        } catch {
           console.warn('Failed to fetch staff details for:', member.userId)
           return null
         }
@@ -715,7 +713,7 @@ export default function AppointmentsPage() {
     }
   }
 
-  const fetchSlotsForDate = (dateString: string, workingSlots: any) => {
+  const fetchSlotsForDate = (dateString: string, workingSlots: Record<string, string[]>) => {
     if (workingSlots[dateString]) {
       const slotsForSelectedDate = workingSlots[dateString]
       const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({
@@ -882,7 +880,7 @@ export default function AppointmentsPage() {
       const res = await fetch('https://restyle-api.netlify.app/.netlify/functions/supabasegroups')
       const data = await res.json()
       
-      const departments = data.groups.map((group: any) => ({
+      const departments = data.groups.map((group: { id: string; name: string }) => ({
         label: group.name,
         value: group.id,
         description: group.description || '',
@@ -890,8 +888,8 @@ export default function AppointmentsPage() {
       }))
       
       setNewAppDepartments(departments)
-    } catch (e) {
-      console.error('Error fetching departments:', e)
+    } catch {
+      console.error('Error fetching departments')
       setNewAppDepartments([])
     } finally {
       setNewAppLoadingDepts(false)
@@ -907,15 +905,15 @@ export default function AppointmentsPage() {
       const res = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
       
-      const services = (data.calendars || []).map((service: any) => ({
+      const services = (data.calendars || []).map((service: { id: string; name: string; duration?: number }) => ({
         label: service.name,
         value: service.id,
         description: `Duration: ${service.slotDuration} mins | Staff: ${service.teamMembers?.length ?? 0}`
       }))
       
       setNewAppServices(services)
-    } catch (e) {
-      console.error('Error fetching services:', e)
+    } catch {
+      console.error('Error fetching services')
       setNewAppServices([])
     } finally {
       setNewAppLoadingServices(false)
@@ -931,7 +929,7 @@ export default function AppointmentsPage() {
       const res = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
       const data = await res.json()
       
-      const serviceObj = (data.calendars || []).find((s: any) => s.id === serviceId)
+      const serviceObj = (data.calendars || []).find((s: { id: string; teamMembers?: Array<{ userId: string; name: string }> }) => s.id === serviceId)
       const teamMembers = serviceObj?.teamMembers || []
 
       const items = [{
@@ -941,7 +939,7 @@ export default function AppointmentsPage() {
         icon: 'user'
       }]
 
-      const staffPromises = teamMembers.map(async (member: any) => {
+      const staffPromises = teamMembers.map(async (member: { userId: string; name: string; email?: string }) => {
         try {
           const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`)
           const staffData = await staffRes.json()
@@ -951,7 +949,7 @@ export default function AppointmentsPage() {
             originalStaffId: staffData.id,
             icon: 'user'
           }
-        } catch (e) {
+        } catch {
           console.warn('Failed to fetch staff details for:', member.userId)
           return null
         }
@@ -961,8 +959,8 @@ export default function AppointmentsPage() {
       const validStaff = staffResults.filter(Boolean)
       
       setNewAppStaff([...items, ...validStaff])
-    } catch (e) {
-      console.error('Error fetching staff:', e)
+    } catch {
+      console.error('Error fetching staff')
       setNewAppStaff([{
         label: 'Any available staff',
         value: 'any',
@@ -1008,7 +1006,7 @@ export default function AppointmentsPage() {
   }
 
   // Generate available dates from working slots
-  const generateNewAppDates = (workingSlots: any) => {
+  const generateNewAppDates = (workingSlots: Record<string, string[]>) => {
     const today = new Date()
     const todayDateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     
@@ -1049,7 +1047,7 @@ export default function AppointmentsPage() {
       isUnavailable: false
     }))
     
-    const availableSlots = slotsWithStatus.filter((slot: any) => !slot.isPast)
+    const availableSlots = slotsWithStatus.filter((slot: TimeSlot) => !slot.isPast)
     setNewAppSlots(availableSlots)
   }
 
