@@ -210,7 +210,7 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
             "Barber/Name": string;
             "ghl_id": string;
             "Barber/Email": string;
-            [key: string]: any;
+            [key: string]: string | number | boolean | null | undefined;
           }) => ({
             id: barber["🔒 Row ID"] || barber["ð Row ID"] || barber.ghl_id,
             ghl_id: barber.ghl_id,
