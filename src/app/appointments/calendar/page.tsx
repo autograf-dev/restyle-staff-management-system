@@ -185,6 +185,122 @@ function formatDate(date: Date) {
   })
 }
 
+// Staff Overview Component
+const StaffOverviewView = ({ appointments }: { appointments: any[] }) => {
+  const [staff, setStaff] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const staffRes = await fetch('/api/getUsers')
+        const staffJson = await staffRes.json()
+        
+        if (staffJson.ok) {
+          const users = staffJson.users || []
+          const staffMembers = users
+            .filter((user: any) => user.user_metadata?.role === 'barber' && user.user_metadata?.ghl_id)
+            .map((user: any) => ({
+              id: user.id,
+              ghl_id: user.user_metadata.ghl_id,
+              name: `${user.user_metadata.firstName || ''} ${user.user_metadata.lastName || ''}`.trim() || user.email,
+              email: user.email,
+              role: user.user_metadata.role
+            }))
+          
+          setStaff(staffMembers)
+        }
+      } catch (error) {
+        console.error('Failed to fetch staff:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStaff()
+  }, [])
+
+  // Group appointments by staff
+  const appointmentsByStaff = React.useMemo(() => {
+    return staff.map((staffMember: any) => ({
+      ...staffMember,
+      appointments: appointments
+        .filter((apt: any) => apt.assigned_user_id === staffMember.ghl_id)
+        .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    }))
+  }, [staff, appointments])
+
+  if (loading) {
+    return <div className="text-center py-4">Loading staff overview...</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {appointmentsByStaff.map((staffMember: any) => (
+        <div key={staffMember.ghl_id} className="border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-semibold text-lg">{staffMember.name}</h3>
+              <p className="text-sm text-gray-500">{staffMember.appointments.length} appointments</p>
+            </div>
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+              {staffMember.role}
+            </Badge>
+          </div>
+          
+          {staffMember.appointments.length === 0 ? (
+            <div className="text-center py-6 text-gray-400">
+              <User className="h-8 w-8 mx-auto mb-2" />
+              <p className="text-sm">No appointments today</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {staffMember.appointments.map((appointment: any) => (
+                <div 
+                  key={appointment.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded border-l-4 border-blue-500 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    // Navigate to appointment details
+                    window.location.href = `/appointments?view=details&id=${appointment.id}`
+                  }}
+                >
+                  <div>
+                    <div className="font-medium">{appointment.serviceName}</div>
+                    <div className="text-sm text-gray-600">{appointment.contactName}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-medium">
+                      {formatTime(appointment.startTime)} 
+                      {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
+                    </div>
+                    <div className="text-xs">
+                      <span className={`inline-block px-2 py-1 rounded text-xs ${
+                        appointment.appointment_status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        appointment.appointment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {appointment.appointment_status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      
+      {appointmentsByStaff.length === 0 && (
+        <div className="text-center py-8 text-gray-400">
+          <Users className="h-12 w-12 mx-auto mb-4" />
+          <p>No staff members found</p>
+          <p className="text-sm">Staff members need to have the 'barber' role to appear here.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getCalendarDays(year: number, month: number): CalendarDay[] {
   const firstDay = new Date(year, month, 1)
   const startDate = new Date(firstDay)
@@ -229,9 +345,21 @@ export default function CalendarPage() {
   const [view, setView] = React.useState<CalendarView>('month')
   const [selectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [staffView, setStaffView] = React.useState(false) // New state for staff view
 
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth()
+
+  // Check if admin view is requested via URL params
+  React.useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search)
+    const isAdminView = searchParams.get('admin') === 'true'
+    const isStaffView = searchParams.get('staff') === 'true' 
+    if ((isAdminView || isStaffView) && (user?.role === 'admin' || user?.role === 'manager')) {
+      setStaffView(true)
+      setView('day') // Default to day view for staff calendar
+    }
+  }, [user])
 
   // Scope to barber's own appointments if barber
   const scopedAppointments = React.useMemo(() => {
@@ -405,6 +533,19 @@ export default function CalendarPage() {
                       >
                         Year
                       </Button>
+                      {(user?.role === 'admin' || user?.role === 'manager') && (
+                        <Button
+                          variant={staffView ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => {
+                            setStaffView(!staffView)
+                            if (!staffView) setView('day')
+                          }}
+                          className="h-8 px-3 text-xs"
+                        >
+                          Staff View
+                        </Button>
+                      )}
                     </div>
                     
                     <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
@@ -432,9 +573,13 @@ export default function CalendarPage() {
                       <CardTitle className="flex items-center gap-2">
                         <CalendarIcon className="h-5 w-5" />
                         {formatDate(currentDate)}
+                        {staffView && (
+                          <Badge variant="outline" className="ml-2">Staff View</Badge>
+                        )}
                       </CardTitle>
                       <CardDescription>
                         {dayAppointments.length} appointments scheduled
+                        {staffView && (user?.role === 'admin' || user?.role === 'manager') && ' - Admin View: All Staff'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -443,11 +588,13 @@ export default function CalendarPage() {
                           <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                           <p>No appointments scheduled for this day</p>
                         </div>
+                      ) : staffView && (user?.role === 'admin' || user?.role === 'manager') ? (
+                        <StaffOverviewView appointments={dayAppointments} />
                       ) : (
                         <div className="space-y-3">
                           {dayAppointments
-                            .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
-                            .map((appointment) => (
+                            .sort((a: any, b: any) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                            .map((appointment: any) => (
                               <div
                                 key={appointment.id}
                                 onClick={() => openAppointmentDetails(appointment)}
