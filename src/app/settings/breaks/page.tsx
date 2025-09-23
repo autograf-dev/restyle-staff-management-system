@@ -30,7 +30,7 @@ export default function BreaksPage() {
     if (r.ok) {
       const all = r.data || []
       if (user?.role === 'barber' && user.ghlId) {
-        setBlocks(all.filter((b: TimeBlock) => String(b.ghl_id || '') === user.ghlId))
+        setBlocks(all.filter((b: { ghl_id?: string }) => String(b.ghl_id || '') === user.ghlId))
       } else {
         setBlocks(all)
       }

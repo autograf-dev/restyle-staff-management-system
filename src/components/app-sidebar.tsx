@@ -135,7 +135,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
 
     return items
-  }, [getTeamPrefix, user?.role])
+  }, [getTeamPrefix, user?.role, user?.ghlId])
 
   return (
     <Sidebar collapsible="icon" {...props}>
