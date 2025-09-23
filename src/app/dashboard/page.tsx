@@ -861,8 +861,8 @@ export default function DashboardPage() {
                             tickLine={false}
                             axisLine={false}
                           />
-                          <ChartTooltip 
-                            content={({ active, payload, label }) => {
+                          <ChartTooltip
+                            content={({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number }>; label?: string }) => {
                               if (active && payload && payload[0]) {
                                 const value = payload[0].value as number
                                 const total = hourlyBookingData.reduce((sum, item) => sum + item.appointments, 0)
@@ -932,7 +932,7 @@ export default function DashboardPage() {
                             axisLine={false}
                           />
                           <ChartTooltip 
-                            content={({ active, payload, label }) => {
+                            content={({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number }>; label?: string }) => {
                               if (active && payload && payload[0]) {
                                 const value = payload[0].value as number
                                 const total = customerGrowthData.reduce((sum, item) => sum + item.customers, 0)
@@ -995,9 +995,10 @@ export default function DashboardPage() {
                             width={100}
                           />
                           <ChartTooltip 
-                            content={({ active, payload }) => {
+                            content={({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name: string; count: number } }> }) => {
                               if (active && payload && payload[0]) {
-                                const data = payload[0].payload
+                                const data = payload?.[0]?.payload as { name: string; count: number } | undefined
+                                if (!data) return null
                                 const total = servicePopularity.reduce((sum, item) => sum + item.count, 0)
                                 const percentage = total > 0 ? ((data.count / total) * 100).toFixed(1) : '0'
                                 const rank = servicePopularity.findIndex(item => item.name === data.name) + 1
