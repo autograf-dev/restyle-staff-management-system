@@ -112,7 +112,7 @@ function useAppointments() {
           
           const batch = limitedBookings.slice(i, i + 5)
           const batchResults = await Promise.all(
-            batch.map(async (booking: { id?: string; contact_id?: string; assigned_user_id?: string; title?: string; startTime?: string; endTime?: string; appointment_status?: string }) => {
+            batch.map(async (booking: { id?: string; calendar_id?: string; contact_id?: string; assigned_user_id?: string; title?: string; status?: string; startTime?: string; endTime?: string; appointment_status?: string; address?: string; is_recurring?: boolean; trace_id?: string }) => {
               if (signal.aborted) throw new Error('Aborted')
 
               const details: Appointment = {
@@ -209,7 +209,7 @@ function useContacts() {
           ? json.contacts 
           : (json?.contacts?.contacts || [])
         
-        const mapped: Contact[] = contacts.map((c: { id?: string; firstName?: string; lastName?: string; phone?: string; email?: string; dateAdded?: string }) => ({
+        const mapped: Contact[] = contacts.map((c: { id?: string; firstName?: string; lastName?: string; phone?: string; email?: string; dateAdded?: string; contactName?: string }) => ({
           id: String(c.id ?? ""),
           contactName: c.contactName || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
           firstName: c.firstName || "",
@@ -312,7 +312,7 @@ export default function DashboardPage() {
 
   const scopedStaff = useMemo(() => {
     if (user?.role === 'barber' && user.ghlId) {
-      return staff.filter((s: { ghl_id?: string }) => String(s.ghl_id || '') === user.ghlId)
+      return staff.filter((s) => String((s as unknown as { ghl_id?: string }).ghl_id || '') === user.ghlId)
     }
     return staff
   }, [staff, user?.role, user?.ghlId])
@@ -729,10 +729,11 @@ export default function DashboardPage() {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <ChartTooltip 
-                          content={({ active, payload }) => {
+                        <ChartTooltip
+                          content={({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name: string; count: number } }> }) => {
                             if (active && payload && payload[0]) {
-                              const data = payload[0].payload
+                              const data = payload?.[0]?.payload as { name: string; count: number } | undefined
+                              if (!data) return null
                               const total = staffWorkloadData.reduce((sum, item) => sum + item.count, 0)
                               const percentage = total > 0 ? ((data.count / total) * 100).toFixed(1) : '0'
                               return (
@@ -787,16 +788,17 @@ export default function DashboardPage() {
                           outerRadius={100}
                           fill="#8884d8"
                           dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         >
                           {statusDistribution.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
                         <ChartTooltip 
-                          content={({ active, payload }) => {
+                          content={({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name: string; value: number } }> }) => {
                             if (active && payload && payload[0]) {
-                              const data = payload[0].payload
+                              const data = payload?.[0]?.payload as { name: string; value: number } | undefined
+                              if (!data) return null
                               const total = statusDistribution.reduce((sum, item) => sum + item.value, 0)
                               const percentage = total > 0 ? ((data.value / total) * 100).toFixed(1) : '0'
                               return (

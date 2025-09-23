@@ -2013,10 +2013,10 @@ export default function AppointmentsPage() {
                       <div className="grid gap-3">
                         {newAppDepartments.map((dept) => (
                           <div
-                            key={dept.value}
-                            onClick={() => handleNewAppDepartmentSelect(dept.value)}
+                            key={dept.value || dept.id || dept.name || Math.random().toString(36)}
+                            onClick={() => handleNewAppDepartmentSelect(dept.value || dept.id || '')}
                             className={`p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                              newAppSelectedDepartment === dept.value
+                              newAppSelectedDepartment === (dept.value || dept.id)
                                 ? 'border-primary bg-primary/5'
                                 : 'border-border'
                             }`}
@@ -2024,8 +2024,8 @@ export default function AppointmentsPage() {
                             <div className="flex items-center gap-3">
                               <User className="h-5 w-5 text-primary" />
                               <div>
-                                <div className="font-medium">{dept.label}</div>
-                                <div className="text-sm text-muted-foreground">{dept.description}</div>
+                                <div className="font-medium">{dept.label || dept.name}</div>
+                                <div className="text-sm text-muted-foreground">{dept.description || ''}</div>
                               </div>
                             </div>
                           </div>
@@ -2053,10 +2053,10 @@ export default function AppointmentsPage() {
                       <div className="grid gap-3">
                         {newAppServices.map((service) => (
                           <div
-                            key={service.value}
-                            onClick={() => handleNewAppServiceSelect(service.value)}
+                            key={service.value || service.id || Math.random().toString(36)}
+                            onClick={() => handleNewAppServiceSelect(service.value || service.id || '')}
                             className={`p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                              newAppSelectedService === service.value
+                              newAppSelectedService === (service.value || service.id)
                                 ? 'border-primary bg-primary/5'
                                 : 'border-border'
                             }`}
@@ -2064,8 +2064,8 @@ export default function AppointmentsPage() {
                             <div className="flex items-center gap-3">
                               <Calendar className="h-5 w-5 text-primary" />
                               <div>
-                                <div className="font-medium">{service.label}</div>
-                                <div className="text-sm text-muted-foreground">{service.description}</div>
+                                <div className="font-medium">{service.label || service.name}</div>
+                                <div className="text-sm text-muted-foreground">{service.description || ''}</div>
                               </div>
                             </div>
                           </div>
@@ -2098,10 +2098,10 @@ export default function AppointmentsPage() {
                       <div className="grid gap-3">
                         {newAppStaff.map((staff) => (
                           <div
-                            key={staff.value}
-                            onClick={() => handleNewAppStaffSelect(staff.value)}
+                            key={staff.value || staff.id || staff.email || Math.random().toString(36)}
+                            onClick={() => handleNewAppStaffSelect(staff.value || staff.id || '')}
                             className={`p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                              newAppSelectedStaff === staff.value
+                              newAppSelectedStaff === (staff.value || staff.id)
                                 ? 'border-primary bg-primary/5'
                                 : 'border-border'
                             }`}
@@ -2109,7 +2109,7 @@ export default function AppointmentsPage() {
                             <div className="flex items-center gap-3">
                               <User className="h-5 w-5 text-primary" />
                               <div className="flex items-center gap-2">
-                                <span className="font-medium">{staff.label}</span>
+                                <span className="font-medium">{staff.label || staff.name || staff.email}</span>
                                 {staff.badge && (
                                   <Badge variant="secondary" className="text-xs">
                                     {staff.badge}
