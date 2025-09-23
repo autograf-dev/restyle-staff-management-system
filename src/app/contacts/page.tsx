@@ -37,20 +37,24 @@ type Contact = {
   dateAdded: string
 }
 
-type ContactOpportunity = {
+type ContactBooking = {
   id: string
-  name: string
-  monetaryValue: number
+  serviceName: string
+  appointmentDate: string
+  appointmentTime: string
   status: string
+  notes?: string
   createdAt: string
   updatedAt: string
 }
 
-type RawOpportunity = {
+type RawBooking = {
   id?: string | number
-  name?: string
-  monetaryValue?: number | string
+  serviceName?: string
+  appointmentDate?: string
+  appointmentTime?: string
   status?: string
+  notes?: string
   createdAt?: string
   updatedAt?: string
   contactId?: string | number
@@ -74,7 +78,7 @@ function useContacts() {
   const fetchContacts = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("https://lawyervantage.netlify.app/.netlify/functions/getContacts")
+      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getcontacts")
       if (!res.ok) throw new Error("Failed to fetch contacts")
       const json = await res.json()
       const arr = (json?.contacts?.contacts || []) as RawContact[]
@@ -119,13 +123,13 @@ export default function Page() {
   const [confirmOpen, setConfirmOpen] = React.useState(false)
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null)
   const [addLoading, setAddLoading] = React.useState(false)
-  const [contactOpps, setContactOpps] = React.useState<ContactOpportunity[]>([])
-  const [contactOppsLoading, setContactOppsLoading] = React.useState(false)
+  const [contactBookings, setContactBookings] = React.useState<ContactBooking[]>([])
+  const [contactBookingsLoading, setContactBookingsLoading] = React.useState(false)
 
   const openDetails = React.useCallback((contact: Contact) => {
     setSelected(contact)
     setDetailsOpen(true)
-    fetchContactOpportunities(contact.id)
+    fetchContactBookings(contact.id)
   }, [])
 
   const openEdit = React.useCallback((contact?: Contact) => {
@@ -145,27 +149,30 @@ export default function Page() {
     setOpenAdd(true)
   }, [])
 
-  async function fetchContactOpportunities(contactId: string) {
-    setContactOppsLoading(true)
+  async function fetchContactBookings(contactId: string) {
+    setContactBookingsLoading(true)
     try {
-      const res = await fetch("https://lawyervantage.netlify.app/.netlify/functions/getOpportunities")
-      if (!res.ok) throw new Error("Failed to fetch opportunities")
+      // TODO: Replace with actual bookings API endpoint
+      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getBookings")
+      if (!res.ok) throw new Error("Failed to fetch bookings")
       const json = await res.json()
-      const arr = (json?.opportunities?.opportunities || []) as RawOpportunity[]
-      const filtered = arr.filter((o) => String(o.contactId || o.contact?.id || "") === String(contactId))
-      const mapped: ContactOpportunity[] = filtered.map((o) => ({
-        id: String(o.id ?? ""),
-        name: String(o.name ?? ""),
-        monetaryValue: Number(o.monetaryValue ?? 0),
-        status: String(o.status ?? "open"),
-        createdAt: String(o.createdAt ?? new Date().toISOString()),
-        updatedAt: String(o.updatedAt ?? new Date().toISOString()),
+      const arr = (json?.bookings?.bookings || []) as RawBooking[]
+      const filtered = arr.filter((b) => String(b.contactId || b.contact?.id || "") === String(contactId))
+      const mapped: ContactBooking[] = filtered.map((b) => ({
+        id: String(b.id ?? ""),
+        serviceName: String(b.serviceName ?? ""),
+        appointmentDate: String(b.appointmentDate ?? ""),
+        appointmentTime: String(b.appointmentTime ?? ""),
+        status: String(b.status ?? "scheduled"),
+        notes: b.notes ? String(b.notes) : undefined,
+        createdAt: String(b.createdAt ?? new Date().toISOString()),
+        updatedAt: String(b.updatedAt ?? new Date().toISOString()),
       }))
-      setContactOpps(mapped)
+      setContactBookings(mapped)
     } catch {
-      setContactOpps([])
+      setContactBookings([])
     } finally {
-      setContactOppsLoading(false)
+      setContactBookingsLoading(false)
     }
   }
 
@@ -201,7 +208,7 @@ export default function Page() {
       setAddLoading(true)
       toast.loading("Updating contact…", { id: "edit-contact" })
       try {
-        const res = await fetch(`https://lawyervantage.netlify.app/.netlify/functions/updateCustomer?id=${encodeURIComponent(editingId)}`, {
+        const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/updateContact?id=${encodeURIComponent(editingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -252,7 +259,7 @@ export default function Page() {
       email,
       phone,
       optionalFields: {
-        companyName: "Lawyer Vantage",
+        companyName: "Lawyer Vantage Tc Legal",
         tags: ["new", "lead"],
       },
     }
@@ -272,7 +279,7 @@ export default function Page() {
     setAddLoading(true)
     toast.loading("Creating contact…", { id: "add-contact" })
     try {
-      const res = await fetch("https://lawyervantage.netlify.app/.netlify/functions/addContact", {
+      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/addContact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -329,7 +336,7 @@ export default function Page() {
     setData((prev) => prev.filter((c) => c.id !== id))
     toast.loading("Deleting…", { id: `del-${id}` })
     try {
-      const res = await fetch(`https://lawyervantage.netlify.app/.netlify/functions/deleteContact?id=${encodeURIComponent(id)}`)
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteContact?id=${encodeURIComponent(id)}`)
       if (!res.ok) throw new Error("Failed to delete contact")
       toast.success("Contact deleted", { id: `del-${id}` })
     } catch {
@@ -431,7 +438,7 @@ export default function Page() {
   })
 
   return (
-    <RoleGuard requiredTeamPrefix="">
+    <RoleGuard requiredTeamPrefix="/legal">
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
@@ -444,7 +451,7 @@ export default function Page() {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-[1.4rem] font-semibold leading-none">Contacts</h1>
+              <h1 className="text-[1.4rem] font-semibold leading-none">Contacts - Tc Legal</h1>
               <p className="text-muted-foreground">Create, update, and edit your contacts from here.</p>
             </div>
             <div>
@@ -577,21 +584,26 @@ export default function Page() {
           <div className="text-sm"><span className="text-muted-foreground">Added:</span> {selected ? new Date(selected.dateAdded).toLocaleString() : "-"}</div>
 
           <div className="pt-2">
-            <div className="text-sm font-medium">Opportunities {contactOppsLoading ? "(loading…)" : `(${contactOpps.length})`}</div>
+            <div className="text-sm font-medium">Bookings {contactBookingsLoading ? "(loading…)" : `(${contactBookings.length})`}</div>
             <div className="mt-2 rounded-md border">
-              {contactOppsLoading ? (
+              {contactBookingsLoading ? (
                 <div className="p-3 text-sm text-muted-foreground">Loading…</div>
-              ) : contactOpps.length === 0 ? (
-                <div className="p-3 text-sm text-muted-foreground">No opportunities</div>
+              ) : contactBookings.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground">No bookings</div>
               ) : (
                 <ul className="divide-y">
-                  {contactOpps.map((o) => (
-                    <li key={o.id} className="p-3 flex items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-medium">{o.name}</div>
-                        <div className="text-xs text-muted-foreground">{o.status} · {new Date(o.updatedAt || o.createdAt).toLocaleDateString()}</div>
+                  {contactBookings.map((b) => (
+                    <li key={b.id} className="p-3 flex items-center justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{b.serviceName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {b.appointmentDate} at {b.appointmentTime}
+                        </div>
+                        <div className="text-xs text-muted-foreground capitalize">{b.status}</div>
+                        {b.notes && (
+                          <div className="text-xs text-muted-foreground mt-1">{b.notes}</div>
+                        )}
                       </div>
-                      <div className="text-sm font-medium">${o.monetaryValue.toLocaleString()}</div>
                     </li>
                   ))}
                 </ul>
@@ -629,5 +641,3 @@ export default function Page() {
     </RoleGuard>
   )
 }
-
-

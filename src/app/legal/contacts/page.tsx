@@ -74,7 +74,7 @@ function useContacts() {
   const fetchContacts = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("https://lawyervantage-tclegal.netlify.app/.netlify/functions/getContacts")
+      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getcontacts")
       if (!res.ok) throw new Error("Failed to fetch contacts")
       const json = await res.json()
       const arr = (json?.contacts?.contacts || []) as RawContact[]
@@ -201,7 +201,7 @@ export default function Page() {
       setAddLoading(true)
       toast.loading("Updating contact…", { id: "edit-contact" })
       try {
-        const res = await fetch(`https://lawyervantage.netlify.app/.netlify/functions/updateCustomer?id=${encodeURIComponent(editingId)}`, {
+        const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/updateContact?id=${encodeURIComponent(editingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -272,7 +272,7 @@ export default function Page() {
     setAddLoading(true)
     toast.loading("Creating contact…", { id: "add-contact" })
     try {
-      const res = await fetch("https://lawyervantage.netlify.app/.netlify/functions/addContact", {
+      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/addContact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -329,7 +329,7 @@ export default function Page() {
     setData((prev) => prev.filter((c) => c.id !== id))
     toast.loading("Deleting…", { id: `del-${id}` })
     try {
-      const res = await fetch(`https://lawyervantage.netlify.app/.netlify/functions/deleteContact?id=${encodeURIComponent(id)}`)
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteContact?id=${encodeURIComponent(id)}`)
       if (!res.ok) throw new Error("Failed to delete contact")
       toast.success("Contact deleted", { id: `del-${id}` })
     } catch {
