@@ -372,7 +372,7 @@ function getStatusBadgeClasses(status: string) {
   }
 }
 
-export default function AppointmentsPage() {
+function AppointmentsPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useUser()
@@ -2293,5 +2293,13 @@ export default function AppointmentsPage() {
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>
+  )
+}
+
+export default function AppointmentsPage() {
+  return (
+    <React.Suspense fallback={<div className="p-4">Loading…</div>}>
+      <AppointmentsPageInner />
+    </React.Suspense>
   )
 }
