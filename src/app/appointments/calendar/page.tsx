@@ -20,7 +20,9 @@ import {
   Plus,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  ArrowLeft,
+  ArrowRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, type User } from "@/contexts/user-context"
@@ -91,7 +93,7 @@ function useAppointments() {
         
         // Process appointments with enrichment for contact and staff
         const enrichedBookings = await Promise.all(
-          bookings.slice(0, 100).map(async (booking: RawAppointment) => {
+          bookings.slice(0, 50).map(async (booking: RawAppointment) => {
             const details: Appointment = {
               id: String(booking.id || ""),
               calendar_id: String(booking.calendar_id || ""),
@@ -121,32 +123,7 @@ function useAppointments() {
               console.warn(`Failed to fetch details for booking ${booking.id}`)
             }
 
-            // Contact details
-            if (booking.contact_id) {
-              try {
-                const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getcontact?id=${booking.contact_id}`)
-                if (contactRes.ok) {
-                  const contactData = await contactRes.json()
-                  const c = contactData.contact || contactData.data || contactData
-                  if (c) {
-                    details.contactName = c.contactName || c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim()
-                    details.contactPhone = c.phone || null
-                  }
-                }
-              } catch {}
-            }
-
-            // Staff details
-            if (booking.assigned_user_id) {
-              try {
-                const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${booking.assigned_user_id}`)
-                if (staffRes.ok) {
-                  const staffData = await staffRes.json()
-                  details.assignedStaffFirstName = staffData.firstName
-                  details.assignedStaffLastName = staffData.lastName
-                }
-              } catch {}
-            }
+            // Contact and staff detail fetches are skipped here to improve performance.
 
             return details
           })
@@ -220,6 +197,9 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     close_time: number | null;
   }[]>([])
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const headerScrollRef = React.useRef<HTMLDivElement>(null)
+  const columnsScrollRef = React.useRef<HTMLDivElement>(null)
+  const columnWidth = 220
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -291,12 +271,29 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
       // Scroll to 8 AM position (0 slots * 60px = 0px since we start at 8AM)
       scrollContainerRef.current.scrollTop = 0
     }
+    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = 0
+    if (columnsScrollRef.current) columnsScrollRef.current.scrollLeft = 0
   }, [staff]) // Trigger after staff data is loaded
 
-  // Generate time slots for 8AM to 8PM (12 hours)
+  // Keep header and body horizontal scroll in sync
+  React.useEffect(() => {
+    const headerEl = headerScrollRef.current
+    const bodyEl = columnsScrollRef.current
+    if (!headerEl || !bodyEl) return
+    const onHeader = () => { if (bodyEl.scrollLeft !== headerEl.scrollLeft) bodyEl.scrollLeft = headerEl.scrollLeft }
+    const onBody = () => { if (headerEl.scrollLeft !== bodyEl.scrollLeft) headerEl.scrollLeft = bodyEl.scrollLeft }
+    headerEl.addEventListener('scroll', onHeader)
+    bodyEl.addEventListener('scroll', onBody)
+    return () => {
+      headerEl.removeEventListener('scroll', onHeader)
+      bodyEl.removeEventListener('scroll', onBody)
+    }
+  }, [headerScrollRef.current, columnsScrollRef.current])
+
+  // Generate time slots for 8AM to 11PM (15 hours)
   const generateTimeSlots = () => {
     const slots = []
-    for (let hour = 8; hour < 20; hour++) {
+    for (let hour = 8; hour <= 23; hour++) {
       slots.push(`${hour}:00`)
       slots.push(`${hour}:30`)
     }
@@ -305,7 +302,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
 
   const timeSlots = generateTimeSlots()
 
-  // Helper function to get appointment position and height (8AM to 8PM range)
+  // Helper function to get appointment position and height (8AM to 11PM range)
   const getAppointmentStyleImproved = (appointment: Appointment) => {
     if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
     
@@ -322,8 +319,9 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
-    // Only show appointments within 8AM-8PM range
-    if (startMinutes < dayStartMinutes || startMinutes >= 20 * 60) {
+    // Only show appointments within 8AM-11PM range
+    const dayEndMinutesExclusive = 23 * 60 + 30
+    if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
       return { display: 'none' }
     }
     
@@ -412,32 +410,91 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
   }
 
   return (
+    <>
+     <div className="pr-2 flex items-center gap-1 py-4">
+          <button
+            className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
+            onClick={() => {
+              const el = headerScrollRef.current
+              if (el) el.scrollBy({ left: -columnWidth*2, behavior: 'smooth' })
+            }}
+            aria-label="Scroll left"
+            title="Scroll left"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <button
+            className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
+            onClick={() => {
+              const el = headerScrollRef.current
+              if (el) el.scrollBy({ left: columnWidth*2, behavior: 'smooth' })
+            }}
+            aria-label="Scroll right"
+            title="Scroll right"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
     <div className="bg-background rounded-lg border shadow-sm overflow-hidden w-full">
+      
       {/* Header - Sticky time column + scrollable staff columns */}
-      <div className="sticky top-0 z-20 bg-background border-b flex w-full">
+      <div className="sticky top-0 z-20 bg-background border-b flex w-full items-center">
         {/* Sticky Time Header */}
         <div className="w-[120px] p-4 border-r font-semibold text-sm bg-muted/50 flex items-center justify-center flex-shrink-0">
           <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
           Time
+          
         </div>
         
         {/* Scrollable Staff Headers */}
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex" style={{ minWidth: `${staff.length * 180}px` }}>
-            {staff.map((staffMember) => (
-              <div key={staffMember.ghl_id} className="w-[180px] p-4 border-r last:border-r-0 bg-background flex-shrink-0">
-                <div className="text-center">
-                  <div className="font-medium text-sm truncate mb-1" title={staffMember.name}>
-                    {staffMember.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {getStaffAppointments(staffMember.ghl_id).length} appointments
+        <div className="flex-1 overflow-x-hidden" ref={headerScrollRef}>
+          <div className="flex" style={{ minWidth: `${staff.length * columnWidth}px` }}>
+            {staff.map((staffMember) => {
+              const appts = getStaffAppointments(staffMember.ghl_id)
+              // Build a compact list of time chips for that day
+              const chips = appts
+                .filter(a => a.startTime)
+                .sort((a,b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                .slice(0,4) // show first 4
+                .map((a) => new Date(a.startTime!))
+              return (
+                <div key={staffMember.ghl_id} className="w-[220px] p-4 border-r last:border-r-0 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
+                  <div className="text-center">
+                    <div className="font-medium text-sm truncate mb-1" title={staffMember.name}>
+                      {staffMember.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      {appts.length} appointments
+                    </div>
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {chips.map((d, idx) => (
+                        <button
+                          key={idx}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
+                          onClick={() => {
+                            const minutesFromStart = (d.getHours()*60 + d.getMinutes()) - (8*60)
+                            const slotIndex = Math.max(0, Math.floor(minutesFromStart / 30))
+                            if (scrollContainerRef.current) {
+                              scrollContainerRef.current.scrollTop = slotIndex * 60
+                            }
+                          }}
+                          title={d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}
+                        >
+                          {d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}
+                        </button>
+                      ))}
+                      {appts.length > 4 && (
+                        <span className="text-[10px] text-muted-foreground">+{appts.length - 4} more</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
+
+      
       </div>
 
       {/* Scrollable Time grid container */}
@@ -470,11 +527,11 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
           </div>
 
           {/* Scrollable Staff columns container */}
-          <div className="flex-1 overflow-x-auto">
-            <div className="flex relative" style={{ minWidth: `${staff.length * 180}px`, height: `${timeSlots.length * 60}px` }}>
+          <div className="flex-1 overflow-x-auto" ref={columnsScrollRef}>
+            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
-                <div key={staffMember.ghl_id} className="w-[180px] border-r last:border-r-0 bg-background flex-shrink-0 relative">
+                <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
                   {/* Hour lines for this staff column */}
                   {timeSlots.map((time, index) => (
                     <div
@@ -560,6 +617,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                     const style = getAppointmentStyleImproved(appointment)
                     if (style.display === 'none') return null
 
+                    const staffName = staff.find(s => s.ghl_id === staffMember.ghl_id)?.name || ''
                     return (
                       <div
                         key={appointment.id}
@@ -573,6 +631,11 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                         <div className="text-sm font-medium text-primary truncate">
                           {appointment.serviceName}
                         </div>
+                        {staffName && (
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {staffName}
+                          </div>
+                        )}
                         <div className="text-xs text-muted-foreground truncate mt-1">
                           {appointment.contactName}
                         </div>
@@ -601,6 +664,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
         </div>
       </div>
     </div>
+    </>
   )
 }
 
@@ -656,6 +720,24 @@ export default function CalendarPage() {
     open_time: number | null;
     close_time: number | null;
   }[]>([])
+  const [staffMap, setStaffMap] = React.useState<Record<string, string>>({})
+  const [leaves, setLeaves] = React.useState<{
+    "🔒 Row ID": string;
+    ghl_id: string;
+    "Event/Name": string;
+    "Event/Start": string;
+    "Event/End": string;
+  }[]>([])
+  const [breaks, setBreaks] = React.useState<{
+    "🔒 Row ID": string;
+    ghl_id: string;
+    "Block/Name": string;
+    "Block/Recurring": string;
+    "Block/Recurring Day": string;
+    "Block/Start": string;
+    "Block/End": string;
+    "Block/Date": string;
+  }[]>([])
 
   // Fetch salon hours
   React.useEffect(() => {
@@ -671,6 +753,39 @@ export default function CalendarPage() {
       }
     }
     fetchSalonHours()
+  }, [])
+
+  // Fetch staff map and leave/break datasets for indicators
+  React.useEffect(() => {
+    const fetchMeta = async () => {
+      try {
+        const [staffRes, leavesRes, breaksRes] = await Promise.all([
+          fetch('/api/barber-hours'),
+          fetch('/api/leaves'),
+          fetch('/api/time-blocks')
+        ])
+
+        const staffJson = await staffRes.json().catch(() => ({ ok: false }))
+        if (staffJson?.ok) {
+          const map: Record<string, string> = {}
+          ;(staffJson.data || []).forEach((barber: Record<string, string>) => {
+            const id = barber['ghl_id']
+            const name = barber['Barber/Name']
+            if (id) map[id] = name || id
+          })
+          setStaffMap(map)
+        }
+
+        const leavesJson = await leavesRes.json().catch(() => ({ ok: false }))
+        if (leavesJson?.ok) setLeaves(leavesJson.data || [])
+
+        const breaksJson = await breaksRes.json().catch(() => ({ ok: false }))
+        if (breaksJson?.ok) setBreaks(breaksJson.data || [])
+      } catch (e) {
+        console.warn('Failed fetching calendar meta', e)
+      }
+    }
+    fetchMeta()
   }, [])
 
   const currentYear = currentDate.getFullYear()
@@ -781,6 +896,42 @@ export default function CalendarPage() {
     const dayOfWeek = date.getDay() // 0 = Sunday, 1 = Monday, etc.
     const dayHours = salonHours.find(hour => hour.day_of_week === dayOfWeek)
     return dayHours && !dayHours.is_open
+  }
+
+  // Utility: same day check (ignoring time)
+  const isSameDay = (a: Date, b: Date) => {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  }
+
+  // Get leaves for a given date (scoped by role)
+  const getLeavesForDate = (date: Date) => {
+    const items = leaves.filter((lv) => {
+      const start = new Date(lv['Event/Start'])
+      const end = new Date(lv['Event/End'])
+      // Treat end as exclusive (if end is 27th 00:00, leave is only on 26th)
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+      const endDayExclusive = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+      const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+      return d >= startDay && d < endDayExclusive
+    })
+    if (user?.role === 'barber' && user.ghlId) return items.filter(i => i.ghl_id === user.ghlId)
+    return items
+  }
+
+  // Get breaks for a given date (scoped by role)
+  const getBreaksForDate = (date: Date) => {
+    const dow = date.getDay().toString()
+    const items = breaks.filter((bk) => {
+      if (bk['Block/Recurring'] === 'true') {
+        const days = (bk['Block/Recurring Day'] || '').split(',')
+        return days.includes(dow)
+      }
+      if (!bk['Block/Date']) return false
+      const d = new Date(bk['Block/Date'])
+      return isSameDay(d, date)
+    })
+    if (user?.role === 'barber' && user.ghlId) return items.filter(i => i.ghl_id === user.ghlId)
+    return items
   }
 
   // Day view appointments
@@ -925,47 +1076,66 @@ export default function CalendarPage() {
                           <p className="font-medium">Salon is closed today</p>
                           <p className="text-sm text-muted-foreground mt-2">No appointments available</p>
                         </div>
-                      ) : dayAppointments.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>No appointments scheduled for this day</p>
-                        </div>
-                      ) : staffView && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
-                        <StaffOverviewView appointments={dayAppointments} user={user} />
                       ) : (
-                        <div className="space-y-3">
-                          {dayAppointments
-                            .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
-                            .map((appointment) => (
-                              <div
-                                key={appointment.id}
-                                onClick={() => openAppointmentDetails(appointment)}
-                                className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 rounded-full bg-primary"></div>
-                                    <div>
-                                      <div className="font-medium">{appointment.serviceName}</div>
-                                      {appointment.contactName ? (
-                                        <div className="text-sm text-muted-foreground">
-                                          {appointment.contactName}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-medium">
-                                      {formatTime(appointment.startTime!)}
-                                    </div>
-                                    <div className="text-sm text-muted-foreground">
-                                      {`${appointment.assignedStaffFirstName || ''} ${appointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
-                                    </div>
-                                  </div>
-                                </div>
+                        <>
+                          {(() => {
+                            const dayLeaves = getLeavesForDate(currentDate)
+                            const dayBreaks = getBreaksForDate(currentDate)
+                            if (dayLeaves.length === 0 && dayBreaks.length === 0) return null
+                            return (
+                              <div className="mb-3 text-xs">
+                                {dayLeaves.length > 0 && (
+                                  <div className="text-orange-700">Leaves: {dayLeaves.map(l => `${staffMap[l.ghl_id] || l.ghl_id} (${l['Event/Name']})`).join(', ')}</div>
+                                )}
+                                {dayBreaks.length > 0 && (
+                                  <div className="text-gray-600">Breaks: {dayBreaks.map(b => `${staffMap[b.ghl_id] || b.ghl_id} (${b['Block/Name']})`).join(', ')}</div>
+                                )}
                               </div>
-                            ))}
-                        </div>
+                            )
+                          })()}
+                          {dayAppointments.length === 0 ? (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                              <p>No appointments scheduled for this day</p>
+                            </div>
+                          ) : staffView && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
+                            <StaffOverviewView appointments={dayAppointments} user={user} />
+                          ) : (
+                            <div className="space-y-3">
+                              {dayAppointments
+                                .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                                .map((appointment) => (
+                                  <div
+                                    key={appointment.id}
+                                    onClick={() => openAppointmentDetails(appointment)}
+                                    className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-3 h-3 rounded-full bg-primary"></div>
+                                        <div>
+                                          <div className="font-medium">{appointment.serviceName}</div>
+                                          {appointment.contactName ? (
+                                            <div className="text-sm text-muted-foreground">
+                                              {appointment.contactName}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="font-medium">
+                                          {formatTime(appointment.startTime!)}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                          {`${appointment.assignedStaffFirstName || ''} ${appointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </CardContent>
                   </Card>
@@ -1003,6 +1173,25 @@ export default function CalendarPage() {
                           >
                             <div className="flex flex-col h-full">
                               <div className="text-sm font-medium">{day.dayNumber}</div>
+                              {/* Leaves/Breaks indicators */}
+                              {(() => {
+                                const dayLeaves = getLeavesForDate(day.date)
+                                const dayBreaks = getBreaksForDate(day.date)
+                                return (
+                                  <>
+                                    {dayLeaves.length > 0 && (
+                                      <button onClick={(e) => { e.stopPropagation(); window.location.href = '/settings/leaves'; }} className="inline-flex items-center gap-1 mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
+                                        {dayLeaves.length} {dayLeaves.length>1? 'Leaves':'Leave'}
+                                      </button>
+                                    )}
+                                    {dayBreaks.length > 0 && (
+                                      <button onClick={(e) => { e.stopPropagation(); window.location.href = '/settings/breaks'; }} className="inline-flex items-center gap-1 mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-800 border border-gray-200">
+                                        {dayBreaks.length} {dayBreaks.length>1? 'Breaks':'Break'}
+                                      </button>
+                                    )}
+                                  </>
+                                )
+                              })()}
                               {isSalonDayOff(day.date) && (
                                 <div className="text-xs text-red-600 font-medium mt-1">
                                   Salon Closed
@@ -1071,7 +1260,24 @@ export default function CalendarPage() {
                                     isSalonDayOff(day.date) && "bg-red-100 text-red-700"
                                   )}
                                 >
-                                  {day.dayNumber}
+                                  <div className="relative w-full h-full flex items-center justify-center">
+                                    {day.dayNumber}
+                                    {/* Corner markers for leaves/breaks */}
+                                    {(() => {
+                                      const dayLeaves = getLeavesForDate(day.date)
+                                      const dayBreaks = getBreaksForDate(day.date)
+                                      return (
+                                        <>
+                                          {dayLeaves.length > 0 && (
+                                            <button onClick={(e) => { e.stopPropagation(); window.location.href = '/settings/leaves'; }} className="absolute left-1 top-1 text-[9px] px-1 rounded bg-orange-100 text-orange-800 border border-orange-200" title={dayLeaves.map(l => `${staffMap[l.ghl_id] || l.ghl_id}: ${l['Event/Name']}`).join(', ')}>L</button>
+                                          )}
+                                          {dayBreaks.length > 0 && (
+                                            <button onClick={(e) => { e.stopPropagation(); window.location.href = '/settings/breaks'; }} className="absolute right-1 bottom-1 text-[9px] px-1 rounded bg-gray-100 text-gray-800 border border-gray-200" title={dayBreaks.map(b => `${staffMap[b.ghl_id] || b.ghl_id}: ${b['Block/Name']}`).join(', ')}>B</button>
+                                          )}
+                                        </>
+                                      )
+                                    })()}
+                                  </div>
                                 </div>
                               ))}
                             </div>

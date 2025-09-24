@@ -42,8 +42,12 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
       setRecurring(isRecurring)
       setDays(String(eb["Block/Recurring Day"] || "").split(',').filter(Boolean))
       setDate(isRecurring ? undefined : (eb["Block/Date"] ? new Date(String(eb["Block/Date"])) : undefined))
-      setStart(minutesToDisplayTime(Number(eb["Block/Start"])) .replace(/\s?(AM|PM)$/,'').padStart(5,'0'))
-      setEnd(minutesToDisplayTime(Number(eb["Block/End"])) .replace(/\s?(AM|PM)$/,'').padStart(5,'0'))
+      // Keep 24h HH:MM for <input type="time"> so PM times are preserved
+      const startMin = Number(eb["Block/Start"]) || 0
+      const endMin = Number(eb["Block/End"]) || 0
+      const toHHMM = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+      setStart(toHHMM(startMin))
+      setEnd(toHHMM(endMin))
     } else {
       setName("Lunch")
       setRecurring(false)
@@ -179,9 +183,9 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
           </div>
 
           {recurring && (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {DAYS.map(d => (
-                <Button key={d} type="button" variant={days.includes(d) ? 'default' : 'outline'} onClick={() => toggleDay(d)} size="sm">
+                <Button key={d} type="button" variant={days.includes(d) ? 'default' : 'outline'} onClick={() => toggleDay(d)} size="sm" className="justify-start">
                   {d}
                 </Button>
               ))}
