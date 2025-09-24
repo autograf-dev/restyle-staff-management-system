@@ -117,7 +117,7 @@ export default function SalonStaffPage() {
               <div className="flex items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
-                <h1 className="text-xl font-semibold">Salon Staff</h1>
+                <h1 className="text-xl font-semibold">Stylists</h1>
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -140,16 +140,16 @@ export default function SalonStaffPage() {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Salon Staff</h1>
+              <h1 className="text-xl font-semibold">Stylists</h1>
             </div>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-semibold">Staff Management</h2>
+                <h2 className="text-2xl font-semibold">Stylist Management</h2>
                 <p className="text-muted-foreground">
-                  Manage your salon staff members and their availability
+                  Manage your stylists and their availability
                 </p>
               </div>
               <Button 
@@ -165,7 +165,8 @@ export default function SalonStaffPage() {
 
             <div>
               <Button className="bg-primary" onClick={() => setCreateDialogOpen(true)}>
-                Create Barber Users
+                <Scissors className="h-4 w-4 mr-2" />
+                Add Stylists
               </Button>
             </div>
 
@@ -173,7 +174,7 @@ export default function SalonStaffPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
+                  <CardTitle className="text-sm font-medium">Total Stylists</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -233,7 +234,7 @@ export default function SalonStaffPage() {
                   Staff Directory
                 </CardTitle>
                 <CardDescription>
-                  Complete list of salon staff members with their availability information
+                  Complete list of stylists with their availability information
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -342,7 +343,7 @@ export default function SalonStaffPage() {
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Create Barber User</DialogTitle>
+                <DialogTitle>Add Stylist</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-1">
@@ -403,7 +404,7 @@ export default function SalonStaffPage() {
                       }
                     }}
                   >
-                    {creating ? 'Creating…' : 'Create Barber'}
+                    {creating ? 'Adding…' : 'Add Stylist'}
                   </Button>
                 </div>
               </div>

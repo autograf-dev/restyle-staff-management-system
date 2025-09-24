@@ -456,35 +456,52 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
   return (
     <>
 {(user?.role === 'admin' || user?.role === 'manager') && (
-  <div className="pr-2 flex items-center gap-1 py-4">
-    <button
-      className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
-      onClick={() => {
-        const delta = -columnWidth*2
-        const h = headerScrollRef.current
-        const b = columnsScrollRef.current
-        if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
-        if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
-      }}
-      aria-label="Scroll left"
-      title="Scroll left"
-    >
-      <ArrowLeft className="h-4 w-4" />
-    </button>
-    <button
-      className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
-      onClick={() => {
-        const delta = columnWidth*2
-        const h = headerScrollRef.current
-        const b = columnsScrollRef.current
-        if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
-        if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
-      }}
-      aria-label="Scroll right"
-      title="Scroll right"
-    >
-      <ArrowRight className="h-4 w-4" />
-    </button>
+  <div className="pr-2 py-4">
+    <div className="bg-muted rounded-lg p-2 flex items-center gap-2 max-w-md">
+      <button
+        className="h-6 w-6 rounded flex items-center justify-center hover:bg-background transition-colors"
+        onClick={() => {
+          const delta = -columnWidth*3
+          const h = headerScrollRef.current
+          const b = columnsScrollRef.current
+          if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
+          if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
+        }}
+        aria-label="Scroll left"
+      >
+        <ArrowLeft className="h-3 w-3" />
+      </button>
+      
+      <div className="flex-1 flex items-center gap-1">
+        {staff.slice(0, 6).map((_, index) => (
+          <div 
+            key={index}
+            className="h-1.5 bg-background rounded-full flex-1 cursor-pointer hover:bg-primary/20 transition-colors"
+            onClick={() => {
+              const scrollPosition = (index * columnWidth * staff.length) / 6
+              const h = headerScrollRef.current
+              const b = columnsScrollRef.current
+              if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+              if (b) b.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+            }}
+          />
+        ))}
+      </div>
+      
+      <button
+        className="h-6 w-6 rounded flex items-center justify-center hover:bg-background transition-colors"
+        onClick={() => {
+          const delta = columnWidth*3
+          const h = headerScrollRef.current
+          const b = columnsScrollRef.current
+          if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
+          if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
+        }}
+        aria-label="Scroll right"
+      >
+        <ArrowRight className="h-3 w-3" />
+      </button>
+    </div>
   </div>
 )}
     <div className="bg-background rounded-lg border shadow-sm overflow-hidden w-full">
@@ -493,8 +510,6 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
       <div className="sticky top-0 z-20 bg-background border-b flex w-full items-center">
         {/* Sticky Time Header */}
         <div className="w-[120px] p-4 border-r font-semibold text-sm bg-muted/50 flex items-center justify-center flex-shrink-0">
-          <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-          Time
           
         </div>
         
@@ -515,29 +530,8 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                     <div className="font-medium text-sm truncate mb-1" title={staffMember.name}>
                       {staffMember.name}
                     </div>
-                    <div className="text-xs text-muted-foreground mb-2">
+                    <div className="text-xs text-muted-foreground">
                       {appts.length} appointments
-                    </div>
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      {chips.map((d, idx) => (
-                        <button
-                          key={idx}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
-                          onClick={() => {
-                            const minutesFromStart = (d.getHours()*60 + d.getMinutes()) - (8*60)
-                            const slotIndex = Math.max(0, Math.floor(minutesFromStart / 30))
-                            if (scrollContainerRef.current) {
-                              scrollContainerRef.current.scrollTop = slotIndex * 60
-                            }
-                          }}
-                          title={d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}
-                        >
-                          {d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}
-                        </button>
-                      ))}
-                      {appts.length > 4 && (
-                        <span className="text-[10px] text-muted-foreground">+{appts.length - 4} more</span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -785,7 +779,7 @@ export default function CalendarPage() {
   const [view, setView] = React.useState<CalendarView>('month')
   const [selectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
-  const [staffView, setStaffView] = React.useState(false) // New state for staff view
+  const [staffView, setStaffView] = React.useState(true) // Default to staff view
   const [salonHours, setSalonHours] = React.useState<{
     id: string;
     day_of_week: number;

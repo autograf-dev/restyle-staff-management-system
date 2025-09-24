@@ -135,8 +135,12 @@ export default function ServicesPage() {
           
           return {
             ...service,
-            // Use the correct duration field from API: slotDuration (in minutes)
-            duration: service.slotDuration ? Number(service.slotDuration) : null,
+            // Convert duration to minutes based on unit
+            duration: service.slotDuration ? (() => {
+              const duration = Number(service.slotDuration)
+              const unit = service.slotDurationUnit as string
+              return unit === 'hours' ? duration * 60 : duration
+            })() : null,
             assignedUserIds: service.teamMembers && Array.isArray(service.teamMembers) 
               ? service.teamMembers.map((member: Record<string, unknown>) => member.userId as string)
               : []

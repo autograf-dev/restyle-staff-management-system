@@ -112,20 +112,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         isActive: true,
         items: [
           { title: "My Hours", url: myHoursUrl },
-          { title: "My Leaves", url: `${prefix}/settings/leaves` },
+          { title: "My Holidays", url: `${prefix}/settings/leaves` },
           { title: "My Breaks", url: `${prefix}/settings/breaks` },
         ],
       })
     } else {
       // Admin/manager view
-      if (user?.role === "admin") {
-        items.push({
-          title: "Teams",
-          url: "/teams",
-          icon: Scissors,
-          isActive: false,
-        })
-      }
       items.push({
         title: "Settings",
         url: "#",
@@ -134,10 +126,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items: [
           { title: "Services", url: `${prefix}/settings/services` },
           { title: "Salon Hours", url: `${prefix}/settings/salon-hours` },
-          { title: "Salon Staff", url: `${prefix}/settings/salon-staff` },
+          { title: "Stylists", url: `${prefix}/settings/salon-staff` },
           { title: "Staff Hours", url: `${prefix}/settings/staff-hours` },
-          { title: "Leaves", url: `${prefix}/settings/leaves` },
+          { title: "Holidays", url: `${prefix}/settings/leaves` },
           { title: "Breaks", url: `${prefix}/settings/breaks` },
+          ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams" }] : []),
         ],
       })
     }
