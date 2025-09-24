@@ -20,12 +20,12 @@ import {
   RefreshCw, 
   Edit, 
   Trash2, 
-  Users, 
+  MoreHorizontal, 
   Clock, 
-  DollarSign,
+  Users, 
   Settings as SettingsIcon,
   Eye,
-  EyeOff
+  EyeOff 
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
@@ -135,8 +135,8 @@ export default function ServicesPage() {
           
           return {
             ...service,
-            // Try different possible duration field names
-            duration: service.duration || service.appointmentDuration || service.serviceDuration || service.timeSlotDuration,
+            // Use the correct duration field from API: slotDuration (in minutes)
+            duration: service.slotDuration ? Number(service.slotDuration) : null,
             assignedUserIds: service.teamMembers && Array.isArray(service.teamMembers) 
               ? service.teamMembers.map((member: Record<string, unknown>) => member.userId as string)
               : []
@@ -384,13 +384,6 @@ export default function ServicesPage() {
     setDeleteDialogOpen(true)
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD'
-    }).format(amount)
-  }
-
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60)
     const mins = minutes % 60
@@ -465,9 +458,9 @@ export default function ServicesPage() {
                   <div className="text-2xl font-bold">
                     {services.length > 0 
                       ? (() => {
-                          const validDurations = services.filter(s => s.duration && !isNaN(Number(s.duration)))
+                          const validDurations = services.filter(s => s.duration && typeof s.duration === 'number' && s.duration > 0)
                           return validDurations.length > 0
-                            ? formatDuration(Math.round(validDurations.reduce((sum, s) => sum + Number(s.duration), 0) / validDurations.length))
+                            ? formatDuration(Math.round(validDurations.reduce((sum: number, s) => sum + (s.duration as number), 0) / validDurations.length))
                             : 'Not set'
                         })()
                       : '0m'
@@ -536,8 +529,8 @@ export default function ServicesPage() {
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <Clock className="h-4 w-4 text-muted-foreground" />
-                                  {service.duration && !isNaN(Number(service.duration)) 
-                                    ? formatDuration(Number(service.duration))
+                                  {service.duration && typeof service.duration === 'number' && service.duration > 0
+                                    ? formatDuration(service.duration)
                                     : <span className="text-muted-foreground">Not set</span>
                                   }
                                 </div>
