@@ -1059,45 +1059,7 @@ export default function CalendarPage() {
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center border rounded-lg p-1">
-                      <Button
-                        variant={view === 'day' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setView('day')}
-                        className="h-8 px-3 text-xs"
-                      >
-                        Day
-                      </Button>
-                      <Button
-                        variant={view === 'month' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setView('month')}
-                        className="h-8 px-3 text-xs"
-                      >
-                        Month
-                      </Button>
-                      <Button
-                        variant={view === 'year' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setView('year')}
-                        className="h-8 px-3 text-xs"
-                      >
-                        Year
-                      </Button>
-                      {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') && (
-                        <Button
-                          variant={staffView ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => {
-                            setStaffView(!staffView)
-                            if (!staffView) setView('day')
-                          }}
-                          className="h-8 px-3 text-xs"
-                        >
-                          {user?.role === 'barber' ? 'My Schedule' : 'Staff View'}
-                        </Button>
-                      )}
-                    </div>
+                    {/* Calendar view selectors removed - staff view is now the only view */}
                     
                     <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
                       <Plus className="h-4 w-4 mr-2" />
@@ -1160,46 +1122,12 @@ export default function CalendarPage() {
                               </div>
                             )
                           })()}
-                          {staffView && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
+                          {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
                             <StaffOverviewView appointments={dayAppointments} user={user} />
-                          ) : dayAppointments.length === 0 ? (
+                          ) : (
                             <div className="text-center py-12 text-muted-foreground">
                               <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                              <p>No bookings scheduled for this day</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {dayAppointments
-                                .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
-                                .map((appointment) => (
-                                  <div
-                                    key={appointment.id}
-                                    onClick={() => openAppointmentDetails(appointment)}
-                                    className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-3 h-3 rounded-full bg-primary"></div>
-                                        <div>
-                                          <div className="font-medium">{appointment.serviceName}</div>
-                                          {appointment.contactName ? (
-                                            <div className="text-sm text-muted-foreground">
-                                              {appointment.contactName}
-                                            </div>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="font-medium">
-                                          {formatTime(appointment.startTime!)}
-                                        </div>
-                                        <div className="text-sm text-muted-foreground">
-                                          {`${appointment.assignedStaffFirstName || ''} ${appointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
+                              <p>Access restricted. Please contact your administrator.</p>
                             </div>
                           )}
                         </>
