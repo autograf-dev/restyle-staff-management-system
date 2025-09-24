@@ -1,7 +1,8 @@
 "use client"
 
+import React from "react"
 import { ChevronRight, type LucideIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
 
 import {
@@ -35,6 +36,11 @@ export function NavMain({
   }[]
 }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const currentWithQuery = React.useMemo(() => {
+    const qs = searchParams?.toString()
+    return qs ? `${pathname}?${qs}` : pathname
+  }, [pathname, searchParams])
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
@@ -42,11 +48,11 @@ export function NavMain({
         {items.map((item) => {
           const subItems = item.items || []
           const parentActive = subItems.some((s) =>
-            pathname === s.url || pathname.startsWith(`${s.url}/`)
+            pathname === s.url || currentWithQuery === s.url || pathname.startsWith(`${s.url}/`)
           )
           // If no sub-items, render as a direct link item
           if (subItems.length === 0) {
-            const isActive = pathname === item.url || pathname.startsWith(`${item.url}/`)
+            const isActive = pathname === item.url || currentWithQuery === item.url || pathname.startsWith(`${item.url}/`)
             return (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
@@ -77,7 +83,7 @@ export function NavMain({
                 <SidebarMenuSub>
                   {subItems.map((subItem) => {
                     const isActive =
-                      pathname === subItem.url || pathname.startsWith(`${subItem.url}/`)
+                      pathname === subItem.url || currentWithQuery === subItem.url || pathname.startsWith(`${subItem.url}/`)
                     return (
                     <SidebarMenuSubItem key={subItem.title}>
                       <SidebarMenuSubButton asChild isActive={isActive}>

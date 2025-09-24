@@ -290,12 +290,18 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     }
   }, [headerScrollRef.current, columnsScrollRef.current])
 
-  // Generate time slots for 8AM to 11PM (15 hours)
+  // Generate time slots based on salon hours (fallback 8AM-11PM)
   const generateTimeSlots = () => {
-    const slots = []
-    for (let hour = 8; hour <= 23; hour++) {
-      slots.push(`${hour}:00`)
-      slots.push(`${hour}:30`)
+    // Determine current day salon hours
+    const dow = new Date().getDay() // 0..6
+    const today = salonHours.find(h => h.day_of_week === dow)
+    const open = (today && today.is_open && typeof today.open_time === 'number') ? today.open_time : 8 * 60
+    const close = (today && today.is_open && typeof today.close_time === 'number') ? today.close_time : 23 * 60 + 30
+    const slots: string[] = []
+    for (let m = open; m <= close; m += 30) {
+      const h = Math.floor(m / 60)
+      const mm = m % 60
+      slots.push(`${h.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`)
     }
     return slots
   }
@@ -315,12 +321,15 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     const endMinute = end.getMinutes()
     
     // Calculate position from 8AM (480 minutes from midnight)
-    const dayStartMinutes = 8 * 60 // Start from 8AM (480 minutes)
+    // Start from salon open (fallback 8AM)
+    const dow = new Date().getDay()
+    const today = salonHours.find(h => h.day_of_week === dow)
+    const dayStartMinutes = (today && today.is_open && typeof today.open_time === 'number') ? today.open_time : 8 * 60
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
     // Only show appointments within 8AM-11PM range
-    const dayEndMinutesExclusive = 23 * 60 + 30
+    const dayEndMinutesExclusive = (today && today.is_open && typeof today.close_time === 'number') ? today.close_time : 23 * 60 + 30
     if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
       return { display: 'none' }
     }

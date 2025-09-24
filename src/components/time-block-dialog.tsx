@@ -78,6 +78,24 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
 
     const startMin = timeToMinutes(start)
     const endMin = timeToMinutes(end)
+
+    // Enforce salon working hours bounds
+    try {
+      const res = await fetch('/api/business-hours')
+      const json = await res.json().catch(() => ({ ok: false }))
+      if (json?.ok) {
+        const dow = date ? new Date(date).getDay() : new Date().getDay()
+        const day = (json.data || []).find((d: { day_of_week: number }) => d.day_of_week === dow)
+        if (day && day.is_open) {
+          const minStart = Number(day.open_time ?? 0)
+          const maxEnd = Number(day.close_time ?? 24*60)
+          if (startMin < minStart || endMin > maxEnd) {
+            toast.error('Break must be within salon working hours')
+            return
+          }
+        }
+      }
+    } catch {}
     if (startMin >= endMin) {
       toast.error('Start time must be before end time')
       return
