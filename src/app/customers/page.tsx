@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Search } from "lucide-react"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -165,6 +166,8 @@ export default function Page() {
   
   // Search state
   const [globalFilter, setGlobalFilter] = React.useState("")
+  const [apiQuery, setApiQuery] = React.useState("")
+  const [apiLoading, setApiLoading] = React.useState(false)
   
   // Add isMounted ref for the main component to prevent state updates on unmounted components
   const isMounted = React.useRef(false)
@@ -744,12 +747,64 @@ export default function Page() {
 
           <div className="w-full space-y-3">
             <div className="flex items-center gap-2">
-              <Input
-                placeholder="Search customers on this page..."
-                value={globalFilter ?? ""}
-                onChange={(e) => setGlobalFilter(e.target.value)}
-                className="w-[320px] h-9"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search by name or phone (server)"
+                  value={apiQuery}
+                  onChange={(e) => setApiQuery(e.target.value)}
+                  className="w-[320px] h-9"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={async () => {
+                    const q = apiQuery.trim()
+                    if (!q) return
+                    try {
+                      setApiLoading(true)
+                      const url = `https://restyle-backend.netlify.app/.netlify/functions/searchContacts?s=${encodeURIComponent(q)}&page=1&limit=20`
+                      const res = await fetch(url)
+                      const json = await res.json().catch(() => ({}))
+                      const arr = Array.isArray(json.results) ? json.results : []
+                      const mapped: Contact[] = arr.map((r: {
+                        id?: string
+                        contactId?: string
+                        uuid?: string
+                        contactName?: string
+                        firstName?: string
+                        lastName?: string
+                        phone?: string
+                        dateAdded?: string
+                      }) => ({
+                        id: String(r.id || r.contactId || r.uuid || ""),
+                        contactName: r.contactName || r.firstName && r.lastName ? `${r.firstName} ${r.lastName}`.trim() : `${r.firstName || ""} ${r.lastName || ""}`.trim(),
+                        firstName: r.firstName || "",
+                        lastName: r.lastName || "",
+                        phone: r.phone || null,
+                        dateAdded: r.dateAdded || new Date().toISOString(),
+                      }))
+                      setData(mapped)
+                    } catch {
+                      toast.error("Search failed")
+                    } finally {
+                      setApiLoading(false)
+                    }
+                  }}
+                  disabled={apiLoading}
+                  title="Search"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Input
+                  placeholder="Filter current page…"
+                  value={globalFilter ?? ""}
+                  onChange={(e) => setGlobalFilter(e.target.value)}
+                  className="w-[240px] h-9"
+                />
+              </div>
             </div>
 
             <div className="rounded-md border overflow-hidden">
