@@ -83,6 +83,33 @@ export default function ServicesPage() {
   })
 
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([])
+  const [allStaff, setAllStaff] = useState<{ [key: string]: { id: string; name: string; email: string } }>({})
+
+  // Fetch all staff to map IDs to names
+  const fetchAllStaff = async () => {
+    try {
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/Staff')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      const result = await response.json()
+      
+      if (result.success) {
+        // Create a lookup map: staffId -> staff details
+        const staffMap: { [key: string]: { id: string; name: string; email: string } } = {}
+        result.staff?.forEach((staff: any) => {
+          staffMap[staff.id] = {
+            id: staff.id,
+            name: staff.name || `${staff.firstName} ${staff.lastName}`.trim(),
+            email: staff.email || ''
+          }
+        })
+        setAllStaff(staffMap)
+      }
+    } catch (error) {
+      console.error('Error fetching staff:', error)
+    }
+  }
 
   // Fetch services data
   const fetchServices = async () => {
@@ -97,7 +124,18 @@ export default function ServicesPage() {
       const result = await response.json()
       
       if (result.success) {
-        setServices(result.services || result.data || [])
+        // The getAllServices endpoint returns services in the 'calendars' array
+        const servicesData = result.calendars || result.services || result.data || []
+        
+        // Transform the data to include assignedUserIds from teamMembers
+        const transformedServices = servicesData.map((service: Record<string, unknown>) => ({
+          ...service,
+          assignedUserIds: service.teamMembers && Array.isArray(service.teamMembers) 
+            ? service.teamMembers.map((member: Record<string, unknown>) => member.userId as string)
+            : []
+        }))
+        
+        setServices(transformedServices)
       } else {
         throw new Error(result.error || 'Failed to fetch services')
       }
@@ -357,6 +395,7 @@ export default function ServicesPage() {
   useEffect(() => {
     fetchServices()
     fetchStaff()
+    fetchAllStaff()
   }, [])
 
   return (
@@ -504,7 +543,8 @@ export default function ServicesPage() {
                                 </div>
                                 {service.assignedUserIds && service.assignedUserIds.length > 0 ? (
                                   <div className="text-xs text-muted-foreground mt-1">
-                                    {service.assignedUserIds.length} staff member{service.assignedUserIds.length > 1 ? 's' : ''}
+                                    {service.assignedUserIds.slice(0, 2).map(userId => allStaff[userId]?.name || userId).join(', ')}
+                                    {service.assignedUserIds.length > 2 && ` +${service.assignedUserIds.length - 2} more`}
                                   </div>
                                 ) : (
                                   <div className="text-xs text-muted-foreground mt-1">
