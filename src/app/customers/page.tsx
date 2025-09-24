@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search } from "lucide-react"
+import { Search, RefreshCw, X } from "lucide-react"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -794,7 +794,26 @@ export default function Page() {
                   disabled={apiLoading}
                   title="Search"
                 >
-                  <Search className="h-4 w-4" />
+                  {apiLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3"
+                  disabled={apiLoading}
+                  onClick={async () => {
+                    try {
+                      setApiLoading(true)
+                      setApiQuery("")
+                      setGlobalFilter("")
+                      await fetchContacts(1)
+                    } finally {
+                      setApiLoading(false)
+                    }
+                  }}
+                  title="Reset filters"
+                >
+                  <X className="h-4 w-4 mr-1" /> Reset
                 </Button>
               </div>
               <div className="ml-auto flex items-center gap-2">
