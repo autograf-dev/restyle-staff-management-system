@@ -15,7 +15,7 @@ import {
   ChevronRight, 
   Calendar as CalendarIcon, 
   Clock, 
-  User, 
+  User as UserIcon, 
   MapPin,
   Plus,
   Eye,
@@ -23,7 +23,7 @@ import {
   Trash2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useUser } from "@/contexts/user-context"
+import { useUser, type User } from "@/contexts/user-context"
 import { toast } from "sonner"
 
 // Types
@@ -186,7 +186,7 @@ function formatDate(date: Date) {
 }
 
 // Staff Overview Component - Acuity-style time grid calendar
-const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) => {
+const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[], user: User | null }) => {
   const [staff, setStaff] = React.useState<{
     id: string;
     ghl_id: string;
@@ -195,17 +195,42 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     role: string;
   }[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [leaves, setLeaves] = React.useState<{
+    "🔒 Row ID": string;
+    ghl_id: string;
+    "Event/Name": string;
+    "Event/Start": string;
+    "Event/End": string;
+  }[]>([])
+  const [breaks, setBreaks] = React.useState<{
+    "🔒 Row ID": string;
+    ghl_id: string;
+    "Block/Name": string;
+    "Block/Recurring": string;
+    "Block/Recurring Day": string;
+    "Block/Start": string;
+    "Block/End": string;
+    "Block/Date": string;
+  }[]>([])
+  const [salonHours, setSalonHours] = React.useState<{
+    id: string;
+    day_of_week: number;
+    is_open: boolean;
+    open_time: number | null;
+    close_time: number | null;
+  }[]>([])
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
-    const fetchStaff = async () => {
+    const fetchData = async () => {
       try {
+        // Fetch staff data
         const staffRes = await fetch('/api/barber-hours')
         const staffJson = await staffRes.json()
         
         if (staffJson.ok) {
           const staffData = staffJson.data || []
-          const staffMembers = staffData.map((barber: {
+          let staffMembers = staffData.map((barber: {
             "🔒 Row ID"?: string;
             "ð Row ID"?: string;
             "Barber/Name": string;
@@ -220,30 +245,58 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
             role: 'barber'
           }))
           
+          // Filter staff based on user role
+          if (user?.role === 'barber' && user.ghlId) {
+            // For barber role, only show their own data
+            staffMembers = staffMembers.filter((member: { ghl_id: string }) => member.ghl_id === user.ghlId)
+          }
+          // For admin/manager roles, show all staff (no filtering)
+          
           setStaff(staffMembers)
         }
+
+        // Fetch leaves data
+        const leavesRes = await fetch('/api/leaves')
+        const leavesJson = await leavesRes.json()
+        if (leavesJson.ok) {
+          setLeaves(leavesJson.data || [])
+        }
+
+        // Fetch breaks data
+        const breaksRes = await fetch('/api/time-blocks')
+        const breaksJson = await breaksRes.json()
+        if (breaksJson.ok) {
+          setBreaks(breaksJson.data || [])
+        }
+
+        // Fetch salon hours data
+        const salonRes = await fetch('/api/business-hours')
+        const salonJson = await salonRes.json()
+        if (salonJson.ok) {
+          setSalonHours(salonJson.data || [])
+        }
       } catch (error) {
-        console.error('Failed to fetch staff:', error)
+        console.error('Failed to fetch data:', error)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchStaff()
-  }, [])
+    fetchData()
+  }, [user])
 
   // Auto-scroll to 8 AM on component mount
   React.useEffect(() => {
     if (scrollContainerRef.current) {
-      // Scroll to 8 AM position (16 slots * 60px = 960px)
-      scrollContainerRef.current.scrollTop = 16 * 60
+      // Scroll to 8 AM position (0 slots * 60px = 0px since we start at 8AM)
+      scrollContainerRef.current.scrollTop = 0
     }
   }, [staff]) // Trigger after staff data is loaded
 
-  // Generate time slots for full 24 hours
+  // Generate time slots for 8AM to 8PM (12 hours)
   const generateTimeSlots = () => {
     const slots = []
-    for (let hour = 0; hour < 24; hour++) {
+    for (let hour = 8; hour < 20; hour++) {
       slots.push(`${hour}:00`)
       slots.push(`${hour}:30`)
     }
@@ -252,7 +305,7 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
 
   const timeSlots = generateTimeSlots()
 
-  // Helper function to get appointment position and height (improved with 60px slots for 24 hours)
+  // Helper function to get appointment position and height (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment) => {
     if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
     
@@ -264,10 +317,15 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     const endHour = end.getHours()
     const endMinute = end.getMinutes()
     
-    // Calculate position from midnight (0 minutes)
-    const dayStartMinutes = 0 // Start from midnight
+    // Calculate position from 8AM (480 minutes from midnight)
+    const dayStartMinutes = 8 * 60 // Start from 8AM (480 minutes)
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
+    
+    // Only show appointments within 8AM-8PM range
+    if (startMinutes < dayStartMinutes || startMinutes >= 20 * 60) {
+      return { display: 'none' }
+    }
     
     const topOffset = ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
     const height = ((endMinutes - startMinutes) / 30) * 60
@@ -289,6 +347,49 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
     return appointments.filter(apt => apt.assigned_user_id === staffGhlId)
   }
 
+  // Get leaves for a specific staff member
+  const getStaffLeaves = (staffGhlId: string) => {
+    return leaves.filter(leave => leave.ghl_id === staffGhlId)
+  }
+
+  // Get breaks for a specific staff member
+  const getStaffBreaks = (staffGhlId: string) => {
+    return breaks.filter(breakItem => breakItem.ghl_id === staffGhlId)
+  }
+
+  // Helper function to get leave/break position and height
+  const getLeaveBreakStyle = (startTime: string, endTime: string) => {
+    const start = new Date(startTime)
+    const end = new Date(endTime)
+    
+    const startHour = start.getHours()
+    const startMinute = start.getMinutes()
+    const endHour = end.getHours()
+    const endMinute = end.getMinutes()
+    
+    // Calculate position from 8AM (480 minutes from midnight)
+    const dayStartMinutes = 8 * 60 // Start from 8AM (480 minutes)
+    const startMinutes = startHour * 60 + startMinute
+    const endMinutes = endHour * 60 + endMinute
+    
+    // Only show if within 8AM-8PM range
+    if (startMinutes < dayStartMinutes || startMinutes >= 20 * 60) {
+      return { display: 'none' }
+    }
+    
+    const topOffset = ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    const height = ((endMinutes - startMinutes) / 30) * 60
+    
+    return {
+      position: 'absolute' as const,
+      top: `${Math.max(0, topOffset)}px`,
+      height: `${Math.max(30, height - 4)}px`,
+      left: '4px',
+      right: '4px',
+      zIndex: 5
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -303,7 +404,7 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
   if (staff.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <UserIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
         <h3 className="font-medium mb-2">No Staff Members Found</h3>
         <p className="text-sm">Staff members with the &apos;barber&apos; role will appear here.</p>
       </div>
@@ -311,9 +412,9 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
   }
 
   return (
-    <div className="bg-background rounded-lg border shadow-sm overflow-hidden">
+    <div className="bg-background rounded-lg border shadow-sm overflow-hidden w-full">
       {/* Header - Sticky time column + scrollable staff columns */}
-      <div className="sticky top-0 z-20 bg-background border-b flex">
+      <div className="sticky top-0 z-20 bg-background border-b flex w-full">
         {/* Sticky Time Header */}
         <div className="w-[120px] p-4 border-r font-semibold text-sm bg-muted/50 flex items-center justify-center flex-shrink-0">
           <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -340,8 +441,8 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
       </div>
 
       {/* Scrollable Time grid container */}
-      <div className="max-h-[600px] overflow-y-auto" ref={scrollContainerRef}>
-        <div className="flex" style={{ height: `${timeSlots.length * 60}px` }}>
+      <div className="max-h-[600px] overflow-y-auto w-full" ref={scrollContainerRef}>
+        <div className="flex w-full" style={{ height: `${timeSlots.length * 60}px` }}>
           {/* Sticky Time column */}
           <div className="w-[120px] border-r bg-muted/30 flex-shrink-0 relative">
             {timeSlots.map((time, index) => (
@@ -388,6 +489,72 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
                     />
                   ))}
 
+                  {/* Leaves for this staff member */}
+                  {getStaffLeaves(staffMember.ghl_id).map((leave) => {
+                    const style = getLeaveBreakStyle(leave["Event/Start"], leave["Event/End"])
+                    if (style.display === 'none') return null
+
+                    return (
+                      <div
+                        key={`leave-${leave["🔒 Row ID"]}`}
+                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-orange-400 bg-orange-100/50 backdrop-blur-sm"
+                        style={style}
+                        title={`Leave: ${leave["Event/Name"]}`}
+                      >
+                        <div className="text-sm font-medium text-orange-700 truncate">
+                          Leave
+                        </div>
+                        <div className="text-xs text-orange-600 truncate mt-1">
+                          {leave["Event/Name"]}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Breaks for this staff member */}
+                  {getStaffBreaks(staffMember.ghl_id).map((breakItem) => {
+                    // For recurring breaks, we need to check if it applies to current day
+                    const currentDay = new Date().getDay() // 0 = Sunday, 1 = Monday, etc.
+                    const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
+                    
+                    // Skip if it's a recurring break and doesn't apply to current day
+                    if (breakItem["Block/Recurring"] === "true" && !recurringDays.includes(currentDay.toString())) {
+                      return null
+                    }
+
+                    // Create start and end times for the break
+                    const startMinutes = parseInt(breakItem["Block/Start"]) || 0
+                    const endMinutes = parseInt(breakItem["Block/End"]) || 0
+                    
+                    // Convert minutes to time strings
+                    const startHour = Math.floor(startMinutes / 60)
+                    const startMin = startMinutes % 60
+                    const endHour = Math.floor(endMinutes / 60)
+                    const endMin = endMinutes % 60
+                    
+                    const startTime = `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}:00`
+                    const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}:00`
+                    
+                    const style = getLeaveBreakStyle(startTime, endTime)
+                    if (style.display === 'none') return null
+
+                    return (
+                      <div
+                        key={`break-${breakItem["🔒 Row ID"]}`}
+                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-gray-400 bg-gray-100/50 backdrop-blur-sm"
+                        style={style}
+                        title={`Break: ${breakItem["Block/Name"]}`}
+                      >
+                        <div className="text-sm font-medium text-gray-600 truncate">
+                          Break
+                        </div>
+                        <div className="text-xs text-gray-500 truncate mt-1">
+                          {breakItem["Block/Name"]}
+                        </div>
+                      </div>
+                    )
+                  })}
+
                   {/* Appointments for this staff member */}
                   {getStaffAppointments(staffMember.ghl_id).map((appointment) => {
                     const style = getAppointmentStyleImproved(appointment)
@@ -427,8 +594,9 @@ const StaffOverviewView = ({ appointments }: { appointments: Appointment[] }) =>
                       </div>
                     )
                   })}
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -481,6 +649,29 @@ export default function CalendarPage() {
   const [selectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
   const [staffView, setStaffView] = React.useState(false) // New state for staff view
+  const [salonHours, setSalonHours] = React.useState<{
+    id: string;
+    day_of_week: number;
+    is_open: boolean;
+    open_time: number | null;
+    close_time: number | null;
+  }[]>([])
+
+  // Fetch salon hours
+  React.useEffect(() => {
+    const fetchSalonHours = async () => {
+      try {
+        const salonRes = await fetch('/api/business-hours')
+        const salonJson = await salonRes.json()
+        if (salonJson.ok) {
+          setSalonHours(salonJson.data || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch salon hours:', error)
+      }
+    }
+    fetchSalonHours()
+  }, [])
 
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth()
@@ -490,7 +681,7 @@ export default function CalendarPage() {
     const searchParams = new URLSearchParams(window.location.search)
     const isAdminView = searchParams.get('admin') === 'true'
     const isStaffView = searchParams.get('staff') === 'true' 
-    if ((isAdminView || isStaffView) && (user?.role === 'admin' || user?.role === 'manager')) {
+    if ((isAdminView || isStaffView) && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber')) {
       setStaffView(true)
       setView('day') // Default to day view for staff calendar
     }
@@ -585,6 +776,13 @@ export default function CalendarPage() {
     }
   }
 
+  // Check if a day is a salon day-off
+  const isSalonDayOff = (date: Date) => {
+    const dayOfWeek = date.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const dayHours = salonHours.find(hour => hour.day_of_week === dayOfWeek)
+    return dayHours && !dayHours.is_open
+  }
+
   // Day view appointments
   const dayAppointments = appointmentsByDate[currentDate.toDateString()] || []
 
@@ -668,7 +866,7 @@ export default function CalendarPage() {
                       >
                         Year
                       </Button>
-                      {(user?.role === 'admin' || user?.role === 'manager') && (
+                      {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') && (
                         <Button
                           variant={staffView ? 'default' : 'ghost'}
                           size="sm"
@@ -678,7 +876,7 @@ export default function CalendarPage() {
                           }}
                           className="h-8 px-3 text-xs"
                         >
-                          Staff View
+                          {user?.role === 'barber' ? 'My Schedule' : 'Staff View'}
                         </Button>
                       )}
                     </div>
@@ -709,22 +907,31 @@ export default function CalendarPage() {
                         <CalendarIcon className="h-5 w-5" />
                         {formatDate(currentDate)}
                         {staffView && (
-                          <Badge variant="outline" className="ml-2">Staff View</Badge>
+                          <Badge variant="outline" className="ml-2">
+                            {user?.role === 'barber' ? 'My Schedule' : 'Staff View'}
+                          </Badge>
                         )}
                       </CardTitle>
                       <CardDescription>
                         {dayAppointments.length} appointments scheduled
+                        {staffView && user?.role === 'barber' && ' - My Schedule'}
                         {staffView && (user?.role === 'admin' || user?.role === 'manager') && ' - Admin View: All Staff'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {dayAppointments.length === 0 ? (
+                      {isSalonDayOff(currentDate) ? (
+                        <div className="text-center py-12 text-red-600">
+                          <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p className="font-medium">Salon is closed today</p>
+                          <p className="text-sm text-muted-foreground mt-2">No appointments available</p>
+                        </div>
+                      ) : dayAppointments.length === 0 ? (
                         <div className="text-center py-12 text-muted-foreground">
                           <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                           <p>No appointments scheduled for this day</p>
                         </div>
-                      ) : staffView && (user?.role === 'admin' || user?.role === 'manager') ? (
-                        <StaffOverviewView appointments={dayAppointments} />
+                      ) : staffView && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
+                        <StaffOverviewView appointments={dayAppointments} user={user} />
                       ) : (
                         <div className="space-y-3">
                           {dayAppointments
@@ -790,11 +997,17 @@ export default function CalendarPage() {
                               "aspect-square p-2 border rounded-lg cursor-pointer transition-all hover:bg-accent relative",
                               !day.isCurrentMonth && "text-muted-foreground bg-muted/30",
                               day.isToday && "bg-primary text-primary-foreground font-bold",
-                              day.appointments.length > 0 && !day.isToday && "bg-primary/10 border-primary/20"
+                              day.appointments.length > 0 && !day.isToday && "bg-primary/10 border-primary/20",
+                              isSalonDayOff(day.date) && "bg-red-50 border-red-200"
                             )}
                           >
                             <div className="flex flex-col h-full">
                               <div className="text-sm font-medium">{day.dayNumber}</div>
+                              {isSalonDayOff(day.date) && (
+                                <div className="text-xs text-red-600 font-medium mt-1">
+                                  Salon Closed
+                                </div>
+                              )}
                               {day.appointments.length > 0 && (
                                 <div className="flex-1 mt-1">
                                   {day.appointments.slice(0, 3).map((appointment, aptIndex) => (
@@ -854,7 +1067,8 @@ export default function CalendarPage() {
                                     "aspect-square text-xs flex items-center justify-center rounded",
                                     !day.isCurrentMonth && "text-muted-foreground",
                                     day.isToday && "bg-primary text-primary-foreground font-bold",
-                                    day.appointments.length > 0 && !day.isToday && "bg-primary/20"
+                                    day.appointments.length > 0 && !day.isToday && "bg-primary/20",
+                                    isSalonDayOff(day.date) && "bg-red-100 text-red-700"
                                   )}
                                 >
                                   {day.dayNumber}
@@ -887,7 +1101,7 @@ export default function CalendarPage() {
                   {/* Basic Info */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <User className="h-4 w-4 text-muted-foreground" />
+                      <UserIcon className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="font-medium">{selectedAppointment.contactName || 'Unknown Customer'}</div>
                         <div className="text-sm text-muted-foreground">{selectedAppointment.contactPhone || 'No phone'}</div>
@@ -908,7 +1122,7 @@ export default function CalendarPage() {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      <User className="h-4 w-4 text-muted-foreground" />
+                      <UserIcon className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="font-medium">
                           {`${selectedAppointment.assignedStaffFirstName || ''} ${selectedAppointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
