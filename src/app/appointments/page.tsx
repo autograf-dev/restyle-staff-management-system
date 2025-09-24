@@ -308,8 +308,17 @@ function formatDateTime(isoString?: string) {
   if (!isoString) return 'N/A'
   try {
     const date = new Date(isoString)
+    
+    // Debug: Log the original ISO string and parsed date
+    console.log('Original ISO:', isoString)
+    console.log('Parsed Date (UTC):', date.toISOString())
+    console.log('Local time (no timezone):', date.toLocaleString('en-US'))
+    console.log('Edmonton time:', date.toLocaleString('en-US', { timeZone: 'America/Edmonton' }))
+    
+    // If the backend is already storing times in local Edmonton time,
+    // we should NOT apply timezone conversion again
+    // Let's try without timezone conversion first
     return date.toLocaleString('en-US', {
-      timeZone: 'America/Edmonton',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
