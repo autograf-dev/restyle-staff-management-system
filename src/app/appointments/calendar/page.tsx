@@ -411,30 +411,32 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
 
   return (
     <>
-     <div className="pr-2 flex items-center gap-1 py-4">
-          <button
-            className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
-            onClick={() => {
-              const el = headerScrollRef.current
-              if (el) el.scrollBy({ left: -columnWidth*2, behavior: 'smooth' })
-            }}
-            aria-label="Scroll left"
-            title="Scroll left"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <button
-            className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
-            onClick={() => {
-              const el = headerScrollRef.current
-              if (el) el.scrollBy({ left: columnWidth*2, behavior: 'smooth' })
-            }}
-            aria-label="Scroll right"
-            title="Scroll right"
-          >
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+{(user?.role === 'admin' || user?.role === 'manager') && (
+  <div className="pr-2 flex items-center gap-1 py-4">
+    <button
+      className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
+      onClick={() => {
+        const el = headerScrollRef.current
+        if (el) el.scrollBy({ left: -columnWidth*2, behavior: 'smooth' })
+      }}
+      aria-label="Scroll left"
+      title="Scroll left"
+    >
+      <ArrowLeft className="h-4 w-4" />
+    </button>
+    <button
+      className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
+      onClick={() => {
+        const el = headerScrollRef.current
+        if (el) el.scrollBy({ left: columnWidth*2, behavior: 'smooth' })
+      }}
+      aria-label="Scroll right"
+      title="Scroll right"
+    >
+      <ArrowRight className="h-4 w-4" />
+    </button>
+  </div>
+)}
     <div className="bg-background rounded-lg border shadow-sm overflow-hidden w-full">
       
       {/* Header - Sticky time column + scrollable staff columns */}
@@ -527,7 +529,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
           </div>
 
           {/* Scrollable Staff columns container */}
-          <div className="flex-1 overflow-x-auto" ref={columnsScrollRef}>
+          <div className="flex-1 overflow-x-hidden" ref={columnsScrollRef}>
             <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
@@ -639,12 +641,12 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                         <div className="text-xs text-muted-foreground truncate mt-1">
                           {appointment.contactName}
                         </div>
-                        <div className="text-xs text-primary/80 mt-1 font-medium">
-                          {appointment.startTime && formatTime(appointment.startTime)}
-                          {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
-                        </div>
-                        <div className="text-xs mt-1">
-                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                        <div className="mt-1 flex items-center justify-between">
+                          <div className="text-xs text-primary/80 font-medium">
+                            {appointment.startTime && formatTime(appointment.startTime)}
+                            {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
+                          </div>
+                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
                             appointment.appointment_status === 'confirmed' 
                               ? 'bg-green-100 text-green-700' 
                               : appointment.appointment_status === 'cancelled'

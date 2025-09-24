@@ -7,6 +7,9 @@ import { RoleGuard } from "@/components/role-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { minutesToDisplayTime } from "@/lib/timeUtils"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useUser } from "@/contexts/user-context"
 import { useEffect, useState, useCallback } from "react"
@@ -99,29 +102,88 @@ export default function BreaksPage() {
                 <CardDescription>Configured time blocks</CardDescription>
               </CardHeader>
               <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center h-48">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : blocks.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p className="mb-2">No breaks have been configured yet.</p>
+                    <p className="text-sm">Use “Add Break” to create your first time block.</p>
+                  </div>
+                ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Recurring</TableHead>
-                      <TableHead>Days/Date</TableHead>
-                      <TableHead>Start</TableHead>
-                      <TableHead>End</TableHead>
+                      <TableHead>Schedule</TableHead>
+                      <TableHead>Time</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {blocks.map((b) => {
                       const member = staff.find((s) => s.ghl_id === String(b['ghl_id'] as string))
+                      const staffName = String(member?.['Barber/Name'] || String(b['ghl_id'] as string))
+                      const staffEmail = String(member?.['Barber/Email'] || '')
+                      const startDisp = minutesToDisplayTime(Number(b['Block/Start'] || 0))
+                      const endDisp = minutesToDisplayTime(Number(b['Block/End'] || 0))
                       return (
                         <TableRow key={String(b['🔒 Row ID'])}>
-                          <TableCell>{String(member?.['Barber/Name'] || String(b['ghl_id'] as string))}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                  {staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <div className="font-medium">{staffName}</div>
+                                {staffEmail && (
+                                  <div className="text-xs text-muted-foreground">{staffEmail}</div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
                           <TableCell>{String(b['Block/Name'] || '')}</TableCell>
-                          <TableCell>{String(b['Block/Recurring']) === 'true' ? 'Yes' : 'No'}</TableCell>
-                          <TableCell>{String(b['Block/Recurring']) === 'true' ? String(b['Block/Recurring Day'] || '-') : String(b['Block/Date'] || '-')}</TableCell>
-                          <TableCell>{String(b['Block/Start'] || '')}</TableCell>
-                          <TableCell>{String(b['Block/End'] || '')}</TableCell>
+                          <TableCell>
+                            <Badge variant={String(b['Block/Recurring']) === 'true' ? 'secondary' : 'outline'} className="text-[11px]">
+                              {String(b['Block/Recurring']) === 'true' ? 'Yes' : 'No'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {String(b['Block/Recurring']) === 'true' ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {String(b['Block/Recurring Day'] || '')
+                                    .split(',')
+                                    .filter(Boolean)
+                                    .map((d) => (
+                                      <Badge key={d} variant="secondary" className="text-[11px]">
+                                        {d}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              ) : (
+                                <Badge variant="outline" className="w-fit text-[11px]">
+                                  {String(b['Block/Date'] || '-')}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[11px]">
+                                {startDisp}
+                              </Badge>
+                              <span className="text-muted-foreground text-xs">to</span>
+                              <Badge variant="outline" className="text-[11px]">
+                                {endDisp}
+                              </Badge>
+                            </div>
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button size="sm" variant="outline" onClick={() => { setEditing(b); setOpen(true) }} disabled={saving}><Edit className="h-4 w-4"/></Button>
@@ -133,6 +195,7 @@ export default function BreaksPage() {
                     })}
                   </TableBody>
                 </Table>
+                )}
               </CardContent>
             </Card>
           </div>
