@@ -132,6 +132,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: Settings,
         isActive: true,
         items: [
+          { title: "Services", url: `${prefix}/settings/services` },
           { title: "Salon Hours", url: `${prefix}/settings/salon-hours` },
           { title: "Salon Staff", url: `${prefix}/settings/salon-staff` },
           { title: "Staff Hours", url: `${prefix}/settings/staff-hours` },
