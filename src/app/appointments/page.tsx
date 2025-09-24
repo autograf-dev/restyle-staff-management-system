@@ -117,7 +117,7 @@ function useBookings() {
 
     try {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getAllBookings`, { signal })
-      if (!res.ok) throw new Error("Failed to fetch appointments")
+      if (!res.ok) throw new Error("Failed to fetch bookings")
       const json = await res.json()
       
       const bookings: RawBooking[] = json.bookings || []
@@ -189,11 +189,11 @@ function useBookings() {
             if (apptRes.ok && !signal.aborted) {
               const apptData = await apptRes.json()
               if (apptData.appointment) {
-                details.startTime = apptData.booking.startTime
-                details.endTime = apptData.booking.endTime
-                details.appointment_status = apptData.booking.appointmentStatus || details.appointment_status
-                details.assigned_user_id = apptData.booking.assignedUserId || details.assigned_user_id
-                details.groupId = apptData.booking.groupId || apptData.booking.group_id
+                details.startTime = apptData.appointment.startTime
+                details.endTime = apptData.appointment.endTime
+                details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
+                details.assigned_user_id = apptData.appointment.assignedUserId || details.assigned_user_id
+                details.groupId = apptData.appointment.groupId || apptData.appointment.group_id
               }
             }
           } catch (error) {
@@ -253,9 +253,9 @@ function useBookings() {
         // Request was intentionally aborted, don't show error
         return
       } else {
-        console.error("Failed to fetch appointments:", error)
+        console.error("Failed to fetch bookings:", error)
         if (isMounted.current) {
-          toast.error("Failed to load appointments")
+          toast.error("Failed to load bookings")
         }
       }
     } finally {
@@ -526,7 +526,7 @@ function BookingsPageInner() {
       
       // Refresh appointments
       await fetchBookings()
-      toast.success("Appointment cancelled successfully")
+      toast.success("Booking cancelled successfully")
       setCancelConfirmOpen(false)
       setBookingToCancel(null)
     } catch (error) {
@@ -559,7 +559,7 @@ function BookingsPageInner() {
       
       // Refresh appointments
       await fetchBookings()
-      toast.success("Appointment deleted successfully")
+      toast.success("Booking deleted successfully")
       setDeleteConfirmOpen(false)
       setBookingToDelete(null)
       
@@ -823,7 +823,7 @@ function BookingsPageInner() {
         const data = await response.json()
         
         if (data.message && data.message.includes('successfully')) {
-          toast.success("Appointment rescheduled successfully")
+          toast.success("Booking rescheduled successfully")
           setRescheduleOpen(false)
           resetRescheduleForm()
           await fetchBookings()
@@ -1227,13 +1227,13 @@ function BookingsPageInner() {
         throw new Error(bookData.error || 'Booking failed')
       }
 
-      toast.success("Appointment created successfully!")
+      toast.success("Booking created successfully!")
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
       await fetchBookings()
     } catch (error) {
       console.error('New appointment error:', error)
-      toast.error(`Failed to create appointment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(`Failed to create booking: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setNewAppLoading(false)
     }
@@ -1339,7 +1339,7 @@ function BookingsPageInner() {
                   variant="outline"
                   size="sm"
                   disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot reschedule - booking starts within 2 hours" : "Reschedule appointment"}
+                  title={withinTwoHours ? "Cannot reschedule - booking starts within 2 hours" : "Reschedule booking"}
                   onClick={() => handleRescheduleBooking(appointment)}
                   className="h-6 px-2 text-xs"
                 >
@@ -1349,7 +1349,7 @@ function BookingsPageInner() {
                   variant="outline"
                   size="sm"
                   disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot cancel - booking starts within 2 hours" : "Cancel appointment"}
+                  title={withinTwoHours ? "Cannot cancel - booking starts within 2 hours" : "Cancel booking"}
                   onClick={() => handleCancelBooking(appointment)}
                   className="h-6 px-2 text-xs"
                 >
@@ -1467,11 +1467,11 @@ function BookingsPageInner() {
               <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Appointments</h1>
+              <h1 className="text-xl font-semibold">Bookings</h1>
               </div>
               <Button onClick={() => setNewAppointmentOpen(true)} className="bg-primary text-primary-foreground">
                 <Calendar className="h-4 w-4 mr-2" />
-                Add Appointment
+                Add Booking
               </Button>
             </div>
           </header>
@@ -1628,7 +1628,7 @@ function BookingsPageInner() {
             <ConfirmContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <ConfirmHeader>
                 <ConfirmTitle>
-                  {selected?.serviceName || selected?.title || 'Appointment Details'}
+                  {selected?.serviceName || selected?.title || 'Booking Details'}
                 </ConfirmTitle>
                 <div className="text-sm text-muted-foreground">
                   Appointment ID: {selected?.id}
@@ -1780,7 +1780,7 @@ function BookingsPageInner() {
                   onClick={confirmCancelBooking}
                   disabled={cancelLoading}
                 >
-                  {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
+                  {cancelLoading ? "Cancelling..." : "Cancel Booking"}
                 </Button>
               </div>
             </ConfirmContent>
@@ -1794,7 +1794,7 @@ function BookingsPageInner() {
               </ConfirmHeader>
               <div className="py-4">
                 <p className="text-red-600 font-medium">⚠️ This action cannot be undone!</p>
-                <p className="mt-2">Are you sure you want to permanently delete this appointment?</p>
+                <p className="mt-2">Are you sure you want to permanently delete this booking?</p>
                 {bookingToDelete && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
                     <p className="font-medium text-red-800">{bookingToDelete.serviceName}</p>
@@ -2000,7 +2000,7 @@ function BookingsPageInner() {
           }}>
             <ConfirmContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <ConfirmHeader>
-                <ConfirmTitle>Create New Appointment</ConfirmTitle>
+                <ConfirmTitle>Create New Booking</ConfirmTitle>
               </ConfirmHeader>
               
               <div className="space-y-6">
@@ -2291,7 +2291,7 @@ function BookingsPageInner() {
                         disabled={!newAppContactForm.firstName || !newAppContactForm.lastName || !newAppContactForm.phone || newAppLoading}
                         className="flex-1 bg-primary"
                       >
-                        {newAppLoading ? 'Creating...' : 'Create Appointment'}
+                        {newAppLoading ? 'Creating...' : 'Create Booking'}
                       </Button>
                     </div>
                   </div>
