@@ -113,10 +113,10 @@ export default function ServicesPage() {
     }
   }
 
-  // Fetch staff data for assignments
+  // Fetch staff data for assignments using your existing working endpoint
   const fetchStaff = async () => {
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getAllStaff')
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/Staff')
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -124,8 +124,18 @@ export default function ServicesPage() {
       
       const result = await response.json()
       
+      // Adapt to your existing Staff endpoint response format
       if (result.success) {
-        setStaff(result.staff || result.data || [])
+        const staffData = result.staff || result.data || []
+        // Transform data to match our expected format
+        const formattedStaff = staffData.map((member: Record<string, string | number>) => ({
+          id: member.ghl_id || member.id,
+          ghl_id: member.ghl_id || member.id,
+          name: member["Barber/Name"] || member.name,
+          email: member["Barber/Email"] || member.email,
+          role: member.role || 'barber'
+        }))
+        setStaff(formattedStaff)
       } else {
         throw new Error(result.error || 'Failed to fetch staff')
       }
@@ -280,38 +290,12 @@ export default function ServicesPage() {
     }
   }
 
-  // Assign staff to service
+  // Assign staff to service - DISABLED (using your existing staff system)
   const assignStaffToService = async () => {
-    if (!selectedService || selectedStaffIds.length === 0) {
-      toast.error('Please select staff members to assign')
-      return
-    }
-
-    try {
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/assignStaffToService?id=${selectedService.id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          staffIds: selectedStaffIds
-        })
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        toast.success('Staff assigned successfully!')
-        setStaffDialogOpen(false)
-        setSelectedStaffIds([])
-        await fetchServices()
-      } else {
-        throw new Error(result.error || 'Failed to assign staff')
-      }
-    } catch (error) {
-      console.error('Error assigning staff:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to assign staff')
-    }
+    toast.info('Staff assignment feature coming soon! Currently using your existing staff system.')
+    // TODO: Integrate with your existing staff assignment system when ready
+    setStaffDialogOpen(false)
+    setSelectedStaffIds([])
   }
 
   // Helper functions
