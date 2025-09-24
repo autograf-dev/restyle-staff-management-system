@@ -129,12 +129,19 @@ export default function ServicesPage() {
         const servicesData = result.calendars || result.services || result.data || []
         
         // Transform the data to include assignedUserIds from teamMembers
-        const transformedServices = servicesData.map((service: Record<string, unknown>) => ({
-          ...service,
-          assignedUserIds: service.teamMembers && Array.isArray(service.teamMembers) 
-            ? service.teamMembers.map((member: Record<string, unknown>) => member.userId as string)
-            : []
-        }))
+        const transformedServices = servicesData.map((service: Record<string, unknown>) => {
+          // Debug: log the service object to see available fields
+          console.log('Service data:', service)
+          
+          return {
+            ...service,
+            // Try different possible duration field names
+            duration: service.duration || service.appointmentDuration || service.serviceDuration || service.timeSlotDuration,
+            assignedUserIds: service.teamMembers && Array.isArray(service.teamMembers) 
+              ? service.teamMembers.map((member: Record<string, unknown>) => member.userId as string)
+              : []
+          }
+        })
         
         setServices(transformedServices)
       } else {
@@ -457,7 +464,12 @@ export default function ServicesPage() {
                 <CardContent>
                   <div className="text-2xl font-bold">
                     {services.length > 0 
-                      ? formatDuration(Math.round(services.reduce((sum, s) => sum + s.duration, 0) / services.length))
+                      ? (() => {
+                          const validDurations = services.filter(s => s.duration && !isNaN(Number(s.duration)))
+                          return validDurations.length > 0
+                            ? formatDuration(Math.round(validDurations.reduce((sum, s) => sum + Number(s.duration), 0) / validDurations.length))
+                            : 'Not set'
+                        })()
                       : '0m'
                     }
                   </div>
@@ -496,7 +508,6 @@ export default function ServicesPage() {
                         <TableRow>
                           <TableHead>Service</TableHead>
                           <TableHead>Duration</TableHead>
-                          <TableHead>Price</TableHead>
                           <TableHead>Staff</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
@@ -525,18 +536,11 @@ export default function ServicesPage() {
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <Clock className="h-4 w-4 text-muted-foreground" />
-                                  {formatDuration(service.duration)}
+                                  {service.duration && !isNaN(Number(service.duration)) 
+                                    ? formatDuration(Number(service.duration))
+                                    : <span className="text-muted-foreground">Not set</span>
+                                  }
                                 </div>
-                              </TableCell>
-                              <TableCell>
-                                {service.price && service.price > 0 ? (
-                                  <div className="flex items-center gap-1">
-                                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                                    {formatCurrency(service.price)}
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground">Not set</span>
-                                )}
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
