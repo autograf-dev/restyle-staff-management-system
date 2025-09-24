@@ -29,27 +29,23 @@ import {
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
 
-type Service = {
+interface Service {
   id: string
   name: string
   description?: string
   duration: number
-  price?: number
+  price: number
+  category?: string
+  isActive?: boolean
   groupId?: string
-  isActive: boolean
   bufferTimeBefore?: number
   bufferTimeAfter?: number
   maxBookingsPerDay?: number
-  assignedStaff?: string[]
-  openHours?: {
-    day: string
-    isOpen: boolean
-    startTime?: string
-    endTime?: string
-  }[]
-  // Enhanced data from backend
-  staffCount?: number
-  staffNames?: string[]
+  createdAt?: string
+  updatedAt?: string
+  assignedStaff?: { id: string; name: string; email: string }[]
+  teamMembers?: { userId: string; name: string }[]
+  departmentName?: string
 }
 
 type Staff = {
@@ -87,23 +83,72 @@ export default function ServicesPage() {
 
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([])
 
-  // Fetch services data
+  // Fetch services data with staff assignments (using same pattern as booking flow)
   const fetchServices = async () => {
     try {
       setLoading(true)
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getAllServices')
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // First, get departments/groups
+      const deptResponse = await fetch('https://restyle-api.netlify.app/.netlify/functions/supabasegroups')
+      if (!deptResponse.ok) {
+        throw new Error(`Failed to fetch departments: HTTP ${deptResponse.status}`)
+      }
+      const deptData = await deptResponse.json()
+      
+      const allServices: Service[] = []
+      
+      // For each department, fetch services with team members
+      for (const group of (deptData.groups || [])) {
+        try {
+          const servicesResponse = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${group.id}`)
+          if (servicesResponse.ok) {
+            const servicesData = await servicesResponse.json()
+            
+            // Process each service to add staff information
+            const servicesWithStaff = await Promise.all(
+              (servicesData.calendars || []).map(async (service: Service & Record<string, unknown>) => {
+                const teamMembers = service.teamMembers || []
+                
+                // Get detailed staff info for each team member
+                const staffDetails = await Promise.all(
+                  teamMembers.map(async (member: { userId: string; name: string }) => {
+                    try {
+                      const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`)
+                      if (staffRes.ok) {
+                        const staffData = await staffRes.json()
+                        return {
+                          id: member.userId,
+                          name: staffData.name || member.name,
+                          email: staffData.email || ''
+                        }
+                      }
+                    } catch {
+                      console.warn('Failed to fetch staff details for:', member.userId)
+                    }
+                    return {
+                      id: member.userId,
+                      name: member.name,
+                      email: ''
+                    }
+                  })
+                )
+                
+                return {
+                  ...service,
+                  assignedStaff: staffDetails.filter(Boolean),
+                  departmentName: group.name
+                }
+              })
+            )
+            
+            allServices.push(...servicesWithStaff)
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch services for department ${group.name}:`, error)
+        }
       }
       
-      const result = await response.json()
-      
-      if (result.success) {
-        setServices(result.services || result.data || [])
-      } else {
-        throw new Error(result.error || 'Failed to fetch services')
-      }
+      setServices(allServices)
     } catch (error) {
       console.error('Error fetching services:', error)
       toast.error('Failed to load services')
@@ -325,14 +370,14 @@ export default function ServicesPage() {
       bufferTimeBefore: service.bufferTimeBefore || 0,
       bufferTimeAfter: service.bufferTimeAfter || 0,
       maxBookingsPerDay: service.maxBookingsPerDay || 0,
-      isActive: service.isActive
+      isActive: service.isActive ?? true
     })
     setEditDialogOpen(true)
   }
 
   const openStaffDialog = (service: Service) => {
     setSelectedService(service)
-    setSelectedStaffIds(service.assignedStaff || [])
+    setSelectedStaffIds(service.assignedStaff?.map(staff => staff.id) || [])
     setStaffDialogOpen(true)
   }
 
@@ -503,12 +548,16 @@ export default function ServicesPage() {
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <Users className="h-4 w-4 text-muted-foreground" />
-                                  <span>{service.staffCount || 0} assigned</span>
+                                  <span>{service.assignedStaff?.length || 0} assigned</span>
                                 </div>
-                                {service.staffNames && service.staffNames.length > 0 && (
+                                {service.assignedStaff && service.assignedStaff.length > 0 ? (
                                   <div className="text-xs text-muted-foreground mt-1">
-                                    {service.staffNames.slice(0, 2).join(', ')}
-                                    {service.staffNames.length > 2 && ` +${service.staffNames.length - 2} more`}
+                                    {service.assignedStaff.slice(0, 2).map((staff: { id: string; name: string; email: string }) => staff.name).join(', ')}
+                                    {service.assignedStaff.length > 2 && ` +${service.assignedStaff.length - 2} more`}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    No staff assigned
                                   </div>
                                 )}
                               </TableCell>
