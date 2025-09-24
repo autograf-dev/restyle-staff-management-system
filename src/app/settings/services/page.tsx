@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { 
   Plus, 
   RefreshCw, 
@@ -400,7 +401,8 @@ export default function ServicesPage() {
 
   return (
     <RoleGuard>
-      <SidebarProvider>
+      <TooltipProvider>
+        <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
@@ -515,7 +517,7 @@ export default function ServicesPage() {
                                   <div className="font-medium">{service.name}</div>
                                   {service.description && (
                                     <div className="text-sm text-muted-foreground">
-                                      {service.description}
+                                      {service.description.replace(/<[^>]*>/g, '')}
                                     </div>
                                   )}
                                 </div>
@@ -542,10 +544,22 @@ export default function ServicesPage() {
                                   <span>{service.assignedUserIds?.length || 0} assigned</span>
                                 </div>
                                 {service.assignedUserIds && service.assignedUserIds.length > 0 ? (
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    {service.assignedUserIds.slice(0, 2).map(userId => allStaff[userId]?.name || userId).join(', ')}
-                                    {service.assignedUserIds.length > 2 && ` +${service.assignedUserIds.length - 2} more`}
-                                  </div>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="text-xs text-muted-foreground mt-1 cursor-pointer hover:text-foreground transition-colors">
+                                        {service.assignedUserIds.slice(0, 2).map(userId => allStaff[userId]?.name || userId).join(', ')}
+                                        {service.assignedUserIds.length > 2 && ` +${service.assignedUserIds.length - 2} more`}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs">
+                                      <div className="space-y-1">
+                                        <div className="font-medium text-sm">All Assigned Staff:</div>
+                                        <div className="text-xs">
+                                          {service.assignedUserIds.map(userId => allStaff[userId]?.name || userId).join(', ')}
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
                                 ) : (
                                   <div className="text-xs text-muted-foreground mt-1">
                                     No staff assigned
@@ -936,6 +950,7 @@ export default function ServicesPage() {
           </Dialog>
         </SidebarInset>
       </SidebarProvider>
+      </TooltipProvider>
     </RoleGuard>
   )
 }
