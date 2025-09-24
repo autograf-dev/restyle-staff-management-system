@@ -1536,8 +1536,8 @@ function BookingsPageInner() {
             {/* Filters and Search */}
             <Card>
               <CardHeader>
-                <CardTitle>Filter Appointments</CardTitle>
-                <CardDescription>Filter and search through all appointments</CardDescription>
+                <CardTitle>Filter Bookings</CardTitle>
+                <CardDescription>Filter and search through all bookings</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -1569,9 +1569,9 @@ function BookingsPageInner() {
             {/* Appointments Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Appointments ({filteredData.length})</CardTitle>
+                <CardTitle>Bookings ({filteredData.length})</CardTitle>
                 <CardDescription>
-                  Manage and view all salon appointments
+                  Manage and view all salon bookings
                 </CardDescription>
               </CardHeader>
               <CardContent>

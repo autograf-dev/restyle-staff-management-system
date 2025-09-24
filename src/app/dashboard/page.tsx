@@ -138,10 +138,10 @@ function useAppointments() {
                 
                 if (apptRes.ok && !signal.aborted) {
                   const apptData = await apptRes.json()
-                  if (apptData.appointment) {
-                    details.startTime = apptData.appointment.startTime
-                    details.endTime = apptData.appointment.endTime
-                    details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
+                  if (apptData.booking) {
+                    details.startTime = apptData.booking.startTime
+                    details.endTime = apptData.booking.endTime
+                    details.appointment_status = apptData.booking.appointmentStatus || details.appointment_status
                   }
                 }
               } catch (error) {
@@ -564,7 +564,7 @@ export default function DashboardPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
               <Card className="relative overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Appointments</CardTitle>
+                  <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
