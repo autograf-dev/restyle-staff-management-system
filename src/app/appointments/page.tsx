@@ -788,15 +788,15 @@ function BookingsPageInner() {
         
         jsDate.setHours(hour, minute, 0, 0)
         
-        // Convert to UTC (MST is UTC-7)
-        const mstOffset = -7 * 60 * 60 * 1000
-        const utcStartTime = new Date(jsDate.getTime() - mstOffset)
+        // Don't convert to UTC - send Edmonton local time
+        // The backend expects Edmonton timezone, not UTC
+        const localStartTime = jsDate
         
         // Calculate end time based on original duration
         const originalStart = new Date(bookingToReschedule.startTime!)
         const originalEnd = new Date(bookingToReschedule.endTime!)
         const duration = originalEnd.getTime() - originalStart.getTime()
-        const utcEndTime = new Date(utcStartTime.getTime() + duration)
+        const localEndTime = new Date(localStartTime.getTime() + duration)
         
         // Determine assignedUserId (similar to Vue.js implementation)
         let assignedUserIdToSend = selectedStaff
@@ -816,8 +816,12 @@ function BookingsPageInner() {
 
         let updateUrl = `https://restyle-api.netlify.app/.netlify/functions/updateappointment?appointmentId=${bookingToReschedule.id}`
         updateUrl += `&assignedUserId=${assignedUserIdToSend}`
-        updateUrl += `&startTime=${encodeURIComponent(utcStartTime.toISOString())}`
-        updateUrl += `&endTime=${encodeURIComponent(utcEndTime.toISOString())}`
+        // Format as ISO string but interpret as Edmonton time (don't add Z for UTC)
+        const startTimeFormatted = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000-06:00`
+        const endTimeFormatted = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000-06:00`
+        
+        updateUrl += `&startTime=${encodeURIComponent(startTimeFormatted)}`
+        updateUrl += `&endTime=${encodeURIComponent(endTimeFormatted)}`
         
         const response = await fetch(updateUrl)
         const data = await response.json()
@@ -1191,17 +1195,19 @@ function BookingsPageInner() {
 
       jsDate.setHours(hour, minute, 0, 0)
 
-      const mstOffset = -7 * 60 * 60 * 1000
-      const utcStartTime = new Date(jsDate.getTime() - mstOffset)
+      // Don't convert to UTC - send Edmonton local time
+      // The backend expects Edmonton timezone, not UTC
+      const localStartTime = jsDate
 
       // Get service duration
       const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
       const durationMatch = selectedServiceObj?.description?.match(/Duration: (\d+) mins/)
       const duration = durationMatch ? parseInt(durationMatch[1]) : 120
-      const utcEndTime = new Date(utcStartTime.getTime() + duration * 60 * 1000)
+      const localEndTime = new Date(localStartTime.getTime() + duration * 60 * 1000)
 
-      const startTime = utcStartTime.toISOString()
-      const endTime = utcEndTime.toISOString()
+      // Format as ISO string but interpret as Edmonton time (don't add Z for UTC)
+      const startTime = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000-06:00`
+      const endTime = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000-06:00`
 
       let assignedUserId = newAppSelectedStaff
       if (assignedUserId === 'any' || !assignedUserId) {
@@ -1611,7 +1617,7 @@ function BookingsPageInner() {
                         ) : (
                           <TableRow>
                             <TableCell colSpan={columns.length} className="h-24 text-center">
-                              No appointments found.
+                              No bookings found.
                             </TableCell>
                           </TableRow>
                         )}
