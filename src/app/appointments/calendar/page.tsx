@@ -529,7 +529,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
           </div>
 
           {/* Scrollable Staff columns container */}
-          <div className="flex-1 overflow-x-hidden" ref={columnsScrollRef}>
+          <div className="flex-1 overflow-x-auto" ref={columnsScrollRef}>
             <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
