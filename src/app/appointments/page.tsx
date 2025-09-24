@@ -816,9 +816,19 @@ function BookingsPageInner() {
 
         let updateUrl = `https://restyle-api.netlify.app/.netlify/functions/updateappointment?appointmentId=${bookingToReschedule.id}`
         updateUrl += `&assignedUserId=${assignedUserIdToSend}`
-        // Format as ISO string but interpret as Edmonton time (don't add Z for UTC)
-        const startTimeFormatted = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000-06:00`
-        const endTimeFormatted = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000-06:00`
+        
+        // Determine correct Edmonton timezone offset (MDT: -06:00, MST: -07:00)
+        const isDST = (date: Date) => {
+          const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
+          const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
+          return Math.max(jan, jul) !== date.getTimezoneOffset()
+        }
+        
+        const edmontonOffset = isDST(localStartTime) ? '-06:00' : '-07:00'
+        
+        // Format as ISO string with correct Edmonton timezone offset
+        const startTimeFormatted = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
+        const endTimeFormatted = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
         
         updateUrl += `&startTime=${encodeURIComponent(startTimeFormatted)}`
         updateUrl += `&endTime=${encodeURIComponent(endTimeFormatted)}`
@@ -1205,9 +1215,19 @@ function BookingsPageInner() {
       const duration = durationMatch ? parseInt(durationMatch[1]) : 120
       const localEndTime = new Date(localStartTime.getTime() + duration * 60 * 1000)
 
-      // Format as ISO string but interpret as Edmonton time (don't add Z for UTC)
-      const startTime = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000-06:00`
-      const endTime = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000-06:00`
+      // Determine correct Edmonton timezone offset (MDT: -06:00, MST: -07:00)
+      // Check if daylight saving time is active for Edmonton
+      const isDST = (date: Date) => {
+        const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
+        const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
+        return Math.max(jan, jul) !== date.getTimezoneOffset()
+      }
+      
+      const edmontonOffset = isDST(localStartTime) ? '-06:00' : '-07:00'
+      
+      // Format as ISO string with correct Edmonton timezone offset
+      const startTime = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
+      const endTime = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
 
       let assignedUserId = newAppSelectedStaff
       if (assignedUserId === 'any' || !assignedUserId) {
