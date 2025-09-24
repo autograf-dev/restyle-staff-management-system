@@ -97,11 +97,11 @@ export default function ServicesPage() {
       if (result.success) {
         // Create a lookup map: staffId -> staff details
         const staffMap: { [key: string]: { id: string; name: string; email: string } } = {}
-        result.staff?.forEach((staff: any) => {
-          staffMap[staff.id] = {
-            id: staff.id,
-            name: staff.name || `${staff.firstName} ${staff.lastName}`.trim(),
-            email: staff.email || ''
+        result.staff?.forEach((staff: Record<string, unknown>) => {
+          staffMap[staff.id as string] = {
+            id: staff.id as string,
+            name: (staff.name as string) || `${staff.firstName as string} ${staff.lastName as string}`.trim(),
+            email: (staff.email as string) || ''
           }
         })
         setAllStaff(staffMap)
