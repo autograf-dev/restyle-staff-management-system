@@ -425,8 +425,11 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     <button
       className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
       onClick={() => {
-        const el = headerScrollRef.current
-        if (el) el.scrollBy({ left: -columnWidth*2, behavior: 'smooth' })
+        const delta = -columnWidth*2
+        const h = headerScrollRef.current
+        const b = columnsScrollRef.current
+        if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
+        if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
       }}
       aria-label="Scroll left"
       title="Scroll left"
@@ -436,8 +439,11 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     <button
       className="h-7 w-7 rounded border bg-background hover:bg-accent flex items-center justify-center"
       onClick={() => {
-        const el = headerScrollRef.current
-        if (el) el.scrollBy({ left: columnWidth*2, behavior: 'smooth' })
+        const delta = columnWidth*2
+        const h = headerScrollRef.current
+        const b = columnsScrollRef.current
+        if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
+        if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
       }}
       aria-label="Scroll right"
       title="Scroll right"
@@ -458,7 +464,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
         </div>
         
         {/* Scrollable Staff Headers */}
-        <div className="flex-1 overflow-x-hidden" ref={headerScrollRef}>
+        <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
           <div className="flex" style={{ minWidth: `${staff.length * columnWidth}px` }}>
             {staff.map((staffMember) => {
               const appts = getStaffAppointments(staffMember.ghl_id)
@@ -538,7 +544,13 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
           </div>
 
           {/* Scrollable Staff columns container */}
-          <div className="flex-1 overflow-x-auto" ref={columnsScrollRef}>
+          <div className="flex-1 overflow-x-auto" ref={columnsScrollRef} onScroll={(e) => {
+            const h = headerScrollRef.current
+            const sl = (e.currentTarget as HTMLDivElement).scrollLeft
+            if (h && Math.abs(h.scrollLeft - sl) > 1) {
+              h.scrollLeft = sl
+            }
+          }}>
             <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
