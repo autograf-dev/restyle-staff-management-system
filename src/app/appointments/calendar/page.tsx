@@ -779,7 +779,7 @@ export default function CalendarPage() {
   const [view, setView] = React.useState<CalendarView>('month')
   const [selectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
-  const [staffView, setStaffView] = React.useState(true) // Default to staff view
+  const [staffView, setStaffView] = React.useState(false) // Default to regular calendar view
   const [salonHours, setSalonHours] = React.useState<{
     id: string;
     day_of_week: number;
@@ -1059,7 +1059,55 @@ export default function CalendarPage() {
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    {/* Calendar view selectors removed - staff view is now the only view */}
+                    {/* Calendar View Toggle */}
+                    {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') && (
+                      <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
+                        <Button
+                          variant={!staffView ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => setStaffView(false)}
+                          className="h-7 text-xs"
+                        >
+                          Calendar
+                        </Button>
+                        <Button
+                          variant={staffView ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => setStaffView(true)}
+                          className="h-7 text-xs"
+                        >
+                          Staff View
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* View type selectors */}
+                    <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
+                      <Button
+                        variant={view === 'day' ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setView('day')}
+                        className="h-7 text-xs"
+                      >
+                        Day
+                      </Button>
+                      <Button
+                        variant={view === 'month' ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setView('month')}
+                        className="h-7 text-xs"
+                      >
+                        Month
+                      </Button>
+                      <Button
+                        variant={view === 'year' ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setView('year')}
+                        className="h-7 text-xs"
+                      >
+                        Year
+                      </Button>
+                    </div>
                     
                     <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
                       <Plus className="h-4 w-4 mr-2" />
@@ -1086,11 +1134,9 @@ export default function CalendarPage() {
                       <CardTitle className="flex items-center gap-2">
                         <CalendarIcon className="h-5 w-5" />
                         {formatDate(currentDate)}
-                        {staffView && (
-                          <Badge variant="outline" className="ml-2">
-                            {user?.role === 'barber' ? 'My Schedule' : 'Staff View'}
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="ml-2">
+                          {staffView ? (user?.role === 'barber' ? 'My Schedule' : 'Staff View') : 'Calendar View'}
+                        </Badge>
                       </CardTitle>
                       <CardDescription>
                         {dayAppointments.length} appointments scheduled
@@ -1122,12 +1168,58 @@ export default function CalendarPage() {
                               </div>
                             )
                           })()}
-                          {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
-                            <StaffOverviewView appointments={dayAppointments} user={user} />
+                          
+                          {staffView ? (
+                            /* Staff View */
+                            (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
+                              <StaffOverviewView appointments={dayAppointments} user={user} />
+                            ) : (
+                              <div className="text-center py-12 text-muted-foreground">
+                                <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                <p>Access restricted. Please contact your administrator.</p>
+                              </div>
+                            )
                           ) : (
-                            <div className="text-center py-12 text-muted-foreground">
-                              <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                              <p>Access restricted. Please contact your administrator.</p>
+                            /* Regular Calendar View */
+                            <div className="space-y-3">
+                              {dayAppointments.length === 0 ? (
+                                <div className="text-center py-12 text-muted-foreground">
+                                  <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                  <p>No appointments scheduled for this day</p>
+                                </div>
+                              ) : (
+                                dayAppointments
+                                  .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                                  .map((appointment) => (
+                                    <div
+                                      key={appointment.id}
+                                      onClick={() => router.push(`/appointments?view=details&id=${encodeURIComponent(appointment.id)}`)}
+                                      className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-3 h-3 rounded-full bg-primary"></div>
+                                          <div>
+                                            <div className="font-medium">{appointment.serviceName}</div>
+                                            {appointment.contactName ? (
+                                              <div className="text-sm text-muted-foreground">
+                                                {appointment.contactName}
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="font-medium">
+                                            {formatTime(appointment.startTime!)}
+                                          </div>
+                                          <div className="text-sm text-muted-foreground">
+                                            {`${appointment.assignedStaffFirstName || ''} ${appointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                              )}
                             </div>
                           )}
                         </>

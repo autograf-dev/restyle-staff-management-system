@@ -83,13 +83,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: `${prefix}/calendar`,
         icon: CalendarIcon,
         isActive: false,
-        // Add staff view for admins/managers
-        ...((user?.role === 'admin' || user?.role === 'manager') && {
-          items: [
-            { title: "Regular View", url: `${prefix}/calendar` },
-            { title: "Staff View", url: `${prefix}/calendar?staff=true` },
-          ]
-        }),
       },
       // Customers stays visible for non-barbers only
       ...(user?.role === 'barber'
