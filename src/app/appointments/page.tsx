@@ -31,7 +31,7 @@ import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useUser } from "@/contexts/user-context"
 
-type Appointment = {
+type Booking = {
   id: string
   calendar_id: string
   contact_id: string
@@ -53,7 +53,7 @@ type Appointment = {
   contactPhone?: string
 }
 
-type RawAppointment = {
+type RawBooking = {
   id?: string
   calendar_id?: string
   contact_id?: string
@@ -86,8 +86,8 @@ type TimeSlot = {
   isPast: boolean
 }
 
-function useAppointments() {
-  const [data, setData] = React.useState<Appointment[]>([])
+function useBookings() {
+  const [data, setData] = React.useState<Booking[]>([])
   const [loading, setLoading] = React.useState<boolean>(true)
   const [currentPage, setCurrentPage] = React.useState<number>(1)
   const [totalPages, setTotalPages] = React.useState<number>(1)
@@ -104,7 +104,7 @@ function useAppointments() {
     }
   }, [])
 
-  const fetchAppointments = React.useCallback(async () => {
+  const fetchBookings = React.useCallback(async () => {
     if (!isMounted.current) return
     
     // Set loading state only if component is still mounted
@@ -120,7 +120,7 @@ function useAppointments() {
       if (!res.ok) throw new Error("Failed to fetch appointments")
       const json = await res.json()
       
-      const bookings: RawAppointment[] = json.bookings || []
+      const bookings: RawBooking[] = json.bookings || []
       
       // Helper function to delay execution with abort check
       const delay = (ms: number) => new Promise((resolve, reject) => {
@@ -139,7 +139,7 @@ function useAppointments() {
       })
       
       // Helper function to process bookings in batches with abort checks
-      const processInBatches = async <T,>(items: T[], batchSize: number, processor: (item: T) => Promise<Appointment>) => {
+      const processInBatches = async <T,>(items: T[], batchSize: number, processor: (item: T) => Promise<Booking>) => {
         const results = []
         for (let i = 0; i < items.length; i += batchSize) {
           // Check if aborted before processing each batch
@@ -160,13 +160,13 @@ function useAppointments() {
       }
 
       // Process bookings in smaller batches (10 at a time)
-      const enrichedBookings = await processInBatches(bookings, 10, async (booking: RawAppointment) => {
+      const enrichedBookings = await processInBatches(bookings, 10, async (booking: RawBooking) => {
         // Check abort status before processing each booking
         if (signal.aborted) {
           throw new Error('Aborted')
         }
 
-        const details: Appointment = {
+        const details: Booking = {
           id: String(booking.id || ""),
           calendar_id: String(booking.calendar_id || ""),
           contact_id: String(booking.contact_id || ""),
@@ -189,11 +189,11 @@ function useAppointments() {
             if (apptRes.ok && !signal.aborted) {
               const apptData = await apptRes.json()
               if (apptData.appointment) {
-                details.startTime = apptData.appointment.startTime
-                details.endTime = apptData.appointment.endTime
-                details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
-                details.assigned_user_id = apptData.appointment.assignedUserId || details.assigned_user_id
-                details.groupId = apptData.appointment.groupId || apptData.appointment.group_id
+                details.startTime = apptData.booking.startTime
+                details.endTime = apptData.booking.endTime
+                details.appointment_status = apptData.booking.appointmentStatus || details.appointment_status
+                details.assigned_user_id = apptData.booking.assignedUserId || details.assigned_user_id
+                details.groupId = apptData.booking.groupId || apptData.booking.group_id
               }
             }
           } catch (error) {
@@ -274,7 +274,7 @@ function useAppointments() {
   React.useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
-      const cleanup = fetchAppointments()
+      const cleanup = fetchBookings()
       return () => {
         // Call cleanup function if it exists
         if (cleanup && typeof cleanup.then === 'function') {
@@ -286,7 +286,7 @@ function useAppointments() {
         }
       }
     }
-  }, [fetchAppointments])
+  }, [fetchBookings])
 
   return { 
     data, 
@@ -296,7 +296,7 @@ function useAppointments() {
     setCurrentPage, 
     totalPages, 
     total, 
-    fetchAppointments,
+    fetchBookings,
     statusFilter,
     setStatusFilter,
     searchTerm,
@@ -341,10 +341,10 @@ function formatDuration(startIso?: string, endIso?: string) {
   return `${m} mins`
 }
 
-function getAppointmentStatus(appointment: Appointment) {
-  const status = (appointment.appointment_status || '').toLowerCase()
+function getBookingStatus(booking: Booking) {
+  const status = (booking.appointment_status || '').toLowerCase()
   const now = new Date()
-  const startTime = appointment.startTime ? new Date(appointment.startTime) : null
+  const startTime = booking.startTime ? new Date(booking.startTime) : null
   
   if (status === 'cancelled') return 'cancelled'
   if (!startTime) return 'unknown'
@@ -381,7 +381,7 @@ function getStatusBadgeClasses(status: string) {
   }
 }
 
-function AppointmentsPageInner() {
+function BookingsPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useUser()
@@ -392,24 +392,24 @@ function AppointmentsPageInner() {
     setStatusFilter,
     searchTerm,
     setSearchTerm,
-    fetchAppointments
-  } = useAppointments()
+    fetchBookings: fetchBookings
+  } = useBookings()
 
-  const [selected, setSelected] = React.useState<Appointment | null>(null)
+  const [selected, setSelected] = React.useState<Booking | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
-  // (moved) Effects for deep-linking placed after new-appointment state
+  // (moved) Effects for deep-linking placed after new-booking state
   const [cancelConfirmOpen, setCancelConfirmOpen] = React.useState(false)
-  const [appointmentToCancel, setAppointmentToCancel] = React.useState<Appointment | null>(null)
+  const [bookingToCancel, setBookingToCancel] = React.useState<Booking | null>(null)
   const [cancelLoading, setCancelLoading] = React.useState(false)
 
   // Delete booking state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false)
-  const [appointmentToDelete, setAppointmentToDelete] = React.useState<Appointment | null>(null)
+  const [bookingToDelete, setBookingToDelete] = React.useState<Booking | null>(null)
   const [deleteLoading, setDeleteLoading] = React.useState(false)
 
   // Reschedule state
   const [rescheduleOpen, setRescheduleOpen] = React.useState(false)
-  const [appointmentToReschedule, setAppointmentToReschedule] = React.useState<Appointment | null>(null)
+  const [bookingToReschedule, setBookingToReschedule] = React.useState<Booking | null>(null)
   const [rescheduleLoading, setRescheduleLoading] = React.useState(false)
   
   // Reschedule form data
@@ -499,17 +499,17 @@ function AppointmentsPageInner() {
   }
 
   // Cancel booking function
-  const handleCancelBooking = async (appointment: Appointment) => {
-    if (isWithinTwoHours(appointment.startTime)) {
+  const handleCancelBooking = async (booking: Booking) => {
+    if (isWithinTwoHours(booking.startTime)) {
       toast.error("Cannot cancel - booking starts within 2 hours")
       return
     }
-    setAppointmentToCancel(appointment)
+    setBookingToCancel(booking)
     setCancelConfirmOpen(true)
   }
 
   const confirmCancelBooking = async () => {
-    if (!appointmentToCancel) return
+    if (!bookingToCancel) return
     
     setCancelLoading(true)
     try {
@@ -519,16 +519,16 @@ function AppointmentsPageInner() {
           "Accept": "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ bookingId: appointmentToCancel.id }),
+        body: JSON.stringify({ bookingId: bookingToCancel.id }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Cancel failed")
       
       // Refresh appointments
-      await fetchAppointments()
+      await fetchBookings()
       toast.success("Appointment cancelled successfully")
       setCancelConfirmOpen(false)
-      setAppointmentToCancel(null)
+      setBookingToCancel(null)
     } catch (error) {
       console.error(error)
       toast.error(`Cancellation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -538,17 +538,17 @@ function AppointmentsPageInner() {
   }
 
   // Delete booking functions
-  const handleDeleteBooking = async (appointment: Appointment) => {
-    setAppointmentToDelete(appointment)
+  const handleDeleteBooking = async (booking: Booking) => {
+    setBookingToDelete(booking)
     setDeleteConfirmOpen(true)
   }
 
   const confirmDeleteBooking = async () => {
-    if (!appointmentToDelete) return
+    if (!bookingToDelete) return
     
     setDeleteLoading(true)
     try {
-      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deletebooking?bookingId=${appointmentToDelete.id}`, {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deletebooking?bookingId=${bookingToDelete.id}`, {
         method: "DELETE",
         headers: {
           "Accept": "application/json"
@@ -558,13 +558,13 @@ function AppointmentsPageInner() {
       if (!res.ok) throw new Error(data.error || "Delete failed")
       
       // Refresh appointments
-      await fetchAppointments()
+      await fetchBookings()
       toast.success("Appointment deleted successfully")
       setDeleteConfirmOpen(false)
-      setAppointmentToDelete(null)
+      setBookingToDelete(null)
       
       // Close details dialog if open
-      if (selected?.id === appointmentToDelete.id) {
+      if (selected?.id === bookingToDelete.id) {
         setDetailsOpen(false)
         setSelected(null)
       }
@@ -577,14 +577,14 @@ function AppointmentsPageInner() {
   }
 
   // Reschedule functions
-  const handleRescheduleBooking = async (appointment: Appointment) => {
-    if (isWithinTwoHours(appointment.startTime)) {
+  const handleRescheduleBooking = async (booking: Booking) => {
+    if (isWithinTwoHours(booking.startTime)) {
       toast.error("Cannot reschedule - booking starts within 2 hours")
       return
     }
     
-    setAppointmentToReschedule(appointment)
-    setSelectedStaff(appointment.assigned_user_id || "any")
+    setBookingToReschedule(booking)
+    setSelectedStaff(booking.assigned_user_id || "any")
     setSelectedDate("")
     setSelectedTime("")
     setRescheduleOpen(true)
@@ -593,17 +593,17 @@ function AppointmentsPageInner() {
   }
 
   const fetchStaffOptions = async () => {
-    if (!rescheduleOpen || !appointmentToReschedule?.calendar_id) return
+    if (!rescheduleOpen || !bookingToReschedule?.calendar_id) return
     
     setLoadingStaff(true)
     const controller = new AbortController()
     
     try {
       // Fetch service details to get team members (like in Vue.js file)
-      const serviceRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${appointmentToReschedule.groupId || 'default'}`, { signal: controller.signal })
+      const serviceRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${bookingToReschedule.groupId || 'default'}`, { signal: controller.signal })
       const serviceData = await serviceRes.json()
       
-      const serviceObj = (serviceData.calendars || []).find((s: { id: string }) => s.id === appointmentToReschedule.calendar_id)
+      const serviceObj = (serviceData.calendars || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
       const teamMembers = serviceObj?.teamMembers || []
       console.log('Team members for service:', teamMembers)
 
@@ -662,14 +662,14 @@ function AppointmentsPageInner() {
   }
 
   const fetchAvailableDates = async () => {
-    if (!appointmentToReschedule?.calendar_id || !rescheduleOpen) return
+    if (!bookingToReschedule?.calendar_id || !rescheduleOpen) return
     
     setLoadingSlots(true)
     const controller = new AbortController()
     
     try {
       const userId = selectedStaff && selectedStaff !== 'any' ? selectedStaff : null
-      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${appointmentToReschedule.calendar_id}`
+      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${bookingToReschedule.calendar_id}`
       if (userId) {
         apiUrl += `&userId=${userId}`
       }
@@ -771,7 +771,7 @@ function AppointmentsPageInner() {
   }
 
   const confirmReschedule = async () => {
-    if (!appointmentToReschedule || !selectedDate || !selectedTime) return
+    if (!bookingToReschedule || !selectedDate || !selectedTime) return
     
     setRescheduleLoading(true)
     try {
@@ -793,8 +793,8 @@ function AppointmentsPageInner() {
         const utcStartTime = new Date(jsDate.getTime() - mstOffset)
         
         // Calculate end time based on original duration
-        const originalStart = new Date(appointmentToReschedule.startTime!)
-        const originalEnd = new Date(appointmentToReschedule.endTime!)
+        const originalStart = new Date(bookingToReschedule.startTime!)
+        const originalEnd = new Date(bookingToReschedule.endTime!)
         const duration = originalEnd.getTime() - originalStart.getTime()
         const utcEndTime = new Date(utcStartTime.getTime() + duration)
         
@@ -805,8 +805,8 @@ function AppointmentsPageInner() {
           const realStaff = staffOptions.filter(item => item.value !== 'any')
           if (realStaff.length > 0) {
             assignedUserIdToSend = realStaff[0].value
-          } else if (appointmentToReschedule.assigned_user_id) {
-            assignedUserIdToSend = appointmentToReschedule.assigned_user_id
+          } else if (bookingToReschedule.assigned_user_id) {
+            assignedUserIdToSend = bookingToReschedule.assigned_user_id
           }
         }
 
@@ -814,7 +814,7 @@ function AppointmentsPageInner() {
           throw new Error('A team member needs to be selected. assignedUserId is missing')
         }
 
-        let updateUrl = `https://restyle-api.netlify.app/.netlify/functions/updateappointment?appointmentId=${appointmentToReschedule.id}`
+        let updateUrl = `https://restyle-api.netlify.app/.netlify/functions/updateappointment?appointmentId=${bookingToReschedule.id}`
         updateUrl += `&assignedUserId=${assignedUserIdToSend}`
         updateUrl += `&startTime=${encodeURIComponent(utcStartTime.toISOString())}`
         updateUrl += `&endTime=${encodeURIComponent(utcEndTime.toISOString())}`
@@ -826,7 +826,7 @@ function AppointmentsPageInner() {
           toast.success("Appointment rescheduled successfully")
           setRescheduleOpen(false)
           resetRescheduleForm()
-          await fetchAppointments()
+          await fetchBookings()
         } else {
           throw new Error(data.error || 'Reschedule failed')
         }
@@ -840,7 +840,7 @@ function AppointmentsPageInner() {
   }
 
   const resetRescheduleForm = () => {
-    setAppointmentToReschedule(null)
+    setBookingToReschedule(null)
     setSelectedStaff("")
     setSelectedDate("")
     setSelectedTime("")
@@ -858,7 +858,7 @@ function AppointmentsPageInner() {
 
   // Effect to fetch dates when staff changes (re-fetch with new userId)
   React.useEffect(() => {
-    if (rescheduleOpen && selectedStaff && appointmentToReschedule) {
+    if (rescheduleOpen && selectedStaff && bookingToReschedule) {
       console.log('Staff changed to:', selectedStaff, '- refetching working slots')
       // Clear current data and refetch with new staff ID
       setWorkingSlots({})
@@ -870,7 +870,7 @@ function AppointmentsPageInner() {
       // Fetch available dates with the new staff selection
       fetchAvailableDates()
     }
-  }, [selectedStaff, rescheduleOpen, appointmentToReschedule])
+  }, [selectedStaff, rescheduleOpen, bookingToReschedule])
 
   // Effect to fetch slots when date changes
   React.useEffect(() => {
@@ -1230,7 +1230,7 @@ function AppointmentsPageInner() {
       toast.success("Appointment created successfully!")
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
-      await fetchAppointments()
+      await fetchBookings()
     } catch (error) {
       console.error('New appointment error:', error)
       toast.error(`Failed to create appointment: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -1269,8 +1269,8 @@ function AppointmentsPageInner() {
 
     // Filter by status
     if (statusFilter !== "all") {
-      filtered = filtered.filter(appointment => {
-        const appointmentStatus = getAppointmentStatus(appointment)
+      filtered = filtered.filter(booking => {
+        const appointmentStatus = getBookingStatus(booking)
         return appointmentStatus === statusFilter
       })
     }
@@ -1292,8 +1292,8 @@ function AppointmentsPageInner() {
       const aTime = a.startTime ? new Date(a.startTime).getTime() : 0
       const bTime = b.startTime ? new Date(b.startTime).getTime() : 0
       
-      const aStatus = getAppointmentStatus(a)
-      const bStatus = getAppointmentStatus(b)
+      const aStatus = getBookingStatus(a)
+      const bStatus = getBookingStatus(b)
       
       // Priority: cancelled last, then upcoming (earliest first), then past (most recent first)
       if (aStatus === 'cancelled' && bStatus !== 'cancelled') return 1
@@ -1313,7 +1313,7 @@ function AppointmentsPageInner() {
     })
   }, [data, statusFilter, searchTerm])
 
-  const columns: ColumnDef<Appointment>[] = [
+  const columns: ColumnDef<Booking>[] = [
     {
       accessorKey: "serviceName",
       header: ({ column }) => (
@@ -1323,7 +1323,7 @@ function AppointmentsPageInner() {
       ),
       cell: ({ row }) => {
         const appointment = row.original
-        const status = getAppointmentStatus(appointment)
+        const status = getBookingStatus(appointment)
         const withinTwoHours = isWithinTwoHours(appointment.startTime)
         const isCancelled = status === 'cancelled'
         const isPast = status === 'past'
@@ -1409,7 +1409,7 @@ function AppointmentsPageInner() {
       accessorKey: "appointment_status",
       header: "Status",
       cell: ({ row }) => {
-        const status = getAppointmentStatus(row.original)
+        const status = getBookingStatus(row.original)
         const displayStatus = row.original.appointment_status || status
         return (
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadgeClasses(status)}`}>
@@ -1450,8 +1450,8 @@ function AppointmentsPageInner() {
   // Count appointments by status
   const statusCounts = React.useMemo(() => {
     const counts = { all: filteredData.length, upcoming: 0, past: 0, cancelled: 0 }
-    filteredData.forEach(appointment => {
-      const status = getAppointmentStatus(appointment)
+    filteredData.forEach(booking => {
+      const status = getBookingStatus(booking)
       counts[status as keyof typeof counts]++
     })
     return counts
@@ -1642,7 +1642,7 @@ function AppointmentsPageInner() {
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Status</label>
                         <div className="mt-1">
-                          <Badge variant={getStatusBadgeVariant(getAppointmentStatus(selected))}>
+                          <Badge variant={getStatusBadgeVariant(getBookingStatus(selected))}>
                             {selected.appointment_status?.charAt(0).toUpperCase() + selected.appointment_status?.slice(1) || 'Unknown'}
                           </Badge>
                         </div>
@@ -1695,7 +1695,7 @@ function AppointmentsPageInner() {
                       <h3 className="text-sm font-medium text-muted-foreground">Actions</h3>
                       <div className="flex gap-2">
                         {/* Cancel Button */}
-                        {getAppointmentStatus(selected) !== 'cancelled' && getAppointmentStatus(selected) !== 'past' && (
+                        {getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' && (
                           <Button
                             onClick={() => {
                               setDetailsOpen(false)
@@ -1709,7 +1709,7 @@ function AppointmentsPageInner() {
                         )}
 
                         {/* Reschedule Button */}
-                        {getAppointmentStatus(selected) !== 'cancelled' && getAppointmentStatus(selected) !== 'past' && (
+                        {getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' && (
                           <Button
                             onClick={() => {
                               setDetailsOpen(false)
@@ -1735,7 +1735,7 @@ function AppointmentsPageInner() {
                       </div>
 
                       {/* Disabled state message */}
-                      {isWithinTwoHours(selected.startTime) && getAppointmentStatus(selected) !== 'cancelled' && getAppointmentStatus(selected) !== 'past' && (
+                      {isWithinTwoHours(selected.startTime) && getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' && (
                         <p className="text-xs text-muted-foreground text-center pt-2">
                           Cancel and Reschedule are disabled - appointment starts within 2 hours
                         </p>
@@ -1755,14 +1755,14 @@ function AppointmentsPageInner() {
               </ConfirmHeader>
               <div className="py-4">
                 <p>Are you sure you want to cancel this appointment?</p>
-                {appointmentToCancel && (
+                {bookingToCancel && (
                   <div className="mt-2 p-3 bg-muted rounded-md">
-                    <p className="font-medium">{appointmentToCancel.serviceName}</p>
+                    <p className="font-medium">{bookingToCancel.serviceName}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatDateTime(appointmentToCancel.startTime)}
+                      {formatDateTime(bookingToCancel.startTime)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Customer: {appointmentToCancel.contactName || 'Unknown'}
+                      Customer: {bookingToCancel.contactName || 'Unknown'}
                     </p>
                   </div>
                 )}
@@ -1795,14 +1795,14 @@ function AppointmentsPageInner() {
               <div className="py-4">
                 <p className="text-red-600 font-medium">⚠️ This action cannot be undone!</p>
                 <p className="mt-2">Are you sure you want to permanently delete this appointment?</p>
-                {appointmentToDelete && (
+                {bookingToDelete && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-                    <p className="font-medium text-red-800">{appointmentToDelete.serviceName}</p>
+                    <p className="font-medium text-red-800">{bookingToDelete.serviceName}</p>
                     <p className="text-sm text-red-700">
-                      {formatDateTime(appointmentToDelete.startTime)}
+                      {formatDateTime(bookingToDelete.startTime)}
                     </p>
                     <p className="text-sm text-red-700">
-                      Customer: {appointmentToDelete.contactName || 'Unknown'}
+                      Customer: {bookingToDelete.contactName || 'Unknown'}
                     </p>
                   </div>
                 )}
@@ -1840,21 +1840,21 @@ function AppointmentsPageInner() {
               
               <div className="space-y-6">
                 {/* Current Appointment Info */}
-                {appointmentToReschedule && (
+                {bookingToReschedule && (
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <h4 className="font-semibold mb-2">Current Appointment Details</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="font-medium">Service:</span> {appointmentToReschedule.serviceName || appointmentToReschedule.title}
+                        <span className="font-medium">Service:</span> {bookingToReschedule.serviceName || bookingToReschedule.title}
                       </div>
                       <div>
-                        <span className="font-medium">Date & Time:</span> {formatDateTime(appointmentToReschedule.startTime)}
+                        <span className="font-medium">Date & Time:</span> {formatDateTime(bookingToReschedule.startTime)}
                       </div>
                       <div>
-                        <span className="font-medium">Staff:</span> {appointmentToReschedule.assignedStaffFirstName} {appointmentToReschedule.assignedStaffLastName}
+                        <span className="font-medium">Staff:</span> {bookingToReschedule.assignedStaffFirstName} {bookingToReschedule.assignedStaffLastName}
                       </div>
                       <div>
-                        <span className="font-medium">Customer:</span> {appointmentToReschedule.contactName}
+                        <span className="font-medium">Customer:</span> {bookingToReschedule.contactName}
                       </div>
                     </div>
                   </div>
@@ -2305,10 +2305,10 @@ function AppointmentsPageInner() {
   )
 }
 
-export default function AppointmentsPage() {
+export default function BookingsPage() {
   return (
     <React.Suspense fallback={<div className="p-4">Loading…</div>}>
-      <AppointmentsPageInner />
+      <BookingsPageInner />
     </React.Suspense>
   )
 }

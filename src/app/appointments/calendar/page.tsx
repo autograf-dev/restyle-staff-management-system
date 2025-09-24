@@ -200,6 +200,48 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
   const headerScrollRef = React.useRef<HTMLDivElement>(null)
   const columnsScrollRef = React.useRef<HTMLDivElement>(null)
   const columnWidth = 220
+  const [currentTime, setCurrentTime] = React.useState(new Date())
+
+  // Update current time every minute
+  React.useEffect(() => {
+    const updateTime = () => setCurrentTime(new Date())
+    const interval = setInterval(updateTime, 60000) // Update every minute
+    return () => clearInterval(interval)
+  }, [])
+
+  // Calculate current time position for live line
+  const getCurrentTimePosition = () => {
+    const now = currentTime
+    const hour = now.getHours()
+    const minute = now.getMinutes()
+    
+    // Only show if within business hours (8 AM to 8 PM)
+    if (hour < 8 || hour >= 20) return null
+    
+    const currentMinutes = hour * 60 + minute
+    const dayStartMinutes = 8 * 60 // 8 AM
+    const position = ((currentMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    
+    return position
+  }
+
+  // Auto-scroll to current time on component mount
+  React.useEffect(() => {
+    const scrollToCurrentTime = () => {
+      if (!scrollContainerRef.current) return
+      
+      const currentTimePosition = getCurrentTimePosition()
+      if (currentTimePosition !== null) {
+        // Scroll to current time minus some offset to show context
+        const scrollTop = Math.max(0, currentTimePosition - 120) // Show 2 hours before
+        scrollContainerRef.current.scrollTop = scrollTop
+      }
+    }
+
+    // Delay scroll to ensure component is fully rendered
+    const timer = setTimeout(scrollToCurrentTime, 500)
+    return () => clearTimeout(timer)
+  }, [staff]) // Re-run when staff data loads
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -290,25 +332,21 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     }
   }, [headerScrollRef.current, columnsScrollRef.current])
 
-  // Generate time slots based on salon hours (fallback 8AM-11PM)
+  // Generate time slots from 8AM to 8PM (12-hour range)
   const generateTimeSlots = () => {
-    // Determine current day salon hours
-    const dow = new Date().getDay() // 0..6
-    const today = salonHours.find(h => h.day_of_week === dow)
-    const open = (today && today.is_open && typeof today.open_time === 'number') ? today.open_time : 8 * 60
-    const close = (today && today.is_open && typeof today.close_time === 'number') ? today.close_time : 23 * 60 + 30
     const slots: string[] = []
-    for (let m = open; m <= close; m += 30) {
-      const h = Math.floor(m / 60)
-      const mm = m % 60
-      slots.push(`${h.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`)
+    // 8 AM to 8 PM (8:00 to 20:00) in 30-minute intervals
+    for (let hour = 8; hour <= 20; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        slots.push(`${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')}`)
+      }
     }
     return slots
   }
 
   const timeSlots = generateTimeSlots()
 
-  // Helper function to get appointment position and height (8AM to 11PM range)
+  // Helper function to get appointment position and height (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment) => {
     if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
     
@@ -321,15 +359,12 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     const endMinute = end.getMinutes()
     
     // Calculate position from 8AM (480 minutes from midnight)
-    // Start from salon open (fallback 8AM)
-    const dow = new Date().getDay()
-    const today = salonHours.find(h => h.day_of_week === dow)
-    const dayStartMinutes = (today && today.is_open && typeof today.open_time === 'number') ? today.open_time : 8 * 60
+    const dayStartMinutes = 8 * 60 // 8 AM start
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
-    // Only show appointments within 8AM-11PM range
-    const dayEndMinutesExclusive = (today && today.is_open && typeof today.close_time === 'number') ? today.close_time : 23 * 60 + 30
+    // Only show appointments within 8AM-8PM range
+    const dayEndMinutesExclusive = 20 * 60 + 30 // 8:30 PM (end of 8 PM slot)
     if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
       return { display: 'none' }
     }
@@ -568,6 +603,21 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                       }}
                     />
                   ))}
+
+                  {/* Live time indicator */}
+                  {(() => {
+                    const currentTimePosition = getCurrentTimePosition()
+                    if (currentTimePosition === null) return null
+                    
+                    return (
+                      <div
+                        className="absolute left-0 right-0 border-t-2 border-red-500 z-20"
+                        style={{ top: `${currentTimePosition}px` }}
+                      >
+                        <div className="absolute -left-1 -top-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                      </div>
+                    )
+                  })()}
 
                   {/* Leaves for this staff member */}
                   {getStaffLeaves(staffMember.ghl_id).map((leave) => {
@@ -1097,7 +1147,7 @@ export default function CalendarPage() {
                         <div className="text-center py-12 text-red-600">
                           <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                           <p className="font-medium">Salon is closed today</p>
-                          <p className="text-sm text-muted-foreground mt-2">No appointments available</p>
+                          <p className="text-sm text-muted-foreground mt-2">No bookings available</p>
                         </div>
                       ) : (
                         <>
@@ -1116,13 +1166,13 @@ export default function CalendarPage() {
                               </div>
                             )
                           })()}
-                          {dayAppointments.length === 0 ? (
+                          {staffView && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
+                            <StaffOverviewView appointments={dayAppointments} user={user} />
+                          ) : dayAppointments.length === 0 ? (
                             <div className="text-center py-12 text-muted-foreground">
                               <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                              <p>No appointments scheduled for this day</p>
+                              <p>No bookings scheduled for this day</p>
                             </div>
-                          ) : staffView && (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
-                            <StaffOverviewView appointments={dayAppointments} user={user} />
                           ) : (
                             <div className="space-y-3">
                               {dayAppointments
