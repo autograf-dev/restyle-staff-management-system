@@ -9,23 +9,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { 
   Plus, 
   RefreshCw, 
   Edit, 
   Trash2, 
-  MoreHorizontal, 
+  DollarSign, 
   Clock, 
   Users, 
   Settings as SettingsIcon,
-  Eye,
-  EyeOff 
+  AlertTriangle,
+  CheckCircle,
+  Star,
+  Sparkles
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
@@ -34,32 +37,37 @@ interface Service {
   id: string
   name: string
   description?: string
-  duration: number
-  price: number
-  category?: string
-  isActive?: boolean
-  groupId?: string
-  bufferTimeBefore?: number
-  bufferTimeAfter?: number
-  maxBookingsPerDay?: number
-  createdAt?: string
-  updatedAt?: string
-  assignedUserIds?: string[]
-  assignedStaff?: { id: string; name: string; email: string }[]
-  teamMembers?: { userId: string; name: string }[]
-  departmentName?: string
+  slotDuration?: number
+  slotDurationUnit?: 'mins' | 'hours'
+  duration?: number // computed from slotDuration + unit
+  teamMembers?: { userId: string; name?: string }[]
 }
 
-type Staff = {
-  ghl_id: string
+interface StaffOption {
+  value: string
+  label: string
+  id: string
   name: string
   email: string
-  isActive: boolean
+}
+
+type ServiceFormData = {
+  name: string
+  description: string
+  duration: number
+  durationUnit: 'mins' | 'hours'
+  price: string
+  currency: string
+  selectedStaff: string[]
+  autoConfirm: boolean
+  allowReschedule: boolean
+  allowCancellation: boolean
+  slotInterval: number
 }
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([])
-  const [staff, setStaff] = useState<Staff[]>([])
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -69,50 +77,45 @@ export default function ServicesPage() {
   const [creating, setCreating] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [assigningStaff, setAssigningStaff] = useState(false)
 
-  // Form states
-  const [formData, setFormData] = useState({
+  // Form states - matching GoHighLevel service creation
+  const [formData, setFormData] = useState<ServiceFormData>({
     name: '',
     description: '',
     duration: 60,
-    price: 0,
-    groupId: '',
-    bufferTimeBefore: 0,
-    bufferTimeAfter: 0,
-    maxBookingsPerDay: 0,
-    isActive: true
+    durationUnit: 'mins',
+    price: '0.00',
+    currency: 'CA$',
+    selectedStaff: [],
+    autoConfirm: true,
+    allowReschedule: true,
+    allowCancellation: true,
+    slotInterval: 15
   })
 
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([])
-  const [allStaff, setAllStaff] = useState<{ [key: string]: { id: string; name: string; email: string } }>({})
 
-  // Fetch all staff to map IDs to names
-  const fetchAllStaff = async () => {
+  // Fetch available staff for dropdown using new getAvailableStaff endpoint
+  const fetchAvailableStaff = async () => {
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/Staff')
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getAvailableStaff')
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
       const result = await response.json()
       
-      if (result.success) {
-        // Create a lookup map: staffId -> staff details
-        const staffMap: { [key: string]: { id: string; name: string; email: string } } = {}
-        result.staff?.forEach((staff: Record<string, unknown>) => {
-          staffMap[staff.id as string] = {
-            id: staff.id as string,
-            name: (staff.name as string) || `${staff.firstName as string} ${staff.lastName as string}`.trim(),
-            email: (staff.email as string) || ''
-          }
-        })
-        setAllStaff(staffMap)
+      if (result.success && result.dropdownOptions) {
+        setStaffOptions(result.dropdownOptions)
+        toast.success(`Loaded ${result.totalStaff} staff members`)
       }
     } catch (error) {
-      console.error('Error fetching staff:', error)
+      console.error('Error fetching available staff:', error)
+      toast.error('Failed to load staff options')
     }
   }
 
-  // Fetch services data
+  // Fetch services data using getAllServices endpoint
   const fetchServices = async () => {
     try {
       setLoading(true)
@@ -125,29 +128,20 @@ export default function ServicesPage() {
       const result = await response.json()
       
       if (result.success) {
-        // The getAllServices endpoint returns services in the 'calendars' array
-        const servicesData = result.calendars || result.services || result.data || []
+        const servicesData = result.calendars || []
         
-        // Transform the data to include assignedUserIds from teamMembers
-        const transformedServices = servicesData.map((service: Record<string, unknown>) => {
-          // Debug: log the service object to see available fields
-          console.log('Service data:', service)
-          
-          return {
-            ...service,
-            // Convert duration to minutes based on unit
-            duration: service.slotDuration ? (() => {
-              const duration = Number(service.slotDuration)
-              const unit = service.slotDurationUnit as string
-              return unit === 'hours' ? duration * 60 : duration
-            })() : null,
-            assignedUserIds: service.teamMembers && Array.isArray(service.teamMembers) 
-              ? service.teamMembers.map((member: Record<string, unknown>) => member.userId as string)
-              : []
-          }
-        })
+        // Transform the data to include computed duration
+        const transformedServices = servicesData.map((service: Record<string, unknown>) => ({
+          ...service,
+          duration: service.slotDuration ? (() => {
+            const duration = Number(service.slotDuration)
+            const unit = service.slotDurationUnit as string
+            return unit === 'hours' ? duration * 60 : duration
+          })() : 60
+        }))
         
         setServices(transformedServices)
+        toast.success(`Loaded ${transformedServices.length} services`)
       } else {
         throw new Error(result.error || 'Failed to fetch services')
       }
@@ -160,48 +154,21 @@ export default function ServicesPage() {
     }
   }
 
-  // Fetch staff data for assignments using your existing working endpoint
-  const fetchStaff = async () => {
-    try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/Staff')
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
-      const result = await response.json()
-      
-      // Adapt to your existing Staff endpoint response format
-      if (result.success) {
-        const staffData = result.staff || result.data || []
-        // Transform data to match our expected format
-        const formattedStaff = staffData.map((member: Record<string, string | number>) => ({
-          id: member.ghl_id || member.id,
-          ghl_id: member.ghl_id || member.id,
-          name: member["Barber/Name"] || member.name,
-          email: member["Barber/Email"] || member.email,
-          role: member.role || 'barber'
-        }))
-        setStaff(formattedStaff)
-      } else {
-        throw new Error(result.error || 'Failed to fetch staff')
-      }
-    } catch (error) {
-      console.error('Error fetching staff:', error)
-      toast.error('Failed to load staff')
-    }
-  }
-
-  // Create new service
+  // Create new service using createFullService endpoint
   const createService = async () => {
     if (!formData.name.trim()) {
       toast.error('Service name is required')
       return
     }
 
+    if (formData.selectedStaff.length === 0) {
+      toast.error('Please select at least one staff member')
+      return
+    }
+
     setCreating(true)
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/createService', {
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/createFullService', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,19 +177,21 @@ export default function ServicesPage() {
           name: formData.name.trim(),
           description: formData.description.trim(),
           duration: formData.duration,
+          durationUnit: formData.durationUnit,
           price: formData.price,
-          groupId: formData.groupId.trim(),
-          bufferTimeBefore: formData.bufferTimeBefore,
-          bufferTimeAfter: formData.bufferTimeAfter,
-          maxBookingsPerDay: formData.maxBookingsPerDay || undefined,
-          isActive: formData.isActive
+          currency: formData.currency,
+          selectedStaff: formData.selectedStaff,
+          slotInterval: formData.slotInterval,
+          autoConfirm: formData.autoConfirm,
+          allowReschedule: formData.allowReschedule,
+          allowCancellation: formData.allowCancellation
         })
       })
 
       const result = await response.json()
 
       if (result.success) {
-        toast.success('Service created successfully!')
+        toast.success('✅ Service created successfully!')
         setCreateDialogOpen(false)
         resetForm()
         await fetchServices()
@@ -237,7 +206,7 @@ export default function ServicesPage() {
     }
   }
 
-  // Update service
+  // Update service using updateFullService endpoint
   const updateService = async () => {
     if (!selectedService || !formData.name.trim()) {
       toast.error('Service name is required')
@@ -246,28 +215,26 @@ export default function ServicesPage() {
 
     setUpdating(true)
     try {
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/updateService?id=${selectedService.id}`, {
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateFullService', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          serviceId: selectedService.id,
           name: formData.name.trim(),
           description: formData.description.trim(),
           duration: formData.duration,
+          durationUnit: formData.durationUnit,
           price: formData.price,
-          groupId: formData.groupId.trim(),
-          bufferTimeBefore: formData.bufferTimeBefore,
-          bufferTimeAfter: formData.bufferTimeAfter,
-          maxBookingsPerDay: formData.maxBookingsPerDay || undefined,
-          isActive: formData.isActive
+          selectedStaff: formData.selectedStaff
         })
       })
 
       const result = await response.json()
 
       if (result.success) {
-        toast.success('Service updated successfully!')
+        toast.success('✅ Service updated successfully!')
         setEditDialogOpen(false)
         resetForm()
         await fetchServices()
@@ -282,20 +249,20 @@ export default function ServicesPage() {
     }
   }
 
-  // Delete service
+  // Delete service using deleteFullService endpoint
   const deleteService = async () => {
     if (!selectedService) return
 
     setDeleting(true)
     try {
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteService?id=${selectedService.id}`, {
+      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteFullService?serviceId=${selectedService.id}`, {
         method: 'DELETE'
       })
 
       const result = await response.json()
 
       if (result.success) {
-        toast.success('Service deleted successfully!')
+        toast.success('✅ Service deleted successfully!')
         setDeleteDialogOpen(false)
         setSelectedService(null)
         await fetchServices()
@@ -310,39 +277,40 @@ export default function ServicesPage() {
     }
   }
 
-  // Toggle service active status
-  const toggleServiceStatus = async (service: Service) => {
+  // Assign/remove staff using manageServiceStaff endpoint
+  const manageStaff = async (action: 'assign' | 'remove' | 'replace') => {
+    if (!selectedService) return
+
+    setAssigningStaff(true)
     try {
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/updateService?id=${service.id}`, {
-        method: 'PUT',
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/manageServiceStaff', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          isActive: !service.isActive
+          serviceId: selectedService.id,
+          action,
+          staffIds: selectedStaffIds
         })
       })
 
       const result = await response.json()
 
       if (result.success) {
-        toast.success(`Service ${!service.isActive ? 'enabled' : 'disabled'} successfully!`)
+        toast.success(`✅ Staff ${action}ed successfully!`)
+        setStaffDialogOpen(false)
+        setSelectedStaffIds([])
         await fetchServices()
       } else {
-        throw new Error(result.error || 'Failed to update service status')
+        throw new Error(result.error || `Failed to ${action} staff`)
       }
     } catch (error) {
-      console.error('Error updating service status:', error)
-      toast.error('Failed to update service status')
+      console.error(`Error ${action}ing staff:`, error)
+      toast.error(`Failed to ${action} staff`)
+    } finally {
+      setAssigningStaff(false)
     }
-  }
-
-  // Assign staff to service - DISABLED (using your existing staff system)
-  const assignStaffToService = async () => {
-    toast.info('Staff assignment feature coming soon! Currently using your existing staff system.')
-    // TODO: Integrate with your existing staff assignment system when ready
-    setStaffDialogOpen(false)
-    setSelectedStaffIds([])
   }
 
   // Helper functions
@@ -351,35 +319,48 @@ export default function ServicesPage() {
       name: '',
       description: '',
       duration: 60,
-      price: 0,
-      groupId: '',
-      bufferTimeBefore: 0,
-      bufferTimeAfter: 0,
-      maxBookingsPerDay: 0,
-      isActive: true
+      durationUnit: 'mins',
+      price: '0.00',
+      currency: 'CA$',
+      selectedStaff: [],
+      autoConfirm: true,
+      allowReschedule: true,
+      allowCancellation: true,
+      slotInterval: 15
     })
     setSelectedService(null)
   }
 
   const openEditDialog = (service: Service) => {
     setSelectedService(service)
+    
+    // Parse existing price from description or use default
+    const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/);
+    const existingPrice = priceMatch ? priceMatch[1] : '0.00';
+    
+    // Get assigned staff IDs
+    const assignedStaffIds = service.teamMembers?.map(member => member.userId) || [];
+    
     setFormData({
       name: service.name,
       description: service.description || '',
-      duration: service.duration,
-      price: service.price || 0,
-      groupId: service.groupId || '',
-      bufferTimeBefore: service.bufferTimeBefore || 0,
-      bufferTimeAfter: service.bufferTimeAfter || 0,
-      maxBookingsPerDay: service.maxBookingsPerDay || 0,
-      isActive: service.isActive ?? true
+      duration: service.duration || 60,
+      durationUnit: service.slotDurationUnit || 'mins',
+      price: existingPrice,
+      currency: 'CA$',
+      selectedStaff: assignedStaffIds,
+      autoConfirm: true,
+      allowReschedule: true,
+      allowCancellation: true,
+      slotInterval: 15
     })
     setEditDialogOpen(true)
   }
 
   const openStaffDialog = (service: Service) => {
     setSelectedService(service)
-    setSelectedStaffIds(service.assignedUserIds || [])
+    const assignedStaffIds = service.teamMembers?.map(member => member.userId) || [];
+    setSelectedStaffIds(assignedStaffIds)
     setStaffDialogOpen(true)
   }
 
@@ -397,10 +378,30 @@ export default function ServicesPage() {
     return `${mins}m`
   }
 
+  const handleStaffSelection = (staffId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedStaffIds(prev => [...prev, staffId])
+    } else {
+      setSelectedStaffIds(prev => prev.filter(id => id !== staffId))
+    }
+  }
+
+  const handleFormStaffSelection = (staffId: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({ ...prev, selectedStaff: [...prev.selectedStaff, staffId] }))
+    } else {
+      setFormData(prev => ({ ...prev, selectedStaff: prev.selectedStaff.filter(id => id !== staffId) }))
+    }
+  }
+
+  const getStaffNameById = (userId: string) => {
+    const staff = staffOptions.find(s => s.value === userId);
+    return staff ? staff.name : 'Unknown';
+  }
+
   useEffect(() => {
     fetchServices()
-    fetchStaff()
-    fetchAllStaff()
+    fetchAvailableStaff()
   }, [])
 
   return (
@@ -414,11 +415,14 @@ export default function ServicesPage() {
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
-                <h1 className="text-xl font-semibold">Services</h1>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <h1 className="text-xl font-semibold">Services Management</h1>
+                </div>
               </div>
               <Button onClick={() => setCreateDialogOpen(true)} className="bg-primary text-primary-foreground">
                 <Plus className="h-4 w-4 mr-2" />
-                Add Service
+                Create Service
               </Button>
             </div>
           </header>
@@ -433,43 +437,57 @@ export default function ServicesPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{services.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    All salon services
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Services</CardTitle>
-                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-medium">Available Staff</CardTitle>
+                  <Users className="h-4 w-4 text-blue-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{services.filter(s => s.isActive).length}</div>
+                  <div className="text-2xl font-bold text-blue-600">{staffOptions.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Ready to assign
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Inactive Services</CardTitle>
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
+                  <Clock className="h-4 w-4 text-orange-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{services.filter(s => !s.isActive).length}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Average Duration</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+                  <div className="text-2xl font-bold text-orange-600">
                     {services.length > 0 
                       ? (() => {
-                          const validDurations = services.filter(s => s.duration && typeof s.duration === 'number' && s.duration > 0)
+                          const validDurations = services.filter(s => s.duration && s.duration > 0)
                           return validDurations.length > 0
-                            ? formatDuration(Math.round(validDurations.reduce((sum: number, s) => sum + (s.duration as number), 0) / validDurations.length))
-                            : 'Not set'
+                            ? formatDuration(Math.round(validDurations.reduce((sum, s) => sum + (s.duration as number), 0) / validDurations.length))
+                            : '0m'
                         })()
                       : '0m'
                     }
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Service duration
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Staff Assignments</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">
+                    {services.reduce((total, service) => total + (service.teamMembers?.length || 0), 0)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Total assignments
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -478,9 +496,12 @@ export default function ServicesPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Services Management</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Star className="h-5 w-5 text-yellow-500" />
+                    Services Overview
+                  </CardTitle>
                   <CardDescription>
-                    Manage your salon services, pricing, and staff assignments
+                    GoHighLevel-style service management with comprehensive staff assignments
                   </CardDescription>
                 </div>
                 <Button 
@@ -494,113 +515,156 @@ export default function ServicesPage() {
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-                    Loading services...
+                  <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="h-8 w-8 animate-spin mr-3 text-primary" />
+                    <div>
+                      <p className="font-medium">Loading services...</p>
+                      <p className="text-sm text-muted-foreground">Fetching from API</p>
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Service</TableHead>
+                          <TableHead className="w-[300px]">Service Details</TableHead>
                           <TableHead>Duration</TableHead>
-                          <TableHead>Staff</TableHead>
-                          <TableHead>Status</TableHead>
+                          <TableHead>Assigned Staff</TableHead>
+                          <TableHead>Price</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {services.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">
-                              No services found. Create your first service!
+                            <TableCell colSpan={5} className="h-32 text-center">
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="p-4 rounded-full bg-muted">
+                                  <SettingsIcon className="h-8 w-8 text-muted-foreground" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">No services found</p>
+                                  <p className="text-sm text-muted-foreground">Create your first service to get started!</p>
+                                </div>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ) : (
                           services.map((service) => (
-                            <TableRow key={service.id}>
+                            <TableRow key={service.id} className="hover:bg-muted/50">
                               <TableCell>
-                                <div>
-                                  <div className="font-medium">{service.name}</div>
+                                <div className="space-y-1">
+                                  <div className="font-medium flex items-center gap-2">
+                                    {service.name}
+                                    <Badge variant="outline" className="text-xs">Service</Badge>
+                                  </div>
                                   {service.description && (
-                                    <div className="text-sm text-muted-foreground">
-                                      {service.description.replace(/<[^>]*>/g, '')}
+                                    <div className="text-sm text-muted-foreground max-w-xs line-clamp-2">
+                                      {service.description.replace(/<[^>]*>/g, '').substring(0, 120)}
+                                      {service.description.length > 120 ? '...' : ''}
                                     </div>
                                   )}
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-2">
                                   <Clock className="h-4 w-4 text-muted-foreground" />
-                                  {service.duration && typeof service.duration === 'number' && service.duration > 0
-                                    ? formatDuration(service.duration)
-                                    : <span className="text-muted-foreground">Not set</span>
-                                  }
+                                  <span className="font-medium">
+                                    {service.duration && service.duration > 0
+                                      ? formatDuration(service.duration)
+                                      : <span className="text-muted-foreground italic">Not set</span>
+                                    }
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-1">
-                                  <Users className="h-4 w-4 text-muted-foreground" />
-                                  <span>{service.assignedUserIds?.length || 0} assigned</span>
-                                </div>
-                                {service.assignedUserIds && service.assignedUserIds.length > 0 ? (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="text-xs text-muted-foreground mt-1 cursor-pointer hover:text-foreground transition-colors">
-                                        {service.assignedUserIds.slice(0, 2).map(userId => allStaff[userId]?.name || userId).join(', ')}
-                                        {service.assignedUserIds.length > 2 && ` +${service.assignedUserIds.length - 2} more`}
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-xs">
-                                      <div className="space-y-1">
-                                        <div className="font-medium text-sm">All Assigned Staff:</div>
-                                        <div className="text-xs">
-                                          {service.assignedUserIds.map(userId => allStaff[userId]?.name || userId).join(', ')}
-                                        </div>
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ) : (
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    No staff assigned
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">{service.teamMembers?.length || 0} staff</span>
                                   </div>
-                                )}
+                                  {service.teamMembers && service.teamMembers.length > 0 ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="text-xs text-blue-600 cursor-pointer hover:underline">
+                                          {service.teamMembers.slice(0, 2).map(member => 
+                                            getStaffNameById(member.userId)
+                                          ).join(', ')}
+                                          {service.teamMembers.length > 2 && ` +${service.teamMembers.length - 2} more`}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-xs">
+                                        <div className="space-y-1">
+                                          <div className="font-medium text-sm">All Assigned Staff:</div>
+                                          <div className="text-xs">
+                                            {service.teamMembers.map(member => 
+                                              getStaffNameById(member.userId)
+                                            ).join(', ')}
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <div className="text-xs text-muted-foreground italic">
+                                      No staff assigned
+                                    </div>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  <Switch
-                                    checked={service.isActive}
-                                    onCheckedChange={() => toggleServiceStatus(service)}
-                                  />
-                                  <Badge variant={service.isActive ? "default" : "secondary"}>
-                                    {service.isActive ? "Active" : "Inactive"}
-                                  </Badge>
+                                  <DollarSign className="h-4 w-4 text-green-600" />
+                                  <span className="font-medium text-green-600">
+                                    {(() => {
+                                      const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/);
+                                      return priceMatch ? `CA$${priceMatch[1]}` : 'Not set';
+                                    })()}
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openStaffDialog(service)}
-                                  >
-                                    <Users className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openEditDialog(service)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openDeleteDialog(service)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => openStaffDialog(service)}
+                                        className="h-8 w-8 p-0"
+                                      >
+                                        <Users className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Manage Staff</TooltipContent>
+                                  </Tooltip>
+                                  
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => openEditDialog(service)}
+                                        className="h-8 w-8 p-0"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Edit Service</TooltipContent>
+                                  </Tooltip>
+                                  
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => openDeleteDialog(service)}
+                                        className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Delete Service</TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -614,122 +678,229 @@ export default function ServicesPage() {
             </Card>
           </div>
 
-          {/* Create Service Dialog */}
+          {/* Create Service Dialog - GoHighLevel Style */}
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create New Service</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Create New Service
+                </DialogTitle>
                 <DialogDescription>
-                  Add a new service to your salon offerings
+                  Create a professional service with pricing, duration, and staff assignments
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Service Name *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., Hair Cut, Hair Color, Styling"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Brief description of the service..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="duration">Duration (minutes) *</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      min="1"
-                      max="480"
-                      value={formData.duration}
-                      onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
-                    />
+              <div className="grid gap-6 py-4">
+                {/* Basic Information */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <SettingsIcon className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Basic Information</h3>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="price">Price (CAD)</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                    />
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="name">Service Name *</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g., Premium Haircut, Hair Coloring, Facial Treatment"
+                        className="text-base"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Service Description</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Describe what this service includes, benefits, and any special features..."
+                        rows={4}
+                        className="text-base"
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="groupId">Group ID (optional)</Label>
-                  <Input
-                    id="groupId"
-                    value={formData.groupId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, groupId: e.target.value }))}
-                    placeholder="Service group identifier"
-                  />
+
+                {/* Duration & Pricing */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Duration & Pricing</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="duration">Service Duration *</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="duration"
+                          type="number"
+                          min="5"
+                          max="480"
+                          value={formData.duration}
+                          onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+                          className="flex-1"
+                          placeholder="60"
+                        />
+                        <Select 
+                          value={formData.durationUnit} 
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, durationUnit: value as 'mins' | 'hours' }))}
+                        >
+                          <SelectTrigger className="w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mins">Minutes</SelectItem>
+                            <SelectItem value="hours">Hours</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Service Price</Label>
+                      <div className="flex gap-2">
+                        <Select 
+                          value={formData.currency} 
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
+                        >
+                          <SelectTrigger className="w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CA$">CA$</SelectItem>
+                            <SelectItem value="US$">US$</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          id="price"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.price}
+                          onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                          placeholder="85.00"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="bufferBefore">Buffer Before (min)</Label>
-                    <Input
-                      id="bufferBefore"
-                      type="number"
-                      min="0"
-                      max="60"
-                      value={formData.bufferTimeBefore}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bufferTimeBefore: parseInt(e.target.value) || 0 }))}
-                    />
+
+                {/* Staff Assignment */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Staff Assignment</h3>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="bufferAfter">Buffer After (min)</Label>
-                    <Input
-                      id="bufferAfter"
-                      type="number"
-                      min="0"
-                      max="60"
-                      value={formData.bufferTimeAfter}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bufferTimeAfter: parseInt(e.target.value) || 0 }))}
-                    />
+                  <div className="border rounded-lg p-4 max-h-60 overflow-y-auto bg-muted/30">
+                    {staffOptions.length === 0 ? (
+                      <div className="text-center py-6">
+                        <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-muted-foreground">No staff members available</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3">
+                        {staffOptions.map((staff) => (
+                          <div key={staff.value} className="flex items-center space-x-3 p-2 rounded border bg-background hover:bg-muted/50">
+                            <Checkbox
+                              id={`create-staff-${staff.value}`}
+                              checked={formData.selectedStaff.includes(staff.value)}
+                              onCheckedChange={(checked) => 
+                                handleFormStaffSelection(staff.value, checked as boolean)
+                              }
+                            />
+                            <div className="flex-1 grid gap-1">
+                              <label htmlFor={`create-staff-${staff.value}`} className="text-sm font-medium cursor-pointer">
+                                {staff.name}
+                              </label>
+                              <p className="text-xs text-muted-foreground">{staff.email}</p>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              Available
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="maxBookings">Max Bookings/Day</Label>
-                    <Input
-                      id="maxBookings"
-                      type="number"
-                      min="0"
-                      value={formData.maxBookingsPerDay}
-                      onChange={(e) => setFormData(prev => ({ ...prev, maxBookingsPerDay: parseInt(e.target.value) || 0 }))}
-                    />
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    💡 Select staff members who can provide this service. At least one is required.
+                  </p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="active"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
-                  />
-                  <Label htmlFor="active">Active service</Label>
+
+                {/* Service Settings */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-lg font-medium">Service Settings</h3>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="slotInterval">Booking Time Slots</Label>
+                      <Select 
+                        value={formData.slotInterval.toString()} 
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, slotInterval: parseInt(value) }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="15">Every 15 minutes</SelectItem>
+                          <SelectItem value="30">Every 30 minutes</SelectItem>
+                          <SelectItem value="60">Every hour</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="autoConfirm"
+                          checked={formData.autoConfirm}
+                          onCheckedChange={(checked) => 
+                            setFormData(prev => ({ ...prev, autoConfirm: checked as boolean }))
+                          }
+                        />
+                        <Label htmlFor="autoConfirm" className="text-sm">Auto-confirm bookings</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="allowReschedule"
+                          checked={formData.allowReschedule}
+                          onCheckedChange={(checked) => 
+                            setFormData(prev => ({ ...prev, allowReschedule: checked as boolean }))
+                          }
+                        />
+                        <Label htmlFor="allowReschedule" className="text-sm">Allow rescheduling</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="allowCancellation"
+                          checked={formData.allowCancellation}
+                          onCheckedChange={(checked) => 
+                            setFormData(prev => ({ ...prev, allowCancellation: checked as boolean }))
+                          }
+                        />
+                        <Label htmlFor="allowCancellation" className="text-sm">Allow cancellation</Label>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={createService} disabled={creating}>
+                <Button onClick={createService} disabled={creating} className="bg-primary">
                   {creating ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
+                      Creating Service...
                     </>
                   ) : (
-                    'Create Service'
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Service
+                    </>
                   )}
                 </Button>
               </div>
@@ -738,174 +909,212 @@ export default function ServicesPage() {
 
           {/* Edit Service Dialog */}
           <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Edit Service</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Edit className="h-5 w-5 text-primary" />
+                  Edit Service: {selectedService?.name}
+                </DialogTitle>
                 <DialogDescription>
-                  Update service details and configuration
+                  Update service details, pricing, and staff assignments
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-name">Service Name *</Label>
-                  <Input
-                    id="edit-name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., Hair Cut, Hair Color, Styling"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-description">Description</Label>
-                  <Textarea
-                    id="edit-description"
-                    value={formData.description}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Brief description of the service..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-6 py-4">
+                <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-duration">Duration (minutes) *</Label>
+                    <Label htmlFor="edit-name">Service Name *</Label>
                     <Input
-                      id="edit-duration"
-                      type="number"
-                      min="1"
-                      max="480"
-                      value={formData.duration}
-                      onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+                      id="edit-name"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      className="text-base"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-price">Price (CAD)</Label>
-                    <Input
-                      id="edit-price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                    <Label htmlFor="edit-description">Service Description</Label>
+                    <Textarea
+                      id="edit-description"
+                      value={formData.description}
+                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                      rows={4}
+                      className="text-base"
                     />
                   </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-groupId">Group ID (optional)</Label>
-                  <Input
-                    id="edit-groupId"
-                    value={formData.groupId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, groupId: e.target.value }))}
-                    placeholder="Service group identifier"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-bufferBefore">Buffer Before (min)</Label>
-                    <Input
-                      id="edit-bufferBefore"
-                      type="number"
-                      min="0"
-                      max="60"
-                      value={formData.bufferTimeBefore}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bufferTimeBefore: parseInt(e.target.value) || 0 }))}
-                    />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-duration">Duration</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="edit-duration"
+                          type="number"
+                          min="5"
+                          max="480"
+                          value={formData.duration}
+                          onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+                          className="flex-1"
+                        />
+                        <Select 
+                          value={formData.durationUnit} 
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, durationUnit: value as 'mins' | 'hours' }))}
+                        >
+                          <SelectTrigger className="w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mins">Minutes</SelectItem>
+                            <SelectItem value="hours">Hours</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-price">Price</Label>
+                      <div className="flex gap-2">
+                        <Select 
+                          value={formData.currency} 
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
+                        >
+                          <SelectTrigger className="w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CA$">CA$</SelectItem>
+                            <SelectItem value="US$">US$</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          id="edit-price"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.price}
+                          onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-bufferAfter">Buffer After (min)</Label>
-                    <Input
-                      id="edit-bufferAfter"
-                      type="number"
-                      min="0"
-                      max="60"
-                      value={formData.bufferTimeAfter}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bufferTimeAfter: parseInt(e.target.value) || 0 }))}
-                    />
+                  
+                  {/* Staff Assignment for Edit */}
+                  <div className="space-y-3">
+                    <Label>Staff Assignment</Label>
+                    <div className="border rounded-lg p-4 max-h-48 overflow-y-auto bg-muted/30">
+                      <div className="grid gap-2">
+                        {staffOptions.map((staff) => (
+                          <div key={staff.value} className="flex items-center space-x-3 p-2 rounded border bg-background">
+                            <Checkbox
+                              id={`edit-staff-${staff.value}`}
+                              checked={formData.selectedStaff.includes(staff.value)}
+                              onCheckedChange={(checked) => 
+                                handleFormStaffSelection(staff.value, checked as boolean)
+                              }
+                            />
+                            <div className="flex-1">
+                              <label htmlFor={`edit-staff-${staff.value}`} className="text-sm font-medium cursor-pointer">
+                                {staff.name}
+                              </label>
+                              <p className="text-xs text-muted-foreground">{staff.email}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-maxBookings">Max Bookings/Day</Label>
-                    <Input
-                      id="edit-maxBookings"
-                      type="number"
-                      min="0"
-                      value={formData.maxBookingsPerDay}
-                      onChange={(e) => setFormData(prev => ({ ...prev, maxBookingsPerDay: parseInt(e.target.value) || 0 }))}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="edit-active"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
-                  />
-                  <Label htmlFor="edit-active">Active service</Label>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={updateService} disabled={updating}>
+                <Button onClick={updateService} disabled={updating} className="bg-primary">
                   {updating ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                       Updating...
                     </>
                   ) : (
-                    'Update Service'
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Update Service
+                    </>
                   )}
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
 
-          {/* Staff Assignment Dialog */}
+          {/* Advanced Staff Management Dialog */}
           <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Assign Staff</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  Staff Management
+                </DialogTitle>
                 <DialogDescription>
-                  Select staff members who can provide this service
+                  Manage staff assignment for: <strong>{selectedService?.name}</strong>
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  {staff.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">
-                      No staff members found
-                    </p>
-                  ) : (
-                    staff.map((member) => (
-                      <div key={member.ghl_id} className="flex items-center gap-3 p-2 border rounded">
-                        <input
-                          type="checkbox"
-                          id={`staff-${member.ghl_id}`}
-                          checked={selectedStaffIds.includes(member.ghl_id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedStaffIds(prev => [...prev, member.ghl_id])
-                            } else {
-                              setSelectedStaffIds(prev => prev.filter(id => id !== member.ghl_id))
-                            }
-                          }}
-                        />
-                        <label htmlFor={`staff-${member.ghl_id}`} className="flex-1 cursor-pointer">
-                          <div className="font-medium">{member.name}</div>
-                          <div className="text-sm text-muted-foreground">{member.email}</div>
-                        </label>
-                        <Badge variant={member.isActive ? "default" : "secondary"}>
-                          {member.isActive ? "Active" : "Inactive"}
-                        </Badge>
+              <div className="space-y-4 py-4">
+                <div className="space-y-3">
+                  <Label>Staff Members</Label>
+                  <div className="border rounded-lg p-3 max-h-60 overflow-y-auto bg-muted/30">
+                    {staffOptions.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-6">
+                        No staff members available
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {staffOptions.map((staff) => {
+                          const isCurrentlyAssigned = selectedService?.teamMembers?.some(member => member.userId === staff.value);
+                          return (
+                            <div key={staff.value} className="flex items-center space-x-3 p-2 rounded border bg-background">
+                              <Checkbox
+                                id={`staff-manage-${staff.value}`}
+                                checked={selectedStaffIds.includes(staff.value)}
+                                onCheckedChange={(checked) => 
+                                  handleStaffSelection(staff.value, checked as boolean)
+                                }
+                              />
+                              <div className="flex-1">
+                                <label htmlFor={`staff-manage-${staff.value}`} className="text-sm font-medium cursor-pointer">
+                                  {staff.name}
+                                </label>
+                                <p className="text-xs text-muted-foreground">{staff.email}</p>
+                              </div>
+                              {isCurrentlyAssigned && (
+                                <Badge variant="default" className="text-xs">
+                                  Currently Assigned
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setStaffDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={assignStaffToService} disabled={selectedStaffIds.length === 0}>
-                  Assign Selected Staff
+                <Button 
+                  onClick={() => manageStaff('replace')} 
+                  disabled={assigningStaff}
+                  className="bg-primary"
+                >
+                  {assigningStaff ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Update Assignment
+                    </>
+                  )}
                 </Button>
               </div>
             </DialogContent>
@@ -915,24 +1124,42 @@ export default function ServicesPage() {
           <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete Service</DialogTitle>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete Service
+                </DialogTitle>
                 <DialogDescription>
-                  Are you sure you want to delete this service? This action cannot be undone.
+                  Are you sure you want to permanently delete this service? This action cannot be undone and will remove all associated bookings and staff assignments.
                 </DialogDescription>
               </DialogHeader>
               {selectedService && (
                 <div className="py-4">
-                  <div className="p-4 border rounded-lg bg-destructive/10">
-                    <h4 className="font-medium text-destructive">{selectedService.name}</h4>
-                    {selectedService.description && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {selectedService.description}
-                      </p>
-                    )}
+                  <div className="p-4 border rounded-lg bg-destructive/10 border-destructive/20">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-destructive">{selectedService.name}</h4>
+                        {selectedService.description && (
+                          <p className="text-sm text-muted-foreground">
+                            {selectedService.description.replace(/<[^>]*>/g, '')}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {selectedService.duration ? formatDuration(selectedService.duration) : 'Duration not set'}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {selectedService.teamMembers?.length || 0} staff assigned
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
                   Cancel
                 </Button>
@@ -943,7 +1170,10 @@ export default function ServicesPage() {
                       Deleting...
                     </>
                   ) : (
-                    'Delete Service'
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Service
+                    </>
                   )}
                 </Button>
               </div>
