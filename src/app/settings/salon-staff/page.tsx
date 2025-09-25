@@ -241,7 +241,7 @@ export default function SalonStaffPage() {
               </CardHeader>
               <CardContent>
                 {isMobile ? (
-                  <div className="grid gap-3">
+                  <div className="grid gap-2">
                     {staffData.map((staff) => {
                       const workingDays = getWorkingDaysCount(staff)
                       const scheduleType = workingDays >= 5 ? 'Full Time' : workingDays > 0 ? 'Part Time' : 'Inactive'
@@ -249,55 +249,56 @@ export default function SalonStaffPage() {
                       const workingToday = isDayWorking(staff, today)
                       return (
                         <Card key={getRowId(staff)}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-3">
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                                    {staff["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <div className="font-medium leading-tight">{staff["Barber/Name"]}</div>
-                                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                    <Mail className="h-3.5 w-3.5" />
-                                    {staff["Barber/Email"]}
-                                  </div>
-                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
-                                      {workingDays} {workingDays === 1 ? 'day' : 'days'}
-                                    </Badge>
-                                    <Badge 
-                                      variant={scheduleType === 'Full Time' ? 'default' : scheduleType === 'Part Time' ? 'secondary' : 'outline'}
-                                      className={
-                                        scheduleType === 'Full Time' 
-                                          ? 'bg-green-100 text-green-800 border-green-300' 
-                                          : scheduleType === 'Part Time'
-                                          ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                          : 'bg-red-100 text-red-800 border-red-300'
-                                      }
-                                    >
-                                      {scheduleType}
-                                    </Badge>
-                                    <Badge 
-                                      variant={workingToday ? 'default' : 'secondary'}
-                                      className={
-                                        workingToday 
-                                          ? 'bg-green-100 text-green-800 border-green-300' 
-                                          : 'bg-gray-100 text-gray-800 border-gray-300'
-                                      }
-                                    >
-                                      {workingToday ? 'Working Today' : 'Off Today'}
-                                    </Badge>
-                                  </div>
+                          <CardContent className="p-3">
+                            {/* Row 1: identity */}
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                                  {staff["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="font-medium leading-tight truncate">{staff["Barber/Name"]}</div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {staff["Barber/Email"]}
                                 </div>
                               </div>
-                              <div className="flex flex-col gap-2">
-                                <Button size="sm" onClick={() => manageAvailability(staff)} className="bg-primary hover:bg-primary/90 px-3 h-8">
-                                  <Settings className="h-4 w-4 mr-1.5" />
-                                  Manage
-                                </Button>
+                            </div>
+
+                            {/* Row 2: chips + action */}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1 text-xs">
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
+                                  {workingDays} {workingDays === 1 ? 'day' : 'days'}
+                                </Badge>
+                                <Badge 
+                                  variant={scheduleType === 'Full Time' ? 'default' : scheduleType === 'Part Time' ? 'secondary' : 'outline'}
+                                  className={
+                                    scheduleType === 'Full Time' 
+                                      ? 'bg-green-100 text-green-800 border-green-300' 
+                                      : scheduleType === 'Part Time'
+                                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                      : 'bg-red-100 text-red-800 border-red-300'
+                                  }
+                                >
+                                  {scheduleType}
+                                </Badge>
+                                <Badge 
+                                  variant={workingToday ? 'default' : 'secondary'}
+                                  className={
+                                    workingToday 
+                                      ? 'bg-green-100 text-green-800 border-green-300' 
+                                      : 'bg-gray-100 text-gray-800 border-gray-300'
+                                  }
+                                >
+                                  {workingToday ? 'Working Today' : 'Off Today'}
+                                </Badge>
                               </div>
+                              <Button size="sm" onClick={() => manageAvailability(staff)} className="bg-primary hover:bg-primary/90 px-3 h-8 shrink-0">
+                                <Settings className="h-4 w-4 mr-1.5" />
+                                Manage
+                              </Button>
                             </div>
                           </CardContent>
                         </Card>

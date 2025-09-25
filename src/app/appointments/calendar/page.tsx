@@ -222,6 +222,9 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
   const columnsScrollRef = React.useRef<HTMLDivElement>(null)
   const columnWidth = 220
   const [currentTime, setCurrentTime] = React.useState(new Date())
+  // Visual padding for the time grid so first/last rows aren't clipped
+  const GRID_TOP_PADDING = 48
+  const GRID_BOTTOM_PADDING = 16
 
   // Update current time every minute
   React.useEffect(() => {
@@ -241,7 +244,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     
     const currentMinutes = hour * 60 + minute
     const dayStartMinutes = 8 * 60 // 8 AM
-    const position = ((currentMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    const position = GRID_TOP_PADDING + ((currentMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
     
     return position
   }
@@ -253,14 +256,32 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
       
       const currentTimePosition = getCurrentTimePosition()
       if (currentTimePosition !== null) {
-        // Scroll to current time minus some offset to show context
-        const scrollTop = Math.max(0, currentTimePosition - 120) // Show 2 hours before
-        scrollContainerRef.current.scrollTop = scrollTop
+        // Center the current-time indicator in the viewport for best UX
+        const container = scrollContainerRef.current
+        const containerHeight = container.clientHeight || 0
+        // If the container hasn't been laid out yet, retry shortly
+        if (containerHeight <= 1) {
+          setTimeout(scrollToCurrentTime, 150)
+          return
+        }
+        const totalHeight = timeSlots.length * 60 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
+        const desiredTop = currentTimePosition - (containerHeight / 2)
+        const clampedTop = Math.max(0, Math.min(totalHeight - containerHeight, desiredTop))
+        container.scrollTop = clampedTop
+      } else {
+        // If outside 8AM-8PM, snap to nearest bound
+        const hourNow = new Date().getHours()
+        if (hourNow < 8) {
+          scrollContainerRef.current.scrollTop = 0
+        } else {
+          const totalHeight = timeSlots.length * 60 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
+          scrollContainerRef.current.scrollTop = totalHeight
+        }
       }
     }
 
     // Delay scroll to ensure component is fully rendered
-    const timer = setTimeout(scrollToCurrentTime, 500)
+    const timer = setTimeout(scrollToCurrentTime, 250)
     return () => clearTimeout(timer)
   }, [staff]) // Re-run when staff data loads
 
@@ -330,12 +351,9 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
 
   // Auto-scroll to 8 AM on component mount
   React.useEffect(() => {
-    if (scrollContainerRef.current) {
-      // Scroll to 8 AM position (0 slots * 60px = 0px since we start at 8AM)
-      scrollContainerRef.current.scrollTop = 0
-    }
     if (headerScrollRef.current) headerScrollRef.current.scrollLeft = 0
     if (columnsScrollRef.current) columnsScrollRef.current.scrollLeft = 0
+    // Do not force vertical scroll to 8 AM here; allow current-time autoscroll to take precedence
   }, [staff]) // Trigger after staff data is loaded
 
   // Keep header and body horizontal scroll in sync
@@ -353,15 +371,17 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     }
   }, [headerScrollRef.current, columnsScrollRef.current])
 
-  // Generate time slots from 8AM to 8PM (12-hour range)
+  // Generate time slots from 8:00 AM to 8:00 PM inclusive (30-min increments)
   const generateTimeSlots = () => {
     const slots: string[] = []
-    // 8 AM to 8 PM (8:00 to 20:00) in 30-minute intervals
-    for (let hour = 8; hour <= 20; hour++) {
+    // 8:00 AM → 7:30 PM
+    for (let hour = 8; hour <= 19; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         slots.push(`${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')}`)
       }
     }
+    // Add final 8:00 PM slot, but not 8:30 PM
+    slots.push('20:00')
     return slots
   }
 
@@ -385,12 +405,12 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
     const endMinutes = endHour * 60 + endMinute
     
     // Only show appointments within 8AM-8PM range
-    const dayEndMinutesExclusive = 20 * 60 + 30 // 8:30 PM (end of 8 PM slot)
+    const dayEndMinutesExclusive = 20 * 60 // 8:00 PM end-of-day
     if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
       return { display: 'none' }
     }
     
-    const topOffset = ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
     const height = ((endMinutes - startMinutes) / 30) * 60
     
     return {
@@ -440,7 +460,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
       return { display: 'none' }
     }
     
-    const topOffset = ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
     const height = ((endMinutes - startMinutes) / 30) * 60
     
     return {
@@ -565,8 +585,8 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
       </div>
 
       {/* Scrollable Time grid container */}
-      <div className="max-h-[600px] overflow-y-auto w-full" ref={scrollContainerRef}>
-        <div className="flex w-full" style={{ height: `${timeSlots.length * 60}px` }}>
+      <div className="max-h-[600px] overflow-y-auto w-full pt-2 pb-6" ref={scrollContainerRef}>
+        <div className="flex w-full" style={{ height: `${(timeSlots.length * 60) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[120px] border-r bg-muted/30 flex-shrink-0 relative">
             {timeSlots.map((time, index) => (
@@ -574,7 +594,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                 key={time}
                 className="absolute left-0 right-0 border-b border-border/50 px-3 flex items-center justify-end"
                 style={{ 
-                  top: `${index * 60}px`, 
+                  top: `${GRID_TOP_PADDING + index * 60}px`, 
                   height: '60px'
                 }}
               >
@@ -601,7 +621,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
               h.scrollLeft = sl
             }
           }}>
-            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60}px` }}>
+            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
                 <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
@@ -613,7 +633,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                         time.endsWith(':00') ? 'border-b border-border' : 'border-b border-border/30'
                       }`}
                       style={{ 
-                        top: `${index * 60}px`, 
+                        top: `${GRID_TOP_PADDING + index * 60}px`, 
                         height: '60px'
                       }}
                     />
@@ -626,10 +646,10 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                     
                     return (
                       <div
-                        className="absolute left-0 right-0 border-t-2 border-red-500 z-20"
+                        className="absolute left-0 right-0 border-t-2 border-primary z-20"
                         style={{ top: `${currentTimePosition}px` }}
                       >
-                        <div className="absolute -left-1 -top-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                        <div className="absolute -left-1 -top-1 w-2 h-2 bg-primary rounded-full"></div>
                       </div>
                     )
                   })()}

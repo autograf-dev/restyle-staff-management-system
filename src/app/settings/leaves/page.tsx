@@ -374,7 +374,7 @@ export default function LeavesPage() {
                   </div>
                 ) : (
                   isMobile ? (
-                    <div className="grid gap-3">
+                    <div className="grid gap-2">
                       {leaves.map((leave) => {
                         const staffMember = getStaffByGhlId(leave.ghl_id)
                         const status = getLeaveStatus(leave)
@@ -390,32 +390,37 @@ export default function LeavesPage() {
                         }
                         return (
                           <Card key={leave["🔒 Row ID"]}>
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-start gap-3">
-                                  <Avatar className="h-9 w-9">
-                                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                      {staffMember?.["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase() || 'UK'}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <div className="font-medium leading-tight">{staffMember?.["Barber/Name"] || 'Unknown Staff'}</div>
-                                    <div className="text-xs text-muted-foreground">{staffMember?.["Barber/Email"]}</div>
-                                    <div className="mt-2 flex items-center gap-2 text-xs">
-                                      <Badge variant="outline" className="text-[10px] capitalize">{leave["Event/Name"]}</Badge>
-                                      {getStatusBadge(status)}
-                                    </div>
-                                    <div className="mt-2 text-xs">
-                                      <span className="text-muted-foreground">{startDate ? format(startDate, 'MMM dd, yyyy') : 'Invalid'} </span>
-                                      <span className="mx-1">→</span>
-                                      <span className="text-muted-foreground">{endDate ? format(endDate, 'MMM dd, yyyy') : 'Invalid'}</span>
-                                      <Badge variant="secondary" className="ml-2 text-[10px]">
-                                        {duration > 0 ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Invalid'}
-                                      </Badge>
-                                    </div>
-                                  </div>
+                            <CardContent className="p-3">
+                              {/* Row 1: identity */}
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-9 w-9">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    {staffMember?.["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase() || 'UK'}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <div className="font-medium leading-tight truncate">{staffMember?.["Barber/Name"] || 'Unknown Staff'}</div>
+                                  <div className="text-xs text-muted-foreground truncate">{staffMember?.["Barber/Email"]}</div>
                                 </div>
-                                <div className="flex flex-col gap-2">
+                              </div>
+
+                              {/* Row 2: chips + actions */}
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1 text-xs">
+                                  <Badge variant="outline" className="text-[10px] capitalize">{leave["Event/Name"]}</Badge>
+                                  <span className="hidden sm:inline">{getStatusBadge(status)}</span>
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {startDate ? format(startDate, 'MMM dd, yyyy') : 'Invalid'}
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">to</span>
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {endDate ? format(endDate, 'MMM dd, yyyy') : 'Invalid'}
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {duration > 0 ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Invalid'}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
                                   <Button size="icon" variant="outline" onClick={() => openEditDialog(leave)} disabled={saving} className="h-8 w-8"><Edit className="h-4 w-4"/></Button>
                                   <Button size="icon" variant="outline" onClick={() => openDeleteDialog(leave)} disabled={saving} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
                                 </div>

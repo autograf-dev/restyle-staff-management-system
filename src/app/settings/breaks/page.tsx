@@ -115,7 +115,7 @@ export default function BreaksPage() {
                   </div>
                 ) : (
                 isMobile ? (
-                  <div className="grid gap-3">
+                  <div className="grid gap-2">
                     {blocks.map((b) => {
                       const member = staff.find((s) => s.ghl_id === String(b['ghl_id'] as string))
                       const staffName = String(member?.['Barber/Name'] || String(b['ghl_id'] as string))
@@ -125,59 +125,59 @@ export default function BreaksPage() {
                       const isRecurring = String(b['Block/Recurring']) === 'true'
                       return (
                         <Card key={String(b['🔒 Row ID'])}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-3">
-                                <Avatar className="h-9 w-9">
-                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                    {staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <div className="font-medium leading-tight">{staffName}</div>
-                                  {staffEmail && (
-                                    <div className="text-xs text-muted-foreground">{staffEmail}</div>
-                                  )}
-                                  <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
-                                    <Badge variant={isRecurring ? 'secondary' : 'outline'} className="text-[10px]">{isRecurring ? 'Recurring' : 'One-time'}</Badge>
-                                    {isRecurring ? (
-                                      <div className="flex flex-wrap gap-1">
-                                        {String(b['Block/Recurring Day'] || '')
-                                          .split(',')
-                                          .filter(Boolean)
-                                          .map((d) => (
-                                            <Badge key={d} variant="outline" className="text-[10px]">{d}</Badge>
-                                          ))}
-                                      </div>
-                                    ) : (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {(() => {
-                                          const raw = String(b['Block/Date'] || '-')
-                                          if (!raw || raw === '-') return '-'
-                                          const tryDate = new Date(raw)
-                                          if (!isNaN(tryDate.getTime())) return tryDate.toLocaleDateString('en-US')
-                                          if (raw.includes(',')) return raw.split(',')[0]
-                                          if (raw.includes('T')) return raw.split('T')[0]
-                                          return raw
-                                        })()}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="mt-2 flex items-center gap-2 text-xs">
-                                    <Badge variant="outline" className="text-[10px]">{startDisp}</Badge>
-                                    <span className="text-muted-foreground">to</span>
-                                    <Badge variant="outline" className="text-[10px]">{endDisp}</Badge>
-                                  </div>
-                                  {String(b['Block/Name'] || '') && (
-                                    <div className="mt-2 text-xs text-muted-foreground">{String(b['Block/Name'] || '')}</div>
-                                  )}
-                                </div>
+                          <CardContent className="p-3">
+                            {/* Row 1: Avatar + identity */}
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9">
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                  {staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="font-medium leading-tight truncate">{staffName}</div>
+                                {staffEmail && (
+                                  <div className="text-xs text-muted-foreground truncate">{staffEmail}</div>
+                                )}
                               </div>
-                              <div className="flex flex-col gap-2">
+                            </div>
+
+                            {/* Row 2: chips + actions */}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1 text-xs">
+                                <Badge variant={isRecurring ? 'secondary' : 'outline'} className="text-[10px]">{isRecurring ? 'Recurring' : 'One-time'}</Badge>
+                                {isRecurring ? (
+                                  String(b['Block/Recurring Day'] || '')
+                                    .split(',')
+                                    .filter(Boolean)
+                                    .map((d) => (
+                                      <Badge key={d} variant="outline" className="text-[10px]">{d}</Badge>
+                                    ))
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {(() => {
+                                      const raw = String(b['Block/Date'] || '-')
+                                      if (!raw || raw === '-') return '-'
+                                      const tryDate = new Date(raw)
+                                      if (!isNaN(tryDate.getTime())) return tryDate.toLocaleDateString('en-US')
+                                      if (raw.includes(',')) return raw.split(',')[0]
+                                      if (raw.includes('T')) return raw.split('T')[0]
+                                      return raw
+                                    })()}
+                                  </Badge>
+                                )}
+                                <Badge variant="outline" className="text-[10px]">{startDisp}</Badge>
+                                <span className="text-muted-foreground text-[10px]">to</span>
+                                <Badge variant="outline" className="text-[10px]">{endDisp}</Badge>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
                                 <Button size="icon" variant="outline" onClick={() => { setEditing(b); setOpen(true) }} disabled={saving} className="h-8 w-8"><Edit className="h-4 w-4"/></Button>
                                 <Button size="icon" variant="outline" onClick={() => deleteBlock(b)} disabled={saving} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
                               </div>
                             </div>
+
+                            {String(b['Block/Name'] || '') && (
+                              <div className="mt-1 text-xs text-muted-foreground">{String(b['Block/Name'] || '')}</div>
+                            )}
                           </CardContent>
                         </Card>
                       )
