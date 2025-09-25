@@ -23,7 +23,8 @@ import {
   Trash2,
   ArrowLeft,
   ArrowRight,
-  RefreshCcw
+  RefreshCcw,
+  DollarSign
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, type User } from "@/contexts/user-context"
@@ -184,7 +185,15 @@ function formatDate(date: Date) {
 }
 
 // Staff Overview Component - Acuity-style time grid calendar
-const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[], user: User | null }) => {
+const StaffOverviewView = ({ 
+  appointments, 
+  user, 
+  onAppointmentClick 
+}: { 
+  appointments: Appointment[], 
+  user: User | null,
+  onAppointmentClick: (appointment: Appointment) => void 
+}) => {
   const [staff, setStaff] = React.useState<{
     id: string;
     ghl_id: string;
@@ -731,9 +740,7 @@ const StaffOverviewView = ({ appointments, user }: { appointments: Appointment[]
                         key={appointment.id}
                         className="absolute rounded-md px-3 py-2 cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 border-l-primary bg-primary/10 hover:bg-primary/20 backdrop-blur-sm"
                         style={style}
-                        onClick={() => {
-                          window.location.href = `/appointments?view=details&id=${appointment.id}`
-                        }}
+                        onClick={() => onAppointmentClick(appointment)}
                         title={`${appointment.serviceName} - ${appointment.contactName}`}
                       >
                         <div className="text-sm font-medium text-primary truncate">
@@ -818,7 +825,7 @@ export default function CalendarPage() {
   const { user } = useUser()
   const [currentDate, setCurrentDate] = React.useState(new Date())
   const [view, setView] = React.useState<CalendarView>('day')
-  const [selectedAppointment] = React.useState<Appointment | null>(null)
+  const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
   const [staffView, setStaffView] = React.useState(true) // Default to staff view only
   const [salonHours, setSalonHours] = React.useState<{
@@ -1196,7 +1203,14 @@ export default function CalendarPage() {
                           
                           {/* Staff View Only */}
                           {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
-                            <StaffOverviewView appointments={dayAppointments} user={user} />
+                            <StaffOverviewView 
+                              appointments={dayAppointments} 
+                              user={user} 
+                              onAppointmentClick={(appointment) => {
+                                setSelectedAppointment(appointment)
+                                setDetailsOpen(true)
+                              }}
+                            />
                           ) : (
                             <div className="text-center py-12 text-muted-foreground">
                               <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -1362,18 +1376,23 @@ export default function CalendarPage() {
             )}
           </div>
 
-          {/* Appointment Details Sheet */}
+          {/* Appointment Details Dialog */}
           <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-md">
+            <SheetContent side="right" className="w-full sm:max-w-lg">
               <SheetHeader>
-                <SheetTitle>{selectedAppointment?.serviceName}</SheetTitle>
-                <SheetDescription>Appointment Details</SheetDescription>
+                <SheetTitle className="flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5 text-primary" />
+                  {selectedAppointment?.serviceName || selectedAppointment?.title}
+                </SheetTitle>
+                <SheetDescription>
+                  Appointment Details & Payment
+                </SheetDescription>
               </SheetHeader>
               
               {selectedAppointment && (
                 <div className="mt-6 space-y-6">
-                  {/* Basic Info */}
-                  <div className="space-y-4">
+                  {/* Appointment Info Card */}
+                  <div className="p-4 bg-muted/30 rounded-lg space-y-4">
                     <div className="flex items-center gap-3">
                       <UserIcon className="h-4 w-4 text-muted-foreground" />
                       <div>
@@ -1390,7 +1409,7 @@ export default function CalendarPage() {
                           {selectedAppointment.endTime && ` - ${formatTime(selectedAppointment.endTime)}`}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {selectedAppointment.startTime && new Date(selectedAppointment.startTime).toLocaleDateString()}
+                          {selectedAppointment.startTime && formatDate(new Date(selectedAppointment.startTime))}
                         </div>
                       </div>
                     </div>
@@ -1402,6 +1421,14 @@ export default function CalendarPage() {
                           {`${selectedAppointment.assignedStaffFirstName || ''} ${selectedAppointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
                         </div>
                         <div className="text-sm text-muted-foreground">Staff Member</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{selectedAppointment.serviceName || selectedAppointment.title}</div>
+                        <div className="text-sm text-muted-foreground">Service</div>
                       </div>
                     </div>
                     
@@ -1416,8 +1443,9 @@ export default function CalendarPage() {
                     )}
                   </div>
                   
-                  {/* Status */}
-                  <div>
+                  {/* Status Badge */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Status:</span>
                     <Badge 
                       variant={
                         selectedAppointment.appointment_status === 'confirmed' ? 'default' :
@@ -1429,20 +1457,54 @@ export default function CalendarPage() {
                     </Badge>
                   </div>
                   
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-4">
-                    <Button size="sm" variant="outline" className="flex-1">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex-1">
+                  {/* Payment Section */}
+                  {selectedAppointment.appointment_status === 'confirmed' && (
+                    <div className="p-4 border-2 border-primary/20 bg-primary/5 rounded-lg">
+                      <div className="text-center space-y-3">
+                        <div className="flex items-center justify-center gap-2 text-primary">
+                          <DollarSign className="h-5 w-5" />
+                          <span className="font-semibold">Ready for Payment</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Process payment for this appointment with tip calculation and staff distribution
+                        </p>
+                        <Button 
+                          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                          onClick={() => {
+                            router.push(`/checkout?appointmentId=${selectedAppointment.id}&calendarId=${selectedAppointment.calendar_id}&staffId=${selectedAppointment.assigned_user_id}`)
+                          }}
+                        >
+                          <DollarSign className="h-4 w-4 mr-2" />
+                          Complete Checkout
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Action Buttons */}
+                  <div className="flex flex-col gap-2 pt-4 border-t">
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        setDetailsOpen(false)
+                        router.push(`/appointments?view=details&id=${selectedAppointment.id}`)
+                      }}
+                    >
                       <Eye className="h-4 w-4 mr-2" />
-                      View Full
+                      View Full Details
                     </Button>
-                    <Button size="sm" variant="destructive" className="flex-1">
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button size="sm" variant="outline">
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
