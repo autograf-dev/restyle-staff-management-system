@@ -872,7 +872,17 @@ function BookingsPageInner() {
           toast.success("Booking rescheduled successfully")
           setRescheduleOpen(false)
           resetRescheduleForm()
-          await fetchBookings()
+          // Clear any view param to avoid reopening a dialog on reload
+          try {
+            const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
+            params.delete("view")
+            params.delete("id")
+            const qs = params.toString()
+            router.replace(qs ? `?${qs}` : "")
+          } catch {}
+          // Invalidate cache and force refresh
+          try { localStorage.removeItem('restyle.bookings.cache') } catch {}
+          await fetchBookings(true)
         } else {
           throw new Error(data.error || 'Reschedule failed')
         }
@@ -1286,9 +1296,21 @@ function BookingsPageInner() {
       }
 
       toast.success("Booking created successfully!")
+      // Close dialog and clear URL param (?view=new)
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
-      await fetchBookings()
+      try {
+        const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
+        params.delete("view")
+        params.delete("id")
+        const qs = params.toString()
+        router.replace(qs ? `?${qs}` : "")
+      } catch {}
+      // Invalidate cache and force refresh
+      try { localStorage.removeItem('restyle.bookings.cache') } catch {}
+      await fetchBookings(true)
+      // Refresh working slots data so the booked time is no longer offered when reopening
+      try { await fetchNewAppWorkingSlots() } catch {}
     } catch (error) {
       console.error('New appointment error:', error)
       toast.error(`Failed to create booking: ${error instanceof Error ? error.message : 'Unknown error'}`)
