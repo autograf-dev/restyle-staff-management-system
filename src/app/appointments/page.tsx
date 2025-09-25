@@ -530,8 +530,6 @@ function BookingsPageInner() {
         setSelected(found)
         setDetailsOpen(true)
       }
-    } else if (view === "new") {
-      setNewAppointmentOpen(true)
     }
   }, [searchParams, data])
 
@@ -541,10 +539,6 @@ function BookingsPageInner() {
       const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
       params.set("view", "details")
       params.set("id", selected.id)
-      router.replace(`?${params.toString()}`)
-    } else if (newAppointmentOpen) {
-      const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
-      params.set("view", "new")
       router.replace(`?${params.toString()}`)
     } else {
       const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
@@ -1493,9 +1487,10 @@ function BookingsPageInner() {
       header: "Staff",
       cell: ({ row }) => {
         const staffName = `${row.original.assignedStaffFirstName || ''} ${row.original.assignedStaffLastName || ''}`.trim()
+        const fallback = row.original.assigned_user_id ? 'Assigned Staff' : 'Any available staff'
         return (
           <div className="text-sm">
-            {staffName || 'Unassigned'}
+            {staffName || fallback}
           </div>
         )
       },
@@ -1568,9 +1563,6 @@ function BookingsPageInner() {
                 <Button variant="outline" onClick={() => fetchBookings(true)} title="Refresh (bypass cache)">
                   <RefreshCcw className="h-4 w-4" />
                 </Button>
-                <div className="text-xs text-muted-foreground hidden md:block" title="Last updated">
-                  {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : ''}
-                </div>
                 <Button onClick={() => setNewAppointmentOpen(true)} className="bg-primary text-primary-foreground">
                   <Calendar className="h-4 w-4 mr-2" />
                   Add Booking
@@ -1777,7 +1769,7 @@ function BookingsPageInner() {
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Assigned Staff</label>
                       <p className="mt-1 text-sm">
-                        {`${selected.assignedStaffFirstName || ''} ${selected.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
+                        {`${selected.assignedStaffFirstName || ''} ${selected.assignedStaffLastName || ''}`.trim() || (selected.assigned_user_id ? 'Assigned Staff' : 'Any available staff')}
                 </p>
               </div>
 
