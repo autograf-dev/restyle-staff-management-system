@@ -817,7 +817,7 @@ export default function CalendarPage() {
   const { data: appointments, loading, refresh } = useAppointments()
   const { user } = useUser()
   const [currentDate, setCurrentDate] = React.useState(new Date())
-  const [view, setView] = React.useState<CalendarView>('month')
+  const [view, setView] = React.useState<CalendarView>('day')
   const [selectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
   const [staffView, setStaffView] = React.useState(true) // Default to staff view only
