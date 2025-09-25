@@ -22,7 +22,8 @@ import {
   Edit,
   Trash2,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  RefreshCcw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, type User } from "@/contexts/user-context"
@@ -81,11 +82,24 @@ type CalendarDay = {
 function useAppointments() {
   const [data, setData] = React.useState<Appointment[]>([])
   const [loading, setLoading] = React.useState<boolean>(true)
+  const [lastUpdated, setLastUpdated] = React.useState<number>(0)
 
   React.useEffect(() => {
-    const fetchAppointments = async () => {
+    const fetchAppointments = async (forceRefresh: boolean = false) => {
       setLoading(true)
       try {
+        // Cache read (10 min TTL)
+        try {
+          const cached = JSON.parse(localStorage.getItem('restyle.calendar.appointments') || 'null') as { data: Appointment[]; fetchedAt: number } | null
+          const ttl = 10 * 60 * 1000
+          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
+            setData(cached.data || [])
+            setLastUpdated(cached.fetchedAt)
+            setLoading(false)
+            return
+          }
+        } catch {}
+
         const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getAllBookings")
         if (!res.ok) throw new Error("Failed to fetch appointments")
         const json = await res.json()
@@ -129,7 +143,11 @@ function useAppointments() {
           })
         )
         
-        setData(enrichedBookings.filter(apt => apt.startTime)) // Only include appointments with time
+        const filtered = enrichedBookings.filter(apt => apt.startTime)
+        setData(filtered)
+        const nowTs = Date.now()
+        setLastUpdated(nowTs)
+        try { localStorage.setItem('restyle.calendar.appointments', JSON.stringify({ data: filtered, fetchedAt: nowTs })) } catch {}
       } catch (error) {
         console.error("Failed to fetch appointments:", error)
         toast.error("Failed to load appointments")
@@ -139,9 +157,12 @@ function useAppointments() {
     }
 
     fetchAppointments()
+    const interval = setInterval(() => fetchAppointments(true), 10 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
-  return { data, loading }
+  const refresh = () => { try { localStorage.removeItem('restyle.calendar.appointments') } catch {}; /* trigger by effect on next mount */ }
+  return { data, loading, refresh, lastUpdated }
 }
 
 // Utility functions
@@ -773,7 +794,7 @@ function getYearMonths(year: number) {
 
 export default function CalendarPage() {
   const router = useRouter()
-  const { data: appointments, loading } = useAppointments()
+  const { data: appointments, loading, refresh } = useAppointments()
   const { user } = useUser()
   const [currentDate, setCurrentDate] = React.useState(new Date())
   const [view, setView] = React.useState<CalendarView>('month')
@@ -1086,7 +1107,13 @@ export default function CalendarPage() {
                         Year
                       </Button>
                     </div>
-                    
+                    <button
+                      className="inline-flex h-8 w-8 items-center justify-center rounded border"
+                      title="Refresh (bypass cache)"
+                      onClick={() => refresh()}
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </button>
                     <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
                       <Plus className="h-4 w-4 mr-2" />
                       New Appointment

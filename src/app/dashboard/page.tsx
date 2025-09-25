@@ -20,7 +20,8 @@ import {
   AlertCircle,
   UserCheck,
   UserX,
-  CalendarDays
+  CalendarDays,
+  RefreshCcw
 } from "lucide-react"
 import { 
   LineChart, 
@@ -82,9 +83,10 @@ function useAppointments() {
   const [data, setData] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<number>(0)
 
   useEffect(() => {
-    const fetchAppointments = async () => {
+    const fetchAppointments = async (forceRefresh: boolean = false) => {
       setLoading(true)
       setError(null)
       
@@ -92,6 +94,18 @@ function useAppointments() {
       const { signal } = controller
 
       try {
+        // Try cache first (10 minutes TTL)
+        try {
+          const cached = JSON.parse(localStorage.getItem('restyle.dashboard.appointments') || 'null') as { data: Appointment[]; fetchedAt: number } | null
+          const ttl = 10 * 60 * 1000
+          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
+            setData(cached.data || [])
+            setLastUpdated(cached.fetchedAt)
+            setLoading(false)
+            return () => controller.abort()
+          }
+        } catch {}
+
         // Use the correct endpoint from appointments page
         const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getAllBookings", { signal })
         if (!res.ok) {
@@ -163,6 +177,9 @@ function useAppointments() {
         
         if (!signal.aborted) {
           setData(enrichedBookings)
+          const nowTs = Date.now()
+          setLastUpdated(nowTs)
+          try { localStorage.setItem('restyle.dashboard.appointments', JSON.stringify({ data: enrichedBookings, fetchedAt: nowTs })) } catch {}
         }
       } catch (error) {
         if (!signal.aborted) {
@@ -179,18 +196,42 @@ function useAppointments() {
     }
 
     fetchAppointments()
+
+    // Auto-refresh every 10 minutes
+    const interval = setInterval(() => fetchAppointments(true), 10 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
-  return { data, loading, error }
+  const refresh = () => {
+    try { localStorage.removeItem('restyle.dashboard.appointments') } catch {}
+    // Trigger a fresh fetch
+    ;(async () => {
+      setLoading(true)
+      try { await fetch("/api/clear-auth-cookie") } catch {}
+      // Reuse effect logic by calling endpoint directly
+      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getAllBookings")
+      const json = await res.json().catch(() => ({}))
+      const bookings = json?.bookings || []
+      const limited = bookings.slice(0, 50)
+      setData(limited)
+      const nowTs = Date.now()
+      setLastUpdated(nowTs)
+      try { localStorage.setItem('restyle.dashboard.appointments', JSON.stringify({ data: limited, fetchedAt: nowTs })) } catch {}
+      setLoading(false)
+    })()
+  }
+
+  return { data, loading, error, lastUpdated, refresh }
 }
 
 function useContacts() {
   const [data, setData] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<number>(0)
 
   useEffect(() => {
-    const fetchContacts = async () => {
+    const fetchContacts = async (forceRefresh: boolean = false) => {
       setLoading(true)
       setError(null)
       
@@ -198,6 +239,17 @@ function useContacts() {
       const { signal } = controller
 
       try {
+        try {
+          const cached = JSON.parse(localStorage.getItem('restyle.dashboard.contacts') || 'null') as { data: Contact[]; fetchedAt: number } | null
+          const ttl = 10 * 60 * 1000
+          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
+            setData(cached.data || [])
+            setLastUpdated(cached.fetchedAt)
+            setLoading(false)
+            return () => controller.abort()
+          }
+        } catch {}
+
         // Use the correct endpoint with limit for dashboard performance
         const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=1&limit=500", { signal })
         if (!res.ok) {
@@ -220,6 +272,9 @@ function useContacts() {
         
         if (!signal.aborted) {
           setData(mapped)
+          const nowTs = Date.now()
+          setLastUpdated(nowTs)
+          try { localStorage.setItem('restyle.dashboard.contacts', JSON.stringify({ data: mapped, fetchedAt: nowTs })) } catch {}
         }
       } catch (error) {
         if (!signal.aborted) {
@@ -236,29 +291,48 @@ function useContacts() {
     }
 
     fetchContacts()
+    const interval = setInterval(() => fetchContacts(true), 10 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
-  return { data, loading, error }
+  const refresh = () => { try { localStorage.removeItem('restyle.dashboard.contacts') } catch {} }
+  return { data, loading, error, lastUpdated, refresh }
 }
 
 function useStaff() {
   const [data, setData] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<number>(0)
 
   useEffect(() => {
-    const fetchStaff = async () => {
+    const fetchStaff = async (forceRefresh: boolean = false) => {
       setLoading(true)
       setError(null)
       
       try {
+        try {
+          const cached = JSON.parse(localStorage.getItem('restyle.dashboard.staff') || 'null') as { data: Staff[]; fetchedAt: number } | null
+          const ttl = 10 * 60 * 1000
+          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
+            setData(cached.data || [])
+            setLastUpdated(cached.fetchedAt)
+            setLoading(false)
+            return
+          }
+        } catch {}
+
         const res = await fetch('/api/barber-hours')
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         }
         
         const json = await res.json()
-        setData(json?.data || [])
+        const mapped = json?.data || []
+        setData(mapped)
+        const nowTs = Date.now()
+        setLastUpdated(nowTs)
+        try { localStorage.setItem('restyle.dashboard.staff', JSON.stringify({ data: mapped, fetchedAt: nowTs })) } catch {}
       } catch (error) {
         console.error("Failed to fetch staff:", error)
         setError(error instanceof Error ? error.message : 'Unknown error')
@@ -268,9 +342,12 @@ function useStaff() {
     }
 
     fetchStaff()
+    const interval = setInterval(() => fetchStaff(true), 10 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
-  return { data, loading, error }
+  const refresh = () => { try { localStorage.removeItem('restyle.dashboard.staff') } catch {} }
+  return { data, loading, error, lastUpdated, refresh }
 }
 
 // Utility functions
@@ -298,9 +375,9 @@ function getAppointmentStatus(appointment: Appointment) {
 
 export default function DashboardPage() {
   const { user } = useUser()
-  const { data: appointments, loading: appointmentsLoading, error: appointmentsError } = useAppointments()
-  const { data: contacts, loading: contactsLoading, error: contactsError } = useContacts()
-  const { data: staff, loading: staffLoading, error: staffError } = useStaff()
+  const { data: appointments, loading: appointmentsLoading, error: appointmentsError, refresh: refreshAppointments } = useAppointments()
+  const { data: contacts, loading: contactsLoading, error: contactsError, refresh: refreshContacts } = useContacts()
+  const { data: staff, loading: staffLoading, error: staffError, refresh: refreshStaff } = useStaff()
 
   // Scope data for barbers
   const scopedAppointments = useMemo(() => {
@@ -539,6 +616,13 @@ export default function DashboardPage() {
                   Data Loading Issues
                 </Badge>
               )}
+              <button
+                className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded border text-xs"
+                title="Refresh (bypass cache)"
+                onClick={() => { refreshAppointments(); refreshContacts(); refreshStaff(); }}
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </button>
             </div>
           </header>
 
