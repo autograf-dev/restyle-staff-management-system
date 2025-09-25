@@ -168,7 +168,18 @@ export default function BreaksPage() {
                                 </div>
                               ) : (
                                 <Badge variant="outline" className="w-fit text-[11px]">
-                                  {String(b['Block/Date'] || '-')}
+                                  {(() => {
+                                    const raw = String(b['Block/Date'] || '-')
+                                    if (!raw || raw === '-') return '-'
+                                    const tryDate = new Date(raw)
+                                    if (!isNaN(tryDate.getTime())) {
+                                      return tryDate.toLocaleDateString('en-US')
+                                    }
+                                    // Fallbacks for non-ISO strings
+                                    if (raw.includes(',')) return raw.split(',')[0]
+                                    if (raw.includes('T')) return raw.split('T')[0]
+                                    return raw
+                                  })()}
                                 </Badge>
                               )}
                             </div>
