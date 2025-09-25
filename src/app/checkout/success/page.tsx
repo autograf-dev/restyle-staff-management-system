@@ -16,7 +16,7 @@ import {
   Mail,
   Phone
 } from "lucide-react"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -43,7 +43,7 @@ interface PaymentResult {
   receiptUrl?: string
 }
 
-export default function CheckoutSuccessPage() {
+function CheckoutSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -387,5 +387,27 @@ export default function CheckoutSuccessPage() {
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>
+  )
+}
+
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={
+      <RoleGuard>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <div className="flex items-center justify-center min-h-screen">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p>Loading...</p>
+              </div>
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </RoleGuard>
+    }>
+      <CheckoutSuccessContent />
+    </Suspense>
   )
 }
