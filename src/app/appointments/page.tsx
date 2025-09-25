@@ -231,9 +231,22 @@ function useBookings() {
             const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${details.assigned_user_id}`, { signal })
             if (staffRes.ok && !signal.aborted) {
               const staffData = await staffRes.json()
-              if (staffData.firstName) {
-                details.assignedStaffFirstName = staffData.firstName
-                details.assignedStaffLastName = staffData.lastName
+              // Derive readable name with robust fallbacks (mirrors supabase.vue)
+              const derivedName = (
+                staffData?.data?.name ||
+                staffData?.name ||
+                staffData?.fullName ||
+                staffData?.displayName ||
+                [staffData?.staff?.firstName, staffData?.staff?.lastName].filter(Boolean).join(' ') ||
+                [staffData?.users?.firstName, staffData?.users?.lastName].filter(Boolean).join(' ') ||
+                [staffData?.firstName, staffData?.lastName].filter(Boolean).join(' ') ||
+                staffData?.user?.name ||
+                ''
+              ) as string
+              if (derivedName) {
+                const parts = String(derivedName).trim().split(/\s+/)
+                details.assignedStaffFirstName = parts[0] || ''
+                details.assignedStaffLastName = parts.slice(1).join(' ') || ''
               }
             }
           } catch (error) {
