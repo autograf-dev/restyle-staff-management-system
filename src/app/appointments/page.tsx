@@ -306,29 +306,24 @@ function useBookings() {
 
 function formatDateTime(isoString?: string) {
   if (!isoString) return 'N/A'
-  try {
-    const date = new Date(isoString)
-    
-    // Debug: Log the original ISO string and parsed date
-    console.log('Original ISO:', isoString)
-    console.log('Parsed Date (UTC):', date.toISOString())
-    console.log('Local time (no timezone):', date.toLocaleString('en-US'))
-    console.log('Edmonton time:', date.toLocaleString('en-US', { timeZone: 'America/Edmonton' }))
-    
-    // If the backend is already storing times in local Edmonton time,
-    // we should NOT apply timezone conversion again
-    // Let's try without timezone conversion first
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short'
-    })
-  } catch {
-    return isoString
-  }
+  // Render the wall time exactly as provided by API (no timezone conversion)
+  // Expected formats include: YYYY-MM-DDTHH:mm:ss.SSS±HH:MM or YYYY-MM-DDTHH:mm:ss±HH:MM
+  const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/) 
+  if (!match) return isoString
+
+  const year = parseInt(match[1], 10)
+  const month = parseInt(match[2], 10)
+  const day = parseInt(match[3], 10)
+  let hour24 = parseInt(match[4], 10)
+  const minute = parseInt(match[5], 10)
+
+  const ampm = hour24 >= 12 ? 'PM' : 'AM'
+  const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
+
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const datePart = `${monthNames[month - 1]} ${day}, ${year}`
+  const timePart = `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`
+  return `${datePart}, ${timePart}`
 }
 
 function formatDuration(startIso?: string, endIso?: string) {
