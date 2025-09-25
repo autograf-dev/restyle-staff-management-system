@@ -95,34 +95,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           }]),
     ]
 
-    // Settings section varies by role
+    // Manage section varies by role
     if (user?.role === 'barber') {
-      const myHoursUrl = user?.ghlId ? `${prefix}/settings/staff-hours/${user.ghlId}` : `${prefix}/settings/staff-hours`
+      const myHoursUrl = user?.ghlId ? `${prefix}/manage/staff-hours/${user.ghlId}` : `${prefix}/manage/staff-hours`
       items.push({
-        title: "Settings",
+        title: "Manage",
         url: "#",
         icon: Settings,
         isActive: true,
         items: [
           { title: "My Hours", url: myHoursUrl },
-          { title: "My Holidays", url: `${prefix}/settings/leaves` },
-          { title: "My Breaks", url: `${prefix}/settings/breaks` },
+          { title: "My Holidays", url: `${prefix}/manage/leaves` },
+          { title: "My Breaks", url: `${prefix}/manage/breaks` },
         ],
       })
     } else {
       // Admin/manager view
       items.push({
-        title: "Settings",
+        title: "Manage",
         url: "#",
         icon: Settings,
         isActive: true,
         items: [
-          { title: "Services", url: `${prefix}/settings/services` },
-          { title: "Salon Hours", url: `${prefix}/settings/salon-hours` },
-          { title: "Stylists", url: `${prefix}/settings/salon-staff` },
-          { title: "Staff Hours", url: `${prefix}/settings/staff-hours` },
-          { title: "Holidays", url: `${prefix}/settings/leaves` },
-          { title: "Breaks", url: `${prefix}/settings/breaks` },
+          { title: "Services", url: `${prefix}/manage/services` },
+          { title: "Salon Hours", url: `${prefix}/manage/salon-hours` },
+          { title: "Stylists", url: `${prefix}/manage/stylists` },
+          { title: "Holidays", url: `${prefix}/manage/leaves` },
+          { title: "Breaks", url: `${prefix}/manage/breaks` },
           ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams" }] : []),
         ],
       })
