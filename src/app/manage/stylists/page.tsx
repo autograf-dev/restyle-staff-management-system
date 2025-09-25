@@ -1,6 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { AppSidebar } from "@/components/app-sidebar"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import { RoleGuard } from "@/components/role-guard"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +47,7 @@ export default function StylistsPage() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   
   // State for creating new users
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -55,13 +60,14 @@ export default function StylistsPage() {
   })
 
   // Statistics calculated from staff data
-  const totalStylists = staff.length
-  const activeStylists = staff.filter(member => member.role === 'barber').length
-  const adminStylists = staff.filter(member => member.role === 'admin').length
+  const totalStylists = Array.isArray(staff) ? staff.length : 0
+  const activeStylists = Array.isArray(staff) ? staff.filter(member => member.role === 'barber').length : 0
+  const adminStylists = Array.isArray(staff) ? staff.filter(member => member.role === 'admin').length : 0
 
   // Fetch staff data
   const fetchStaff = useCallback(async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const response = await fetch('/api/getUsers', {
         method: 'GET',
@@ -72,15 +78,20 @@ export default function StylistsPage() {
       
       if (response.ok) {
         const data = await response.json()
-        setStaff(data)
-        if (data.length > 0 && !selectedStaff) {
-          setSelectedStaff(data[0])
+        const staffArray = Array.isArray(data) ? data : []
+        setStaff(staffArray)
+        if (staffArray.length > 0 && !selectedStaff) {
+          setSelectedStaff(staffArray[0])
         }
       } else {
-        console.error('Failed to fetch staff:', response.statusText)
+        const errorMsg = `Failed to fetch staff: ${response.status} ${response.statusText}`
+        console.error(errorMsg)
+        setError(errorMsg)
       }
     } catch (error) {
-      console.error('Error fetching staff:', error)
+      const errorMsg = `Error fetching staff: ${error}`
+      console.error(errorMsg)
+      setError(errorMsg)
     } finally {
       setIsLoading(false)
     }
@@ -141,7 +152,7 @@ export default function StylistsPage() {
         
         setSelectedStaff(updatedStaff)
         setStaff(prevStaff => 
-          prevStaff.map(s => s.ghl_id === selectedStaff.ghl_id ? updatedStaff : s)
+          Array.isArray(prevStaff) ? prevStaff.map(s => s.ghl_id === selectedStaff.ghl_id ? updatedStaff : s) : []
         )
       }
     } catch (error) {
@@ -199,7 +210,8 @@ export default function StylistsPage() {
         if (response.ok) {
           await fetchStaff()
           if (selectedStaff?.ghl_id === ghlId) {
-            setSelectedStaff(staff.filter(s => s.ghl_id !== ghlId)[0] || null)
+            const remainingStaff = Array.isArray(staff) ? staff.filter(s => s.ghl_id !== ghlId) : []
+            setSelectedStaff(remainingStaff[0] || null)
           }
         }
       } catch (error) {
@@ -212,9 +224,32 @@ export default function StylistsPage() {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+        <div className="text-red-500 text-center">
+          <h2 className="text-xl font-semibold mb-2">Error Loading Stylists</h2>
+          <p>{error}</p>
+        </div>
+        <Button onClick={fetchStaff}>Try Again</Button>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header with Stats */}
+    <RoleGuard requiredRole="admin">
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center gap-2">
+            <div className="flex items-center gap-2 px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
+            </div>
+          </header>
+          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+            <div className="space-y-6">
+              {/* Header with Stats */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Stylists</h1>
@@ -277,7 +312,7 @@ export default function StylistsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {staff.map((member) => (
+                {Array.isArray(staff) && staff.map((member) => (
                   <Card
                     key={member.ghl_id}
                     className={`cursor-pointer transition-colors hover:bg-accent ${
@@ -381,7 +416,7 @@ export default function StylistsPage() {
               {isMobile ? (
                 // Mobile Card View
                 <div className="space-y-4">
-                  {staff.map((member) => (
+                  {Array.isArray(staff) && staff.map((member) => (
                     <Card key={member.ghl_id}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
@@ -426,7 +461,7 @@ export default function StylistsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {staff.map((member) => (
+                    {Array.isArray(staff) && staff.map((member) => (
                       <TableRow key={member.ghl_id}>
                         <TableCell className="font-medium">
                           {member.first_name} {member.last_name}
@@ -522,6 +557,10 @@ export default function StylistsPage() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </RoleGuard>
   )
 }
