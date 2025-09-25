@@ -11,9 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TimePicker } from '@/components/ui/time-picker'
 import { Switch } from '@/components/ui/switch'
-import { useUser } from '@/contexts/user-context'
 import { useIsMobile } from '@/hooks/use-mobile'
-import '@/lib/timeUtils'
 import { Calendar, Clock, Plus, Settings, Trash2, User, Users } from 'lucide-react'
 
 type StaffMember = {
