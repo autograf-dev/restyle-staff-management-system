@@ -314,7 +314,7 @@ function formatDateTime(isoString?: string) {
   const year = parseInt(match[1], 10)
   const month = parseInt(match[2], 10)
   const day = parseInt(match[3], 10)
-  let hour24 = parseInt(match[4], 10)
+  const hour24 = parseInt(match[4], 10)
   const minute = parseInt(match[5], 10)
 
   const ampm = hour24 >= 12 ? 'PM' : 'AM'
