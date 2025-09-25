@@ -118,6 +118,41 @@ export function LeaveDialog({
       return
     }
 
+    // Prevent creating leave on salon closed days
+    try {
+      const res = await fetch('/api/business-hours')
+      const json = await res.json().catch(() => ({ ok: false }))
+      if (json?.ok) {
+        const isClosed = (d: Date) => {
+          const dow = d.getDay()
+          const day = (json.data || []).find((x: { day_of_week: number }) => x.day_of_week === dow)
+          return day && day.is_open === false
+        }
+        if (isClosed(startDate) || isClosed(endDate)) {
+          toast.error('Salon is closed on selected day(s)')
+          return
+        }
+      }
+    } catch {}
+
+    // Optional: warn if outside staff working hours (non-blocking)
+    try {
+      const res = await fetch('/api/barber-hours')
+      const json = await res.json().catch(() => ({ ok: false }))
+      if (json?.ok) {
+        const row = (json.data || []).find((s: Record<string, unknown>) => String(s.ghl_id || '') === selectedStaff)
+        if (row) {
+          const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+          const startDay = dayNames[startDate.getDay()]
+          const startVal = Number(row[`${startDay}/Start Value` as keyof typeof row] as number | string | undefined || 0)
+          const endVal = Number(row[`${startDay}/End Value` as keyof typeof row] as number | string | undefined || 0)
+          if (startVal === 0 && endVal === 0) {
+            toast.warning('Note: Staff is marked off on the start date; creating full-day leave')
+          }
+        }
+      }
+    } catch {}
+
     try {
       setSaving(true)
       

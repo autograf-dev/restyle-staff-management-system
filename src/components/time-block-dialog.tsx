@@ -86,12 +86,46 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
       if (json?.ok) {
         const dow = date ? new Date(date).getDay() : new Date().getDay()
         const day = (json.data || []).find((d: { day_of_week: number }) => d.day_of_week === dow)
+        if (!day || day.is_open === false) {
+          toast.error('Salon is closed on the selected day')
+          return
+        }
         if (day && day.is_open) {
           const minStart = Number(day.open_time ?? 0)
           const maxEnd = Number(day.close_time ?? 24*60)
           if (startMin < minStart || endMin > maxEnd) {
             toast.error('Break must be within salon working hours')
             return
+          }
+        }
+      }
+    } catch {}
+
+    // Enforce staff working hours / off-day bounds
+    try {
+      const res = await fetch('/api/barber-hours')
+      const json = await res.json().catch(() => ({ ok: false }))
+      if (json?.ok) {
+        const staffRow = (json.data || []).find((s: Record<string, unknown>) => String(s.ghl_id || '') === selectedStaff)
+        if (staffRow) {
+          const checkDay = (dayName: string) => {
+            const startVal = Number(staffRow[`${dayName}/Start Value` as keyof typeof staffRow] as number | string | undefined || 0)
+            const endVal = Number(staffRow[`${dayName}/End Value` as keyof typeof staffRow] as number | string | undefined || 0)
+            if (startVal === 0 && endVal === 0) return { ok: false, reason: 'Staff is off that day' }
+            if (startMin < startVal || endMin > endVal) return { ok: false, reason: 'Break must be within staff working hours' }
+            return { ok: true }
+          }
+
+          const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+          if (recurring) {
+            for (const d of days) {
+              const resCheck = checkDay(d)
+              if (!resCheck.ok) { toast.error(resCheck.reason); return }
+            }
+          } else {
+            const dow = (date ? date.getDay() : new Date().getDay())
+            const resCheck = checkDay(dayNames[dow])
+            if (!resCheck.ok) { toast.error(resCheck.reason); return }
           }
         }
       }
