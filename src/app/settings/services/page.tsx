@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface Service {
   id: string
@@ -78,6 +79,7 @@ export default function ServicesPage() {
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [assigningStaff, setAssigningStaff] = useState(false)
+  const isMobile = useIsMobile()
 
   // Form states - matching GoHighLevel service creation
   const [formData, setFormData] = useState<ServiceFormData>({
@@ -492,7 +494,7 @@ export default function ServicesPage() {
               </Card>
             </div>
 
-            {/* Services Table */}
+            {/* Services List */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -523,156 +525,239 @@ export default function ServicesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[300px]">Service Details</TableHead>
-                          <TableHead>Duration</TableHead>
-                          <TableHead>Assigned Staff</TableHead>
-                          <TableHead>Price</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {services.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={5} className="h-32 text-center">
-                              <div className="flex flex-col items-center gap-3">
-                                <div className="p-4 rounded-full bg-muted">
-                                  <SettingsIcon className="h-8 w-8 text-muted-foreground" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">No services found</p>
-                                  <p className="text-sm text-muted-foreground">Create your first service to get started!</p>
-                                </div>
+                  isMobile ? (
+                    <div className="grid gap-3">
+                      {services.length === 0 ? (
+                        <Card>
+                          <CardContent className="p-6 text-center">
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="p-4 rounded-full bg-muted">
+                                <SettingsIcon className="h-8 w-8 text-muted-foreground" />
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          services.map((service) => (
-                            <TableRow key={service.id} className="hover:bg-muted/50">
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="font-medium flex items-center gap-2">
+                              <div>
+                                <p className="font-medium">No services found</p>
+                                <p className="text-sm text-muted-foreground">Create your first service to get started!</p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        services.map((service) => (
+                          <Card key={service.id}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium leading-tight flex items-center gap-2">
                                     {service.name}
-                                    <Badge variant="outline" className="text-xs">Service</Badge>
+                                    <Badge variant="outline" className="text-[10px]">Service</Badge>
                                   </div>
                                   {service.description && (
-                                    <div className="text-sm text-muted-foreground max-w-xs line-clamp-2">
-                                      {service.description.replace(/<[^>]*>/g, '').substring(0, 120)}
-                                      {service.description.length > 120 ? '...' : ''}
+                                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                      {service.description.replace(/<[^>]*>/g, '')}
                                     </div>
                                   )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Clock className="h-4 w-4 text-muted-foreground" />
-                                  <span className="font-medium">
-                                    {service.duration && service.duration > 0
-                                      ? formatDuration(service.duration)
-                                      : <span className="text-muted-foreground italic">Not set</span>
-                                    }
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium">{service.teamMembers?.length || 0} staff</span>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                      {service.duration && service.duration > 0 ? formatDuration(service.duration) : 'Not set'}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                                      {service.teamMembers?.length || 0} staff
+                                    </span>
+                                    <span className="flex items-center gap-1 text-green-700">
+                                      <DollarSign className="h-3.5 w-3.5" />
+                                      {(() => {
+                                        const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/)
+                                        return priceMatch ? `CA$${priceMatch[1]}` : 'Not set'
+                                      })()}
+                                    </span>
                                   </div>
-                                  {service.teamMembers && service.teamMembers.length > 0 ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="text-xs text-blue-600 cursor-pointer hover:underline">
-                                          {service.teamMembers.slice(0, 2).map(member => 
-                                            getStaffNameById(member.userId)
-                                          ).join(', ')}
-                                          {service.teamMembers.length > 2 && ` +${service.teamMembers.length - 2} more`}
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="top" className="max-w-xs">
-                                        <div className="space-y-1">
-                                          <div className="font-medium text-sm">All Assigned Staff:</div>
-                                          <div className="text-xs">
-                                            {service.teamMembers.map(member => 
-                                              getStaffNameById(member.userId)
-                                            ).join(', ')}
-                                          </div>
-                                        </div>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <div className="text-xs text-muted-foreground italic">
-                                      No staff assigned
-                                    </div>
-                                  )}
                                 </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <DollarSign className="h-4 w-4 text-green-600" />
-                                  <span className="font-medium text-green-600">
-                                    {(() => {
-                                      const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/);
-                                      return priceMatch ? `CA$${priceMatch[1]}` : 'Not set';
-                                    })()}
-                                  </span>
+                                <div className="flex flex-col gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => openStaffDialog(service)}
+                                    className="h-8 w-8"
+                                  >
+                                    <Users className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => openEditDialog(service)}
+                                    className="h-8 w-8"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => openDeleteDialog(service)}
+                                    className="h-8 w-8 hover:bg-destructive hover:text-destructive-foreground"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openStaffDialog(service)}
-                                        className="h-8 w-8 p-0"
-                                      >
-                                        <Users className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Manage Staff</TooltipContent>
-                                  </Tooltip>
-                                  
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openEditDialog(service)}
-                                        className="h-8 w-8 p-0"
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Edit Service</TooltipContent>
-                                  </Tooltip>
-                                  
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openDeleteDialog(service)}
-                                        className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Delete Service</TooltipContent>
-                                  </Tooltip>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[300px]">Service Details</TableHead>
+                            <TableHead>Duration</TableHead>
+                            <TableHead>Assigned Staff</TableHead>
+                            <TableHead>Price</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {services.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-32 text-center">
+                                <div className="flex flex-col items-center gap-3">
+                                  <div className="p-4 rounded-full bg-muted">
+                                    <SettingsIcon className="h-8 w-8 text-muted-foreground" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">No services found</p>
+                                    <p className="text-sm text-muted-foreground">Create your first service to get started!</p>
+                                  </div>
                                 </div>
                               </TableCell>
                             </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                          ) : (
+                            services.map((service) => (
+                              <TableRow key={service.id} className="hover:bg-muted/50">
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <div className="font-medium flex items-center gap-2">
+                                      {service.name}
+                                      <Badge variant="outline" className="text-xs">Service</Badge>
+                                    </div>
+                                    {service.description && (
+                                      <div className="text-sm text-muted-foreground max-w-xs line-clamp-2">
+                                        {service.description.replace(/<[^>]*>/g, '').substring(0, 120)}
+                                        {service.description.length > 120 ? '...' : ''}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">
+                                      {service.duration && service.duration > 0
+                                        ? formatDuration(service.duration)
+                                        : <span className="text-muted-foreground italic">Not set</span>
+                                      }
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <Users className="h-4 w-4 text-muted-foreground" />
+                                      <span className="font-medium">{service.teamMembers?.length || 0} staff</span>
+                                    </div>
+                                    {service.teamMembers && service.teamMembers.length > 0 ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className="text-xs text-blue-600 cursor-pointer hover:underline">
+                                            {service.teamMembers.slice(0, 2).map(member => 
+                                              getStaffNameById(member.userId)
+                                            ).join(', ')}
+                                            {service.teamMembers.length > 2 && ` +${service.teamMembers.length - 2} more`}
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="max-w-xs">
+                                          <div className="space-y-1">
+                                            <div className="font-medium text-sm">All Assigned Staff:</div>
+                                            <div className="text-xs">
+                                              {service.teamMembers.map(member => 
+                                                getStaffNameById(member.userId)
+                                              ).join(', ')}
+                                            </div>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      <div className="text-xs text-muted-foreground italic">
+                                        No staff assigned
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="h-4 w-4 text-green-600" />
+                                    <span className="font-medium text-green-600">
+                                      {(() => {
+                                        const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/);
+                                        return priceMatch ? `CA$${priceMatch[1]}` : 'Not set';
+                                      })()}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => openStaffDialog(service)}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <Users className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Manage Staff</TooltipContent>
+                                    </Tooltip>
+                                    
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => openEditDialog(service)}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Edit Service</TooltipContent>
+                                    </Tooltip>
+                                    
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => openDeleteDialog(service)}
+                                          className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Delete Service</TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )
                 )}
               </CardContent>
             </Card>

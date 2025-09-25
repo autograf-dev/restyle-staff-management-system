@@ -14,6 +14,7 @@ import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useUser } from "@/contexts/user-context"
 import { useEffect, useState, useCallback } from "react"
 import { RefreshCw, Plus, Trash2, Edit } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type Staff = { ghl_id: string; "Barber/Name"?: string; "Barber/Email"?: string; [key: string]: unknown }
 type Block = Record<string, unknown>
@@ -26,6 +27,7 @@ export default function BreaksPage() {
   const [editing, setEditing] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const isMobile = useIsMobile()
 
   const fetchBlocks = useCallback(async () => {
     const res = await fetch('/api/time-blocks')
@@ -112,100 +114,171 @@ export default function BreaksPage() {
                     <p className="text-sm">Use “Add Break” to create your first time block.</p>
                   </div>
                 ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Recurring</TableHead>
-                      <TableHead>Schedule</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                isMobile ? (
+                  <div className="grid gap-3">
                     {blocks.map((b) => {
                       const member = staff.find((s) => s.ghl_id === String(b['ghl_id'] as string))
                       const staffName = String(member?.['Barber/Name'] || String(b['ghl_id'] as string))
                       const staffEmail = String(member?.['Barber/Email'] || '')
                       const startDisp = minutesToDisplayTime(Number(b['Block/Start'] || 0))
                       const endDisp = minutesToDisplayTime(Number(b['Block/End'] || 0))
+                      const isRecurring = String(b['Block/Recurring']) === 'true'
                       return (
-                        <TableRow key={String(b['🔒 Row ID'])}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                  {staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <div className="font-medium">{staffName}</div>
-                                {staffEmail && (
-                                  <div className="text-xs text-muted-foreground">{staffEmail}</div>
-                                )}
+                        <Card key={String(b['🔒 Row ID'])}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <Avatar className="h-9 w-9">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    {staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium leading-tight">{staffName}</div>
+                                  {staffEmail && (
+                                    <div className="text-xs text-muted-foreground">{staffEmail}</div>
+                                  )}
+                                  <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
+                                    <Badge variant={isRecurring ? 'secondary' : 'outline'} className="text-[10px]">{isRecurring ? 'Recurring' : 'One-time'}</Badge>
+                                    {isRecurring ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {String(b['Block/Recurring Day'] || '')
+                                          .split(',')
+                                          .filter(Boolean)
+                                          .map((d) => (
+                                            <Badge key={d} variant="outline" className="text-[10px]">{d}</Badge>
+                                          ))}
+                                      </div>
+                                    ) : (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {(() => {
+                                          const raw = String(b['Block/Date'] || '-')
+                                          if (!raw || raw === '-') return '-'
+                                          const tryDate = new Date(raw)
+                                          if (!isNaN(tryDate.getTime())) return tryDate.toLocaleDateString('en-US')
+                                          if (raw.includes(',')) return raw.split(',')[0]
+                                          if (raw.includes('T')) return raw.split('T')[0]
+                                          return raw
+                                        })()}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="mt-2 flex items-center gap-2 text-xs">
+                                    <Badge variant="outline" className="text-[10px]">{startDisp}</Badge>
+                                    <span className="text-muted-foreground">to</span>
+                                    <Badge variant="outline" className="text-[10px]">{endDisp}</Badge>
+                                  </div>
+                                  {String(b['Block/Name'] || '') && (
+                                    <div className="mt-2 text-xs text-muted-foreground">{String(b['Block/Name'] || '')}</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Button size="icon" variant="outline" onClick={() => { setEditing(b); setOpen(true) }} disabled={saving} className="h-8 w-8"><Edit className="h-4 w-4"/></Button>
+                                <Button size="icon" variant="outline" onClick={() => deleteBlock(b)} disabled={saving} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
                               </div>
                             </div>
-                          </TableCell>
-                          <TableCell>{String(b['Block/Name'] || '')}</TableCell>
-                          <TableCell>
-                            <Badge variant={String(b['Block/Recurring']) === 'true' ? 'secondary' : 'outline'} className="text-[11px]">
-                              {String(b['Block/Recurring']) === 'true' ? 'Yes' : 'No'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {String(b['Block/Recurring']) === 'true' ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {String(b['Block/Recurring Day'] || '')
-                                    .split(',')
-                                    .filter(Boolean)
-                                    .map((d) => (
-                                      <Badge key={d} variant="secondary" className="text-[11px]">
-                                        {d}
-                                      </Badge>
-                                    ))}
-                                </div>
-                              ) : (
-                                <Badge variant="outline" className="w-fit text-[11px]">
-                                  {(() => {
-                                    const raw = String(b['Block/Date'] || '-')
-                                    if (!raw || raw === '-') return '-'
-                                    const tryDate = new Date(raw)
-                                    if (!isNaN(tryDate.getTime())) {
-                                      return tryDate.toLocaleDateString('en-US')
-                                    }
-                                    // Fallbacks for non-ISO strings
-                                    if (raw.includes(',')) return raw.split(',')[0]
-                                    if (raw.includes('T')) return raw.split('T')[0]
-                                    return raw
-                                  })()}
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[11px]">
-                                {startDisp}
-                              </Badge>
-                              <span className="text-muted-foreground text-xs">to</span>
-                              <Badge variant="outline" className="text-[11px]">
-                                {endDisp}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="outline" onClick={() => { setEditing(b); setOpen(true) }} disabled={saving}><Edit className="h-4 w-4"/></Button>
-                              <Button size="sm" variant="outline" onClick={() => deleteBlock(b)} disabled={saving} className="text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                          </CardContent>
+                        </Card>
                       )
                     })}
-                  </TableBody>
-                </Table>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Staff</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Recurring</TableHead>
+                        <TableHead>Schedule</TableHead>
+                        <TableHead>Time</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {blocks.map((b) => {
+                        const member = staff.find((s) => s.ghl_id === String(b['ghl_id'] as string))
+                        const staffName = String(member?.['Barber/Name'] || String(b['ghl_id'] as string))
+                        const staffEmail = String(member?.['Barber/Email'] || '')
+                        const startDisp = minutesToDisplayTime(Number(b['Block/Start'] || 0))
+                        const endDisp = minutesToDisplayTime(Number(b['Block/End'] || 0))
+                        return (
+                          <TableRow key={String(b['🔒 Row ID'])}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    {staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium">{staffName}</div>
+                                  {staffEmail && (
+                                    <div className="text-xs text-muted-foreground">{staffEmail}</div>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{String(b['Block/Name'] || '')}</TableCell>
+                            <TableCell>
+                              <Badge variant={String(b['Block/Recurring']) === 'true' ? 'secondary' : 'outline'} className="text-[11px]">
+                                {String(b['Block/Recurring']) === 'true' ? 'Yes' : 'No'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {String(b['Block/Recurring']) === 'true' ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {String(b['Block/Recurring Day'] || '')
+                                      .split(',')
+                                      .filter(Boolean)
+                                      .map((d) => (
+                                        <Badge key={d} variant="secondary" className="text-[11px]">
+                                          {d}
+                                        </Badge>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  <Badge variant="outline" className="w-fit text-[11px]">
+                                    {(() => {
+                                      const raw = String(b['Block/Date'] || '-')
+                                      if (!raw || raw === '-') return '-'
+                                      const tryDate = new Date(raw)
+                                      if (!isNaN(tryDate.getTime())) {
+                                        return tryDate.toLocaleDateString('en-US')
+                                      }
+                                      // Fallbacks for non-ISO strings
+                                      if (raw.includes(',')) return raw.split(',')[0]
+                                      if (raw.includes('T')) return raw.split('T')[0]
+                                      return raw
+                                    })()}
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[11px]">
+                                  {startDisp}
+                                </Badge>
+                                <span className="text-muted-foreground text-xs">to</span>
+                                <Badge variant="outline" className="text-[11px]">
+                                  {endDisp}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" variant="outline" onClick={() => { setEditing(b); setOpen(true) }} disabled={saving}><Edit className="h-4 w-4"/></Button>
+                                <Button size="sm" variant="outline" onClick={() => deleteBlock(b)} disabled={saving} className="text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )
                 )}
               </CardContent>
             </Card>

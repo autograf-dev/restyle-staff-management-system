@@ -25,6 +25,7 @@ import { useUser } from "@/contexts/user-context"
 import { toast } from "sonner"
 import { format, parseISO, isAfter, isBefore, isValid, parse } from "date-fns"
 import { LeaveDialog } from "@/components/leave-dialog"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type Leave = {
   "🔒 Row ID": string
@@ -82,6 +83,7 @@ export default function LeavesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editingLeave, setEditingLeave] = useState<Leave | null>(null)
   const [deletingLeave, setDeletingLeave] = useState<Leave | null>(null)
+  const isMobile = useIsMobile()
 
   // Fetch leaves data
   const fetchLeaves = useCallback(async () => {
@@ -371,103 +373,150 @@ export default function LeavesPage() {
                     </Button>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Staff Member</TableHead>
-                        <TableHead>Reason</TableHead>
-                        <TableHead>Start Date</TableHead>
-                        <TableHead>End Date</TableHead>
-                        <TableHead>Duration</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                  isMobile ? (
+                    <div className="grid gap-3">
                       {leaves.map((leave) => {
                         const staffMember = getStaffByGhlId(leave.ghl_id)
                         const status = getLeaveStatus(leave)
-                        const startDate = safeParseDateString(leave["Event/Start"])
-                        const endDate = safeParseDateString(leave["Event/End"])
-                        
-                        // Calculate duration safely (difference in days)
+                        const startDate = safeParseDateString(leave["Event/Start"]) 
+                        const endDate = safeParseDateString(leave["Event/End"]) 
                         let duration = 0
                         if (startDate && endDate) {
-                          // Reset time to midnight for accurate day calculation
                           const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
                           const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
                           const timeDiff = end.getTime() - start.getTime()
                           duration = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
-                          // If same day (0 difference), show as 1 day minimum
-                          if (duration === 0) {
-                            duration = 1
-                          }
+                          if (duration === 0) duration = 1
                         }
-                        
                         return (
-                          <TableRow key={leave["🔒 Row ID"]}>
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                    {staffMember?.["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase() || 'UK'}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <div className="font-medium">
-                                    {staffMember?.["Barber/Name"] || 'Unknown Staff'}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {staffMember?.["Barber/Email"]}
+                          <Card key={leave["🔒 Row ID"]}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3">
+                                  <Avatar className="h-9 w-9">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                      {staffMember?.["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase() || 'UK'}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <div className="font-medium leading-tight">{staffMember?.["Barber/Name"] || 'Unknown Staff'}</div>
+                                    <div className="text-xs text-muted-foreground">{staffMember?.["Barber/Email"]}</div>
+                                    <div className="mt-2 flex items-center gap-2 text-xs">
+                                      <Badge variant="outline" className="text-[10px] capitalize">{leave["Event/Name"]}</Badge>
+                                      {getStatusBadge(status)}
+                                    </div>
+                                    <div className="mt-2 text-xs">
+                                      <span className="text-muted-foreground">{startDate ? format(startDate, 'MMM dd, yyyy') : 'Invalid'} </span>
+                                      <span className="mx-1">→</span>
+                                      <span className="text-muted-foreground">{endDate ? format(endDate, 'MMM dd, yyyy') : 'Invalid'}</span>
+                                      <Badge variant="secondary" className="ml-2 text-[10px]">
+                                        {duration > 0 ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Invalid'}
+                                      </Badge>
+                                    </div>
                                   </div>
                                 </div>
+                                <div className="flex flex-col gap-2">
+                                  <Button size="icon" variant="outline" onClick={() => openEditDialog(leave)} disabled={saving} className="h-8 w-8"><Edit className="h-4 w-4"/></Button>
+                                  <Button size="icon" variant="outline" onClick={() => openDeleteDialog(leave)} disabled={saving} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
+                                </div>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="capitalize">
-                                {leave["Event/Name"]}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {startDate ? format(startDate, 'MMM dd, yyyy') : 'Invalid Date'}
-                            </TableCell>
-                            <TableCell>
-                              {endDate ? format(endDate, 'MMM dd, yyyy') : 'Invalid Date'}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">
-                                {duration > 0 ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Invalid'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {getStatusBadge(status)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openEditDialog(leave)}
-                                  disabled={saving}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openDeleteDialog(leave)}
-                                  disabled={saving}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                            </CardContent>
+                          </Card>
                         )
                       })}
-                    </TableBody>
-                  </Table>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Staff Member</TableHead>
+                          <TableHead>Reason</TableHead>
+                          <TableHead>Start Date</TableHead>
+                          <TableHead>End Date</TableHead>
+                          <TableHead>Duration</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {leaves.map((leave) => {
+                          const staffMember = getStaffByGhlId(leave.ghl_id)
+                          const status = getLeaveStatus(leave)
+                          const startDate = safeParseDateString(leave["Event/Start"]) 
+                          const endDate = safeParseDateString(leave["Event/End"]) 
+                          let duration = 0
+                          if (startDate && endDate) {
+                            const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+                            const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+                            const timeDiff = end.getTime() - start.getTime()
+                            duration = Math.floor(timeDiff / (1000 * 60 * 60 * 24))
+                            if (duration === 0) duration = 1
+                          }
+                          return (
+                            <TableRow key={leave["🔒 Row ID"]}>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                      {staffMember?.["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase() || 'UK'}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <div className="font-medium">
+                                      {staffMember?.["Barber/Name"] || 'Unknown Staff'}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {staffMember?.["Barber/Email"]}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize">
+                                  {leave["Event/Name"]}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {startDate ? format(startDate, 'MMM dd, yyyy') : 'Invalid Date'}
+                              </TableCell>
+                              <TableCell>
+                                {endDate ? format(endDate, 'MMM dd, yyyy') : 'Invalid Date'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">
+                                  {duration > 0 ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Invalid'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {getStatusBadge(status)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openEditDialog(leave)}
+                                    disabled={saving}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openDeleteDialog(leave)}
+                                    disabled={saving}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  )
                 )}
               </CardContent>
             </Card>
