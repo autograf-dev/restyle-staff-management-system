@@ -22,7 +22,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight } from "lucide-react"
+import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -51,6 +51,7 @@ type Booking = {
   assignedStaffLastName?: string
   contactName?: string
   contactPhone?: string
+  createdAt?: string
 }
 
 type RawBooking = {
@@ -96,6 +97,7 @@ function useBookings() {
   const [searchTerm, setSearchTerm] = React.useState<string>("")
   const isInitialMount = React.useRef(true)
   const isMounted = React.useRef(false)
+  const [lastUpdated, setLastUpdated] = React.useState<number>(0)
 
   React.useEffect(() => {
     isMounted.current = true
@@ -104,7 +106,7 @@ function useBookings() {
     }
   }, [])
 
-  const fetchBookings = React.useCallback(async () => {
+  const fetchBookings = React.useCallback(async (forceRefresh: boolean = false) => {
     if (!isMounted.current) return
     
     // Set loading state only if component is still mounted
@@ -112,6 +114,20 @@ function useBookings() {
       setLoading(true)
     }
     
+    // Try cache first unless forced
+    try {
+      const cached = JSON.parse(localStorage.getItem('restyle.bookings.cache') || 'null') as { data: Booking[]; fetchedAt: number } | null
+      const tenMinutes = 10 * 60 * 1000
+      if (!forceRefresh && cached && Date.now() - cached.fetchedAt < tenMinutes) {
+        setData(cached.data || [])
+        setTotal(cached.data?.length || 0)
+        setTotalPages(Math.ceil((cached.data?.length || 0) / 20))
+        setLastUpdated(cached.fetchedAt)
+        setLoading(false)
+        return
+      }
+    } catch {}
+
     const controller = new AbortController()
     const { signal } = controller
 
@@ -194,6 +210,12 @@ function useBookings() {
                 details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
                 details.assigned_user_id = apptData.appointment.assignedUserId || details.assigned_user_id
                 details.groupId = apptData.appointment.groupId || apptData.appointment.group_id
+                // Try to capture created time from API (various possible field names)
+                details.createdAt = apptData.appointment.createdAt 
+                  || apptData.appointment.created_at 
+                  || apptData.appointment.dateCreated 
+                  || apptData.appointment.created
+                  || undefined
               }
             }
           } catch (error) {
@@ -244,9 +266,14 @@ function useBookings() {
 
       // Only update state if component is still mounted and request wasn't aborted
       if (isMounted.current && !signal.aborted) {
-        setData(enrichedBookings)
+        // If createdAt missing, fallback to now to maintain stable order within this fetch batch
+        const withCreated = enrichedBookings.map(b => ({ ...b, createdAt: b.createdAt || new Date().toISOString() }))
+        setData(withCreated)
         setTotal(json.totalBookings || enrichedBookings.length)
         setTotalPages(Math.ceil((json.totalBookings || enrichedBookings.length) / 20))
+        const nowTs = Date.now()
+        setLastUpdated(nowTs)
+        try { localStorage.setItem('restyle.bookings.cache', JSON.stringify({ data: withCreated, fetchedAt: nowTs })) } catch {}
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -274,7 +301,7 @@ function useBookings() {
   React.useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
-      const cleanup = fetchBookings()
+      const cleanup = fetchBookings(false)
       return () => {
         // Call cleanup function if it exists
         if (cleanup && typeof cleanup.then === 'function') {
@@ -286,6 +313,14 @@ function useBookings() {
         }
       }
     }
+  }, [fetchBookings])
+
+  // Auto refresh every 10 minutes
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      fetchBookings(true)
+    }, 10 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [fetchBookings])
 
   return { 
@@ -300,7 +335,8 @@ function useBookings() {
     statusFilter,
     setStatusFilter,
     searchTerm,
-    setSearchTerm
+    setSearchTerm,
+    lastUpdated
   }
 }
 
@@ -387,7 +423,8 @@ function BookingsPageInner() {
     setStatusFilter,
     searchTerm,
     setSearchTerm,
-    fetchBookings: fetchBookings
+    fetchBookings: fetchBookings,
+    lastUpdated
   } = useBookings()
 
   const [selected, setSelected] = React.useState<Booking | null>(null)
@@ -1308,29 +1345,15 @@ function BookingsPageInner() {
       )
     }
 
-    // Sort by start time (most recent first for past, earliest first for upcoming)
+    // Sort by created time (newest first). Fallback: appointment start time.
     return filtered.sort((a, b) => {
+      const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0
       const aTime = a.startTime ? new Date(a.startTime).getTime() : 0
       const bTime = b.startTime ? new Date(b.startTime).getTime() : 0
       
-      const aStatus = getBookingStatus(a)
-      const bStatus = getBookingStatus(b)
-      
-      // Priority: cancelled last, then upcoming (earliest first), then past (most recent first)
-      if (aStatus === 'cancelled' && bStatus !== 'cancelled') return 1
-      if (bStatus === 'cancelled' && aStatus !== 'cancelled') return -1
-      if (aStatus === 'upcoming' && bStatus === 'past') return -1
-      if (bStatus === 'upcoming' && aStatus === 'past') return 1
-      
-      if (aStatus === 'upcoming' && bStatus === 'upcoming') {
-        return aTime - bTime // earliest first for upcoming
-      }
-      
-      if (aStatus === 'past' && bStatus === 'past') {
-        return bTime - aTime // most recent first for past
-      }
-      
-      return aTime - bTime
+      if (aCreated || bCreated) return bCreated - aCreated
+      return bTime - aTime
     })
   }, [data, statusFilter, searchTerm])
 
@@ -1490,10 +1513,18 @@ function BookingsPageInner() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Bookings</h1>
               </div>
-              <Button onClick={() => setNewAppointmentOpen(true)} className="bg-primary text-primary-foreground">
-                <Calendar className="h-4 w-4 mr-2" />
-                Add Booking
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => fetchBookings(true)} title="Refresh (bypass cache)">
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+                <div className="text-xs text-muted-foreground hidden md:block" title="Last updated">
+                  {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : ''}
+                </div>
+                <Button onClick={() => setNewAppointmentOpen(true)} className="bg-primary text-primary-foreground">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Add Booking
+                </Button>
+              </div>
             </div>
           </header>
           
