@@ -372,6 +372,40 @@ function formatDuration(startIso?: string, endIso?: string) {
   return `${m} mins`
 }
 
+// Convert America/Denver wall time to UTC ISO, mirroring supabase.vue
+function getTimeZoneOffsetInMs(timeZone: string, utcDate: Date) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+  const parts = dtf.formatToParts(utcDate)
+  const map: Record<string, string> = {}
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = p.value
+  }
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  )
+  return asUTC - utcDate.getTime()
+}
+
+function denverWallTimeToUtcIso(year: number, month: number, day: number, hour: number, minute: number) {
+  const baseUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+  const offset = getTimeZoneOffsetInMs('America/Denver', baseUtc)
+  return new Date(baseUtc.getTime() - offset).toISOString()
+}
+
 function getBookingStatus(booking: Booking) {
   const status = (booking.appointment_status || '').toLowerCase()
   const now = new Date()
@@ -819,9 +853,6 @@ function BookingsPageInner() {
         if (period === 'AM' && hour === 12) hour = 0
         
         jsDate.setHours(hour, minute, 0, 0)
-        
-        // Don't convert to UTC - send Edmonton local time
-        // The backend expects Edmonton timezone, not UTC
         const localStartTime = jsDate
         
         // Calculate end time based on original duration
@@ -849,18 +880,19 @@ function BookingsPageInner() {
         let updateUrl = `https://restyle-api.netlify.app/.netlify/functions/updateappointment?appointmentId=${bookingToReschedule.id}`
         updateUrl += `&assignedUserId=${assignedUserIdToSend}`
         
-        // Determine correct Edmonton timezone offset (MDT: -06:00, MST: -07:00)
-        const isDST = (date: Date) => {
-          const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
-          const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
-          return Math.max(jan, jul) !== date.getTimezoneOffset()
-        }
-        
-        const edmontonOffset = isDST(localStartTime) ? '-06:00' : '-07:00'
-        
-        // Format as ISO string with correct Edmonton timezone offset
-        const startTimeFormatted = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
-        const endTimeFormatted = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
+        // Convert America/Denver wall time to UTC ISO (mirror Vue logic)
+        const y1 = localStartTime.getFullYear()
+        const m1 = localStartTime.getMonth() + 1
+        const d1 = localStartTime.getDate()
+        const h1 = localStartTime.getHours()
+        const min1 = localStartTime.getMinutes()
+        const startTimeFormatted = denverWallTimeToUtcIso(y1, m1, d1, h1, min1)
+        const y2 = localEndTime.getFullYear()
+        const m2 = localEndTime.getMonth() + 1
+        const d2 = localEndTime.getDate()
+        const h2 = localEndTime.getHours()
+        const min2 = localEndTime.getMinutes()
+        const endTimeFormatted = denverWallTimeToUtcIso(y2, m2, d2, h2, min2)
         
         updateUrl += `&startTime=${encodeURIComponent(startTimeFormatted)}`
         updateUrl += `&endTime=${encodeURIComponent(endTimeFormatted)}`
@@ -1246,9 +1278,6 @@ function BookingsPageInner() {
       }
 
       jsDate.setHours(hour, minute, 0, 0)
-
-      // Don't convert to UTC - send Edmonton local time
-      // The backend expects Edmonton timezone, not UTC
       const localStartTime = jsDate
 
       // Get service duration
@@ -1257,19 +1286,19 @@ function BookingsPageInner() {
       const duration = durationMatch ? parseInt(durationMatch[1]) : 120
       const localEndTime = new Date(localStartTime.getTime() + duration * 60 * 1000)
 
-      // Determine correct Edmonton timezone offset (MDT: -06:00, MST: -07:00)
-      // Check if daylight saving time is active for Edmonton
-      const isDST = (date: Date) => {
-        const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
-        const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
-        return Math.max(jan, jul) !== date.getTimezoneOffset()
-      }
-      
-      const edmontonOffset = isDST(localStartTime) ? '-06:00' : '-07:00'
-      
-      // Format as ISO string with correct Edmonton timezone offset
-      const startTime = `${localStartTime.getFullYear()}-${String(localStartTime.getMonth() + 1).padStart(2, '0')}-${String(localStartTime.getDate()).padStart(2, '0')}T${String(localStartTime.getHours()).padStart(2, '0')}:${String(localStartTime.getMinutes()).padStart(2, '0')}:${String(localStartTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
-      const endTime = `${localEndTime.getFullYear()}-${String(localEndTime.getMonth() + 1).padStart(2, '0')}-${String(localEndTime.getDate()).padStart(2, '0')}T${String(localEndTime.getHours()).padStart(2, '0')}:${String(localEndTime.getMinutes()).padStart(2, '0')}:${String(localEndTime.getSeconds()).padStart(2, '0')}.000${edmontonOffset}`
+      // Convert America/Denver wall time to UTC ISO (mirror Vue logic)
+      const y1 = localStartTime.getFullYear()
+      const m1 = localStartTime.getMonth() + 1
+      const d1 = localStartTime.getDate()
+      const h1 = localStartTime.getHours()
+      const min1 = localStartTime.getMinutes()
+      const startTime = denverWallTimeToUtcIso(y1, m1, d1, h1, min1)
+      const y2 = localEndTime.getFullYear()
+      const m2 = localEndTime.getMonth() + 1
+      const d2 = localEndTime.getDate()
+      const h2 = localEndTime.getHours()
+      const min2 = localEndTime.getMinutes()
+      const endTime = denverWallTimeToUtcIso(y2, m2, d2, h2, min2)
 
       let assignedUserId = newAppSelectedStaff
       if (assignedUserId === 'any' || !assignedUserId) {
