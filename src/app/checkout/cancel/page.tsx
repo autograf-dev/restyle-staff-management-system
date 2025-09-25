@@ -127,6 +127,7 @@ export default function CheckoutCancelPage() {
     }
     
     loadCancelledSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, reason])
 
   return (
@@ -301,8 +302,8 @@ export default function CheckoutCancelPage() {
                       <div>
                         <h3 className="font-semibold text-amber-900 mb-2">Need Help?</h3>
                         <p className="text-sm text-amber-800 mb-3">
-                          If you're experiencing issues with payment or have questions about your appointment, 
-                          we're here to help.
+                          If you&apos;re experiencing issues with payment or have questions about your appointment, 
+                          we&apos;re here to help.
                         </p>
                         
                         <div className="grid gap-2 sm:grid-cols-2">

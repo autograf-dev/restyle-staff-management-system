@@ -14,8 +14,7 @@ import {
   Clock,
   User as UserIcon,
   Mail,
-  Phone,
-  DollarSign
+  Phone
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -128,6 +127,7 @@ export default function CheckoutSuccessPage() {
     }
     
     confirmPayment()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, paymentId])
 
   if (loading) {
@@ -321,7 +321,7 @@ export default function CheckoutSuccessPage() {
                       Confirmation Details
                     </CardTitle>
                     <CardDescription>
-                      Where we'll send your appointment confirmation and reminders
+                      Where we&apos;ll send your appointment confirmation and reminders
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -377,7 +377,7 @@ export default function CheckoutSuccessPage() {
                   <h3 className="font-semibold text-blue-900">What happens next?</h3>
                   <p className="text-sm text-blue-700">
                     • A confirmation email will be sent to {paymentResult?.customerInfo.email}<br />
-                    • You'll receive a reminder 24 hours before your appointment<br />
+                    • You&apos;ll receive a reminder 24 hours before your appointment<br />
                     • If you need to reschedule, please contact us at least 24 hours in advance
                   </p>
                 </div>

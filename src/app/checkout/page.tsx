@@ -6,7 +6,6 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,7 +18,6 @@ import {
   Calendar as CalendarIcon,
   CreditCard,
   ArrowLeft,
-  CheckCircle,
   AlertCircle,
   Loader2,
   Receipt,
@@ -320,6 +318,7 @@ export default function CheckoutPage() {
     if (appointmentDetails && customerInfo.name) {
       initializePayment()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipPercentage, customTipAmount, useCustomTip, appointmentDetails, customerInfo])
 
   // Fetch data on mount
@@ -331,6 +330,7 @@ export default function CheckoutPage() {
     }
     
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentId, calendarId, staffId])
 
   if (!appointmentId || !calendarId) {
