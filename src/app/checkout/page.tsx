@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator as UISeparator } from "@/components/ui/separator"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { 
   DollarSign, 
   Clock, 
@@ -25,6 +26,7 @@ import {
   Percent,
   Phone,
   Wallet,
+  Plus,
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -101,6 +103,7 @@ function CheckoutContent() {
   const [customTipAmount, setCustomTipAmount] = useState('')
   const [useCustomTip, setUseCustomTip] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
+  const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false)
 
   // Fetch appointment details
   const fetchAppointmentDetails = async () => {
@@ -443,11 +446,42 @@ function CheckoutContent() {
                   {paymentSession && (
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                          <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
-                          Pricing Summary
-                        </CardTitle>
-                        <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                              <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
+                              Pricing Summary
+                            </CardTitle>
+                            <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
+                          </div>
+                          <Dialog open={addServiceDialogOpen} onOpenChange={setAddServiceDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="rounded-lg border-[#7b1d1d] text-[#7b1d1d] hover:bg-[#7b1d1d] hover:text-white transition-all"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Service
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Add Service</DialogTitle>
+                                <DialogDescription>
+                                  Add an additional service to this appointment.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="text-center py-8">
+                                  <p className="text-sm text-muted-foreground">
+                                    Service selection will be implemented here.
+                                  </p>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {/* Service Items */}
@@ -523,27 +557,38 @@ function CheckoutContent() {
                       <CardDescription className="text-[13px]">Choose your preferred payment method</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="flex gap-2">
                         {[
-                          { id: 'visa', name: 'Visa', icon: '💳' },
-                          { id: 'mastercard', name: 'Mastercard', icon: '💳' },
-                          { id: 'amex', name: 'Amex', icon: '💳' },
-                          { id: 'debit', name: 'Debit', icon: '💳' },
-                          { id: 'cash', name: 'Cash', icon: '💵' }
-                        ].map((method) => (
-                          <button
-                            key={method.id}
-                            onClick={() => setSelectedPaymentMethod(method.id)}
-                            className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all hover:border-[#7b1d1d]/30 ${
-                              selectedPaymentMethod === method.id
-                                ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
-                                : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                            }`}
-                          >
-                            <span className="text-2xl">{method.icon}</span>
-                            <span className="text-[14px] font-medium text-neutral-900">{method.name}</span>
-                          </button>
-                        ))}
+                          { id: 'visa', name: 'Visa', icon: CreditCard },
+                          { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
+                          { id: 'amex', name: 'Amex', icon: CreditCard },
+                          { id: 'debit', name: 'Debit', icon: CreditCard },
+                          { id: 'cash', name: 'Cash', icon: DollarSign }
+                        ].map((method) => {
+                          const IconComponent = method.icon
+                          return (
+                            <button
+                              key={method.id}
+                              onClick={() => setSelectedPaymentMethod(method.id)}
+                              className={`flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 transition-all hover:border-[#7b1d1d]/30 flex-1 cursor-pointer ${
+                                selectedPaymentMethod === method.id
+                                  ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                  : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                              }`}
+                            >
+                              <IconComponent className={`h-4 w-4 ${
+                                selectedPaymentMethod === method.id
+                                  ? 'text-white'
+                                  : 'text-neutral-600'
+                              }`} />
+                              <span className={`text-[12px] font-medium ${
+                                selectedPaymentMethod === method.id
+                                  ? 'text-white'
+                                  : 'text-neutral-900'
+                              }`}>{method.name}</span>
+                            </button>
+                          )
+                        })}
                       </div>
                     </CardContent>
                   </Card>
