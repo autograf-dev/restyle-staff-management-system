@@ -589,11 +589,19 @@ function CheckoutContent() {
     return additionalServices.reduce((total, service) => total + service.price, 0)
   }
 
+  // Calculate current total subtotal (appointment services + additional services)
+  const getCurrentSubtotal = () => {
+    if (!paymentSession) return 0
+    const appointmentTotal = paymentSession.appointments.reduce((sum, apt) => sum + apt.servicePrice, 0)
+    const additionalTotal = getAdditionalServicesTotal()
+    return appointmentTotal + additionalTotal
+  }
+
   // Effective tip amount including added services when using percentage-based tips
   const getEffectiveTipAmount = () => {
     if (!paymentSession) return 0
-    if (useCustomTip) return paymentSession.pricing.tipAmount
-    const base = paymentSession.pricing.subtotal + getAdditionalServicesTotal()
+    if (useCustomTip) return parseFloat(customTipAmount) || 0
+    const base = getCurrentSubtotal()
     const tip = (base * tipPercentage) / 100
     return Number(tip.toFixed(2))
   }
@@ -634,8 +642,8 @@ function CheckoutContent() {
     const tipAmount = getEffectiveTipAmount()
     
     return Object.values(staffTotals).map(staff => {
-      const sharePercentage = (staff.totalServicePrice / totalServicePrice) * 100
-      const tipShare = (staff.totalServicePrice / totalServicePrice) * tipAmount
+      const sharePercentage = totalServicePrice > 0 ? (staff.totalServicePrice / totalServicePrice) * 100 : 0
+      const tipShare = totalServicePrice > 0 ? (staff.totalServicePrice / totalServicePrice) * tipAmount : 0
       const totalEarning = staff.totalServicePrice + tipShare
       
       return {
@@ -675,9 +683,28 @@ function CheckoutContent() {
         servicePrice: newPrice
       }
       
+      // Recalculate pricing
+      const newSubtotal = updatedAppointments.reduce((sum, apt) => sum + apt.servicePrice, 0) + getAdditionalServicesTotal()
+      const newTipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (newSubtotal * tipPercentage) / 100
+      const newGst = newSubtotal * 0.05 // 5% GST
+      const newPst = newSubtotal * 0.07 // 7% PST
+      const newTotal = newSubtotal + newTipAmount + newGst + newPst
+      
       setPaymentSession(prev => prev ? {
         ...prev,
-        appointments: updatedAppointments
+        appointments: updatedAppointments,
+        pricing: {
+          ...prev.pricing,
+          subtotal: newSubtotal,
+          tipAmount: newTipAmount,
+          taxes: {
+            ...prev.pricing.taxes,
+            gst: { rate: 5, amount: newGst },
+            pst: { rate: 7, amount: newPst },
+            totalTax: newGst + newPst
+          },
+          totalAmount: newTotal
+        }
       } : null)
     } else if (editingService.type === 'additional') {
       // Update additional service price
@@ -687,6 +714,29 @@ function CheckoutContent() {
         price: newPrice
       }
       setAdditionalServices(updatedAdditionalServices)
+      
+      // Recalculate pricing for additional services
+      const newSubtotal = paymentSession.appointments.reduce((sum, apt) => sum + apt.servicePrice, 0) + updatedAdditionalServices.reduce((sum, service) => sum + service.price, 0)
+      const newTipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (newSubtotal * tipPercentage) / 100
+      const newGst = newSubtotal * 0.05 // 5% GST
+      const newPst = newSubtotal * 0.07 // 7% PST
+      const newTotal = newSubtotal + newTipAmount + newGst + newPst
+      
+      setPaymentSession(prev => prev ? {
+        ...prev,
+        pricing: {
+          ...prev.pricing,
+          subtotal: newSubtotal,
+          tipAmount: newTipAmount,
+          taxes: {
+            ...prev.pricing.taxes,
+            gst: { rate: 5, amount: newGst },
+            pst: { rate: 7, amount: newPst },
+            totalTax: newGst + newPst
+          },
+          totalAmount: newTotal
+        }
+      } : null)
     }
 
     setIsEditDialogOpen(false)
@@ -714,7 +764,32 @@ function CheckoutContent() {
   }, [appointmentId, calendarId, staffIdParam])
 
   useEffect(() => { // price whenever dependencies change
-    if (appointmentDetails) { void initializePayment() }
+    if (appointmentDetails && !paymentSession) { 
+      void initializePayment() 
+    } else if (paymentSession && (tipPercentage || customTipAmount || useCustomTip)) {
+      // Only recalculate tip and totals, don't reset service prices
+      const currentSubtotal = getCurrentSubtotal()
+      const newTipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (currentSubtotal * tipPercentage) / 100
+      const newGst = currentSubtotal * 0.05 // 5% GST
+      const newPst = currentSubtotal * 0.07 // 7% PST
+      const newTotal = currentSubtotal + newTipAmount + newGst + newPst
+      
+      setPaymentSession(prev => prev ? {
+        ...prev,
+        pricing: {
+          ...prev.pricing,
+          subtotal: currentSubtotal,
+          tipAmount: newTipAmount,
+          taxes: {
+            ...prev.pricing.taxes,
+            gst: { rate: 5, amount: newGst },
+            pst: { rate: 7, amount: newPst },
+            totalTax: newGst + newPst
+          },
+          totalAmount: newTotal
+        }
+      } : null)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentDetails, tipPercentage, customTipAmount, useCustomTip])
 
@@ -1224,7 +1299,7 @@ function CheckoutContent() {
 
                         {/* Totals */}
                         <div className="rounded-xl border border-neutral-200 p-4">
-                          <Row label="Subtotal" value={formatCurrency(paymentSession.pricing.subtotal + getAdditionalServicesTotal(), paymentSession.pricing.currency)} />
+                          <Row label="Subtotal" value={formatCurrency(getCurrentSubtotal(), paymentSession.pricing.currency)} />
                           {getEffectiveTipAmount() > 0 && (
                             <Row label={`Tip (${useCustomTip ? 'Custom' : `${tipPercentage}%`})`} value={formatCurrency(getEffectiveTipAmount(), paymentSession.pricing.currency)} />
                           )}
@@ -1235,7 +1310,7 @@ function CheckoutContent() {
                             <Row small label={`PST (${paymentSession.pricing.taxes.pst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)} />
                           ) : null}
                           <div className="h-px my-2 bg-neutral-200" />
-                          <Row strong label="Total Due" value={formatCurrency((paymentSession.pricing.subtotal + getAdditionalServicesTotal()) + (getEffectiveTipAmount()) + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)} />
+                          <Row strong label="Total Due" value={formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)} />
                         </div>
                       </CardContent>
                     </Card>
@@ -1346,7 +1421,7 @@ function CheckoutContent() {
                             Complete
                             {paymentSession && (
                               <span className="ml-2 font-bold">
-                                {formatCurrency((paymentSession.pricing.subtotal + getAdditionalServicesTotal()) + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)}
+                                {formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)}
                               </span>
                             )}
                           </>
