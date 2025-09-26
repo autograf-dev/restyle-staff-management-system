@@ -70,8 +70,14 @@ export default function PaymentsPage() {
     const tips = filtered.reduce((sum, r) => sum + Number(r.tip || 0), 0)
     const avg = count > 0 ? revenue / count : 0
     
-    // Calculate unique staff count
-    const uniqueStaff = new Set(filtered.map(r => r.staff).filter(Boolean)).size
+    // Calculate unique staff count - handle comma-separated staff names
+    const uniqueStaff = new Set(
+      filtered
+        .map(r => r.staff)
+        .filter(Boolean)
+        .flatMap(staff => staff!.split(',').map(name => name.trim()))
+        .filter(name => name.length > 0)
+    ).size
     
     // Calculate total tip splits (sum of all staff tip splits)
     const totalTipSplits = filtered.reduce((sum, r) => {

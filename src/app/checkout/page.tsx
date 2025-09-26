@@ -547,7 +547,7 @@ function CheckoutContent() {
           customerLookup: appointmentDetails?.contact_id || null,
           customerPhone: appointmentDetails?.customerPhone ?? null,
           bookingId: appointmentDetails?.id ?? null,
-          paymentStaff: appointmentDetails?.staffName ?? null,
+          paymentStaff: items.map((i) => i.staffName).filter((name) => Boolean(name)).join(', ') || null,
           status: 'Paid',
         },
         items: itemsWithTip.map((i) => ({ ...i, paymentId: transactionId })),
