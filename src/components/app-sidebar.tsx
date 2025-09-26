@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Scissors, Calendar as CalendarIcon, CreditCard } from "lucide-react"
+import { Clock, UsersRound, Settings, LayoutDashboard as IconDashboard, Scissors, Calendar as CalendarIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -73,7 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         isActive: false,
       },
       {
-        title: "Bookings",
+        title: "Appointments",
         url: `${prefix}/appointments`,
         icon: Clock,
         isActive: false,
@@ -93,12 +93,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: UsersRound,
             isActive: false,
           }]),
-      {
-        title: "Payments",
-        url: `${prefix}/payments`,
-        icon: CreditCard,
-        isActive: false,
-      },
     ]
 
     // Manage section varies by role

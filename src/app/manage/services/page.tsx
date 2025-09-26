@@ -921,7 +921,7 @@ export default function ServicesPage() {
                   </div>
                   <div className="grid gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="slotInterval">Booking Time Slots</Label>
+                      <Label htmlFor="slotInterval">Appointment Time Slots</Label>
                       <Select 
                         value={formData.slotInterval.toString()} 
                         onValueChange={(value) => setFormData(prev => ({ ...prev, slotInterval: parseInt(value) }))}
@@ -945,7 +945,7 @@ export default function ServicesPage() {
                             setFormData(prev => ({ ...prev, autoConfirm: checked as boolean }))
                           }
                         />
-                        <Label htmlFor="autoConfirm" className="text-sm">Auto-confirm bookings</Label>
+                        <Label htmlFor="autoConfirm" className="text-sm">Auto-confirm appointments</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -1214,7 +1214,7 @@ export default function ServicesPage() {
                   Delete Service
                 </DialogTitle>
                 <DialogDescription>
-                  Are you sure you want to permanently delete this service? This action cannot be undone and will remove all associated bookings and staff assignments.
+                  Are you sure you want to permanently delete this service? This action cannot be undone and will remove all associated appointments and staff assignments.
                 </DialogDescription>
               </DialogHeader>
               {selectedService && (

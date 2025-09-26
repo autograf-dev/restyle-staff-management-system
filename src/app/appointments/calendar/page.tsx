@@ -806,19 +806,14 @@ const StaffOverviewView = ({
                           </div>
                         )}
                         
-                        {/* Status indicator - always visible */}
-                        <div className="absolute top-1 right-1 flex items-center gap-1">
-                          {appointment.payment_status === 'paid' && (
-                            <div className="w-2 h-2 rounded-full bg-emerald-500" title="Paid"></div>
-                          )}
-                          <div className={`w-2 h-2 rounded-full ${
-                            appointment.appointment_status === 'confirmed' 
-                              ? 'bg-green-500' 
-                              : appointment.appointment_status === 'cancelled'
-                              ? 'bg-red-500'
-                              : 'bg-gray-400'
-                          }`} title={appointment.appointment_status}></div>
-                        </div>
+                        {/* Status indicator - only show paid when applicable */}
+                        {appointment.payment_status === 'paid' && (
+                          <div className="absolute top-1 right-1">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500 text-white font-medium">
+                              PAID
+                            </span>
+                          </div>
+                        )}
                         
                         {/* Hover overlay with full details */}
                         <div className="absolute inset-0 bg-[#601625]/95 text-white p-2 rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 flex flex-col justify-center">
@@ -832,19 +827,15 @@ const StaffOverviewView = ({
                             {appointment.startTime && formatTime(appointment.startTime)}
                             {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                              appointment.appointment_status === 'confirmed' 
-                                ? 'bg-green-500/20 text-green-200' 
-                                : appointment.appointment_status === 'cancelled'
-                                ? 'bg-red-500/20 text-red-200'
-                                : 'bg-gray-500/20 text-gray-200'
-                            }`}>
-                              {appointment.appointment_status}
-                            </span>
+                          <div className="flex items-center justify-end">
                             {appointment.payment_status === 'paid' && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200">
                                 PAID
+                              </span>
+                            )}
+                            {appointment.appointment_status === 'cancelled' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-200 ml-2">
+                                CANCELLED
                               </span>
                             )}
                           </div>

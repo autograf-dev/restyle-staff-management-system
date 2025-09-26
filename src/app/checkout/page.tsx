@@ -885,7 +885,7 @@ function CheckoutContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Button variant="outline" className="h-8 rounded-lg border-neutral-200 text-[13px]">Booking Link</Button>
+                      <Button variant="outline" className="h-8 rounded-lg border-neutral-200 text-[13px]">Appointment Link</Button>
                       <Button variant="outline" className="h-8 rounded-lg border-neutral-200 text-[13px]">Club Card Link</Button>
                     </div>
                   </div>
