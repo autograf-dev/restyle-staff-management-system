@@ -12,8 +12,8 @@ export async function POST(req: Request) {
 
     const body = await req.json()
     const { transaction, items } = body as {
-      transaction: any
-      items: any[]
+      transaction: Record<string, unknown>
+      items: Record<string, unknown>[]
     }
 
     if (!transaction || !Array.isArray(items)) {
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     }
 
     // Insert into "Transaction Items"
-    const itemRows = items.map((it) => ({
+    const itemRows = items.map((it: Record<string, unknown>) => ({
       "🔒 Row ID": it.id,
       "Payment/ID": it.paymentId,
       "VALUES JOINED 2": it.valuesJoined2 ?? null,
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, id: transaction.id })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("/api/transactions error", error)
     return NextResponse.json({ ok: false, error: "Failed to create transaction" }, { status: 500 })
   }
@@ -125,7 +125,6 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get('limit') || 50)
-    const offset = Number(searchParams.get('offset') || 0)
 
     const { data, error } = await supabaseAdmin
       .from('Transactions')
@@ -138,10 +137,10 @@ export async function GET(req: Request) {
     }
 
     // Get transaction IDs to fetch items
-    const transactionIds = (data || []).map((row: any) => row['🔒 Row ID'])
+    const transactionIds = (data || []).map((row: Record<string, unknown>) => row['🔒 Row ID'])
     
     // Fetch transaction items for all transactions
-    let itemsData: any[] = []
+    let itemsData: Record<string, unknown>[] = []
     if (transactionIds.length > 0) {
       const { data: items, error: itemsError } = await supabaseAdmin
         .from('Transaction Items')
@@ -165,8 +164,8 @@ export async function GET(req: Request) {
     }
 
     // Group items by transaction ID
-    const itemsByTransaction = itemsData.reduce((acc: any, item: any) => {
-      const paymentId = item['Payment/ID']
+    const itemsByTransaction = itemsData.reduce((acc: Record<string, unknown[]>, item: Record<string, unknown>) => {
+      const paymentId = String(item['Payment/ID'] || '')
       if (!acc[paymentId]) acc[paymentId] = []
       acc[paymentId].push({
         id: item['🔒 Row ID'],
@@ -181,7 +180,7 @@ export async function GET(req: Request) {
       return acc
     }, {})
 
-    const rows = (data || []).map((row: any) => ({
+    const rows = (data || []).map((row: Record<string, unknown>) => ({
       id: row['🔒 Row ID'],
       paymentDate: row['Payment/Date'],
       method: row['Payment/Method'],
@@ -195,11 +194,12 @@ export async function GET(req: Request) {
       staff: row['Payment/Staff'],
       customerPhone: row['Customer/Phone'],
       customerLookup: row['Customer/Lookup'],
-      items: itemsByTransaction[row['🔒 Row ID']] || [],
+      items: itemsByTransaction[String(row['🔒 Row ID'] || '')] || [],
     }))
 
     return NextResponse.json({ ok: true, data: rows })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    console.error('Error fetching transactions:', e)
     return NextResponse.json({ ok: false, error: 'Failed to fetch transactions' }, { status: 500 })
   }
 }
@@ -217,7 +217,8 @@ export async function DELETE(req: Request) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
     return NextResponse.json({ ok: true })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    console.error('Error deleting transaction:', e)
     return NextResponse.json({ ok: false, error: 'Failed to delete transaction' }, { status: 500 })
   }
 }

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const { id } = await params
+    console.log('Fetching transaction with ID:', id)
     if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 })
 
     const { data: tx, error: txErr } = await supabaseAdmin
@@ -23,11 +24,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         "Customer/Phone",
         "Customer/Lookup"
       `)
-      .eq('🔒 Row ID', id)
+      .eq('"🔒 Row ID"', id)
       .maybeSingle()
 
-    if (txErr) return NextResponse.json({ ok: false, error: txErr.message }, { status: 400 })
-    if (!tx) return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 })
+    if (txErr) {
+      console.error('Supabase error:', txErr)
+      return NextResponse.json({ ok: false, error: txErr.message }, { status: 400 })
+    }
+    if (!tx) {
+      console.log('Transaction not found for ID:', id)
+      return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 })
+    }
+    console.log('Found transaction:', tx['🔒 Row ID'])
 
     const { data: items, error: itemErr } = await supabaseAdmin
       .from('Transaction Items')
@@ -41,7 +49,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         "Staff/Tip Split",
         "Staff/Tip Collected"
       `)
-      .eq('Payment/ID', id)
+      .eq('"Payment/ID"', id)
 
     if (itemErr) return NextResponse.json({ ok: false, error: itemErr.message }, { status: 400 })
 
@@ -59,7 +67,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       staff: tx['Payment/Staff'],
       customerPhone: tx['Customer/Phone'],
       customerLookup: tx['Customer/Lookup'],
-      items: (items || []).map((r: any) => ({
+      items: (items || []).map((r: Record<string, unknown>) => ({
         id: r['🔒 Row ID'],
         paymentId: r['Payment/ID'],
         serviceId: r['Service/ID'],
@@ -70,18 +78,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         staffTipCollected: r['Staff/Tip Collected'],
       }))
     } })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    console.error('Error fetching transaction:', e)
     return NextResponse.json({ ok: false, error: 'Failed to fetch transaction' }, { status: 500 })
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const { id } = await params
     const body = await req.json().catch(() => ({}))
     if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 })
 
-    const update: Record<string, any> = {}
+    const update: Record<string, unknown> = {}
     if (body.method !== undefined) update['Payment/Method'] = body.method
     if (body.staff !== undefined) update['Payment/Staff'] = body.staff
     if (body.totalPaid !== undefined) update['Transaction/Total Paid'] = body.totalPaid
@@ -97,11 +106,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const { error } = await supabaseAdmin
       .from('Transactions')
       .update(update)
-      .eq('🔒 Row ID', id)
+      .eq('"🔒 Row ID"', id)
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
     return NextResponse.json({ ok: true })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    console.error('Error updating transaction:', e)
     return NextResponse.json({ ok: false, error: 'Failed to update transaction' }, { status: 500 })
   }
 }

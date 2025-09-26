@@ -7,10 +7,10 @@ import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Pencil, Search, Eye, DollarSign, TrendingUp, Users, Calendar } from "lucide-react"
+import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar } from "lucide-react"
 import { CreditCard } from "lucide-react"
 import Link from "next/link"
 
@@ -88,9 +88,10 @@ export default function PaymentsPage() {
         const json = await res.json()
         if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
         setRows(json.data || [])
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Error loading payments:', e)
-        toast.error('Failed to load payments: ' + e.message)
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error'
+        toast.error('Failed to load payments: ' + errorMessage)
       } finally {
         setLoading(false)
       }
@@ -115,7 +116,8 @@ export default function PaymentsPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok || json?.ok === false) throw new Error(json.error || 'Delete failed')
       toast.success('Transaction deleted')
-    } catch (e) {
+    } catch (e: unknown) {
+      console.error('Error deleting transaction:', e)
       setRows(prev)
       toast.error('Could not delete transaction')
     } finally {
