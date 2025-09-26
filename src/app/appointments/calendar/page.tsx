@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { 
   ChevronLeft, 
@@ -892,12 +894,100 @@ export default function CalendarPage() {
   const [bookingToCancel, setBookingToCancel] = React.useState<Appointment | null>(null)
   const [cancelLoading, setCancelLoading] = React.useState(false)
 
+  // Reschedule state
+  const [rescheduleOpen, setRescheduleOpen] = React.useState(false)
+  const [bookingToReschedule, setBookingToReschedule] = React.useState<Appointment | null>(null)
+  const [rescheduleLoading, setRescheduleLoading] = React.useState(false)
+  
+  // Reschedule form data
+  const [selectedStaff, setSelectedStaff] = React.useState<string>("")
+  const [staffOptions, setStaffOptions] = React.useState<Array<{
+    label: string;
+    value: string;
+    badge?: string;
+    icon?: string;
+  }>>([{
+    label: 'Any available staff',
+    value: 'any',
+    badge: 'Recommended',
+    icon: 'user'
+  }])
+  const [selectedDate, setSelectedDate] = React.useState<string>("")
+  const [selectedTime, setSelectedTime] = React.useState<string>("")
+  const [availableDates, setAvailableDates] = React.useState<Array<{
+    dateString: string;
+    dayName: string;
+    dateDisplay: string;
+    label?: string;
+    date: Date;
+  }>>([])
+  const [availableSlots, setAvailableSlots] = React.useState<Array<{
+    time: string;
+    isPast: boolean;
+  }>>([])
+  const [loadingStaff, setLoadingStaff] = React.useState(false)
+  const [loadingSlots, setLoadingSlots] = React.useState(false)
+  const [workingSlots, setWorkingSlots] = React.useState<Record<string, string[]>>({})
+
   // Helper function to check if appointment is within 2 hours
   const isWithinTwoHours = (startTimeString?: string) => {
     if (!startTimeString) return false
     const start = new Date(startTimeString)
     const now = new Date()
     return start.getTime() <= now.getTime() + 2 * 60 * 60 * 1000
+  }
+
+  // Helper functions for reschedule
+  const getTimeZoneOffsetInMs = (timeZone: string, utcDate: Date) => {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+    const parts = dtf.formatToParts(utcDate)
+    const map: Record<string, string> = {}
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value
+    }
+    const asUTC = Date.UTC(
+      Number(map.year),
+      Number(map.month) - 1,
+      Number(map.day),
+      Number(map.hour),
+      Number(map.minute),
+      Number(map.second)
+    )
+    return asUTC - utcDate.getTime()
+  }
+
+  const denverWallTimeToUtcIso = (year: number, month: number, day: number, hour: number, minute: number) => {
+    const baseUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+    const offset = getTimeZoneOffsetInMs('America/Denver', baseUtc)
+    return new Date(baseUtc.getTime() - offset).toISOString()
+  }
+
+  const isSlotInPast = (slotTime: string, dateString: string) => {
+    const now = new Date()
+    const [year, month, day] = dateString.split('-').map(Number)
+    const slotDate = new Date(year, month - 1, day)
+    
+    const timeMatch = slotTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
+    if (!timeMatch) return false
+    
+    let hour = parseInt(timeMatch[1])
+    const minute = parseInt(timeMatch[2])
+    const period = timeMatch[3].toUpperCase()
+    
+    if (period === 'PM' && hour !== 12) hour += 12
+    if (period === 'AM' && hour === 12) hour = 0
+    
+    slotDate.setHours(hour, minute, 0, 0)
+    return slotDate < now
   }
 
   // Cancel appointment function
@@ -941,14 +1031,243 @@ export default function CalendarPage() {
     }
   }
 
-  // Reschedule appointment function - simplified to redirect to appointments page
-  const handleRescheduleAppointment = (appointment: Appointment) => {
+  // Reschedule appointment function
+  const handleRescheduleAppointment = async (appointment: Appointment) => {
     if (isWithinTwoHours(appointment.startTime)) {
       toast.error("Cannot reschedule - booking starts within 2 hours")
       return
     }
+    
+    setBookingToReschedule(appointment)
+    setSelectedStaff(appointment.assigned_user_id || "any")
+    setSelectedDate("")
+    setSelectedTime("")
+    setRescheduleOpen(true)
     setDetailsOpen(false)
-    router.push(`/appointments?view=reschedule&id=${appointment.id}`)
+  }
+
+  const fetchStaffOptions = async () => {
+    if (!rescheduleOpen || !bookingToReschedule?.calendar_id) return
+    
+    setLoadingStaff(true)
+    const controller = new AbortController()
+    
+    try {
+      // Fetch service details to get team members
+      const serviceRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${bookingToReschedule.groupId || 'default'}`, { signal: controller.signal })
+      const serviceData = await serviceRes.json()
+      
+      const serviceObj = (serviceData.calendars || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
+      const teamMembers = serviceObj?.teamMembers || []
+
+      const items = [{
+        label: 'Any available staff',
+        value: 'any',
+        badge: 'Recommended',
+        icon: 'user'
+      }]
+
+      // Fetch individual staff details for each team member
+      const staffPromises = teamMembers.map(async (member: { userId: string; name: string; email?: string }) => {
+        try {
+          const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`, { signal: controller.signal })
+          const staffData = await staffRes.json()
+          return {
+            label: staffData.name,
+            value: member.userId,
+            icon: 'user'
+          }
+        } catch {
+          return null
+        }
+      })
+
+      const staffResults = await Promise.all(staffPromises)
+      const validStaff = staffResults.filter(Boolean)
+      
+      const allStaffOptions = [...items, ...validStaff]
+      
+      if (rescheduleOpen) {
+        setStaffOptions(allStaffOptions)
+      }
+    } catch (error) {
+      if (!controller.signal.aborted && rescheduleOpen) {
+        setStaffOptions([{
+          label: 'Any available staff',
+          value: 'any',
+          badge: 'Recommended',
+          icon: 'user'
+        }])
+      }
+    } finally {
+      if (rescheduleOpen) {
+        setLoadingStaff(false)
+      }
+    }
+  }
+
+  const fetchAvailableDates = async () => {
+    if (!bookingToReschedule?.calendar_id || !rescheduleOpen) return
+    
+    setLoadingSlots(true)
+    const controller = new AbortController()
+    
+    try {
+      const userId = selectedStaff && selectedStaff !== 'any' ? selectedStaff : null
+      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${bookingToReschedule.calendar_id}`
+      if (userId) {
+        apiUrl += `&userId=${userId}`
+      }
+      
+      const response = await fetch(apiUrl, { signal: controller.signal })
+      const data = await response.json()
+      
+      if (data.slots) {
+        const workingDates = Object.keys(data.slots).sort()
+        
+        const dates = workingDates.map((dateString) => {
+          const [year, month, day] = dateString.split('-').map(Number)
+          const date = new Date(year, month - 1, day)
+          
+          const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+          const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          
+          return {
+            dateString,
+            dayName,
+            dateDisplay,
+            label: '',
+            date
+          }
+        })
+        
+        if (rescheduleOpen) {
+          setAvailableDates(dates)
+          setWorkingSlots(data.slots)
+          
+          // Auto-select first future date
+          const today = new Date().toISOString().split('T')[0]
+          const firstFutureDate = dates.find(d => d.dateString >= today)
+          if (firstFutureDate) {
+            setSelectedDate(firstFutureDate.dateString)
+            fetchSlotsForDate(firstFutureDate.dateString, data.slots)
+          }
+        }
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error('Error fetching dates:', error)
+      }
+    } finally {
+      if (rescheduleOpen) {
+        setLoadingSlots(false)
+      }
+    }
+  }
+
+  const fetchSlotsForDate = (dateString: string, workingSlots: Record<string, string[]>) => {
+    if (workingSlots[dateString]) {
+      const slotsForSelectedDate = workingSlots[dateString]
+      const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({
+        time: slot,
+        isPast: isSlotInPast(slot, dateString)
+      }))
+      
+      const availableSlots = slotsWithStatus.filter((slot) => !slot.isPast)
+      setAvailableSlots(availableSlots)
+    } else {
+      setAvailableSlots([])
+    }
+  }
+
+  const confirmReschedule = async () => {
+    if (!bookingToReschedule || !selectedDate || !selectedTime) return
+    
+    setRescheduleLoading(true)
+    try {
+      const jsDate = new Date(selectedDate + 'T00:00:00')
+      const timeMatch = selectedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
+      
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1])
+        const minute = parseInt(timeMatch[2])
+        const period = timeMatch[3].toUpperCase()
+        
+        if (period === 'PM' && hour !== 12) hour += 12
+        if (period === 'AM' && hour === 12) hour = 0
+        
+        jsDate.setHours(hour, minute, 0, 0)
+        const localStartTime = jsDate
+        
+        // Calculate end time based on original duration
+        const originalStart = new Date(bookingToReschedule.startTime!)
+        const originalEnd = new Date(bookingToReschedule.endTime!)
+        const duration = originalEnd.getTime() - originalStart.getTime()
+        const localEndTime = new Date(localStartTime.getTime() + duration)
+        
+        // Determine assignedUserId
+        let assignedUserIdToSend = selectedStaff
+        if (selectedStaff === 'any') {
+          const realStaff = staffOptions.filter(item => item.value !== 'any')
+          if (realStaff.length > 0) {
+            assignedUserIdToSend = realStaff[0].value
+          } else if (bookingToReschedule.assigned_user_id) {
+            assignedUserIdToSend = bookingToReschedule.assigned_user_id
+          }
+        }
+
+        if (!assignedUserIdToSend || assignedUserIdToSend === 'any') {
+          throw new Error('A team member needs to be selected')
+        }
+
+        let updateUrl = `https://restyle-api.netlify.app/.netlify/functions/updateappointment?appointmentId=${bookingToReschedule.id}`
+        updateUrl += `&assignedUserId=${assignedUserIdToSend}`
+        
+        // Convert to UTC ISO
+        const y1 = localStartTime.getFullYear()
+        const m1 = localStartTime.getMonth() + 1
+        const d1 = localStartTime.getDate()
+        const h1 = localStartTime.getHours()
+        const min1 = localStartTime.getMinutes()
+        const startTimeFormatted = denverWallTimeToUtcIso(y1, m1, d1, h1, min1)
+        const y2 = localEndTime.getFullYear()
+        const m2 = localEndTime.getMonth() + 1
+        const d2 = localEndTime.getDate()
+        const h2 = localEndTime.getHours()
+        const min2 = localEndTime.getMinutes()
+        const endTimeFormatted = denverWallTimeToUtcIso(y2, m2, d2, h2, min2)
+        
+        updateUrl += `&startTime=${encodeURIComponent(startTimeFormatted)}`
+        updateUrl += `&endTime=${encodeURIComponent(endTimeFormatted)}`
+        
+        const response = await fetch(updateUrl)
+        const data = await response.json()
+        
+        if (data.message && data.message.includes('successfully')) {
+          toast.success("Appointment rescheduled successfully")
+          setRescheduleOpen(false)
+          resetRescheduleForm()
+          await refresh()
+        } else {
+          throw new Error(data.error || 'Reschedule failed')
+        }
+      }
+    } catch (error) {
+      console.error('Reschedule error:', error)
+      toast.error(`Reschedule failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setRescheduleLoading(false)
+    }
+  }
+
+  const resetRescheduleForm = () => {
+    setBookingToReschedule(null)
+    setSelectedStaff("")
+    setSelectedDate("")
+    setSelectedTime("")
+    setAvailableDates([])
+    setAvailableSlots([])
+    setWorkingSlots({})
   }
 
   // Fetch salon hours
@@ -1148,6 +1467,32 @@ export default function CalendarPage() {
 
   // Day view appointments
   const dayAppointments = appointmentsByDate[currentDate.toDateString()] || []
+
+  // Effect to fetch staff when reschedule dialog opens
+  React.useEffect(() => {
+    if (rescheduleOpen) {
+      fetchStaffOptions()
+    }
+  }, [rescheduleOpen])
+
+  // Effect to fetch dates when staff changes
+  React.useEffect(() => {
+    if (rescheduleOpen && selectedStaff && bookingToReschedule) {
+      setWorkingSlots({})
+      setAvailableDates([])
+      setAvailableSlots([])
+      setSelectedDate("")
+      setSelectedTime("")
+      fetchAvailableDates()
+    }
+  }, [selectedStaff, rescheduleOpen, bookingToReschedule])
+
+  // Effect to fetch slots when date changes
+  React.useEffect(() => {
+    if (selectedDate && workingSlots && Object.keys(workingSlots).length > 0) {
+      fetchSlotsForDate(selectedDate, workingSlots)
+    }
+  }, [selectedDate, workingSlots])
 
   return (
     <RoleGuard requiredTeamPrefix="">
@@ -1618,6 +1963,189 @@ export default function CalendarPage() {
                 >
                   {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
                 </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Reschedule Dialog */}
+          <Dialog open={rescheduleOpen} onOpenChange={(open) => {
+            setRescheduleOpen(open)
+            if (!open) {
+              resetRescheduleForm()
+            }
+          }}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl border-[#601625]/20">
+              <DialogHeader>
+                <DialogTitle className="text-[#601625] text-lg font-semibold">
+                  Reschedule Appointment
+                </DialogTitle>
+                <DialogDescription className="text-gray-600">
+                  Choose a new date and time for this appointment
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Current Appointment Info */}
+                {bookingToReschedule && (
+                  <div className="p-4 bg-[#601625]/5 border border-[#601625]/20 rounded-xl">
+                    <h4 className="font-semibold mb-3 text-[#601625]">Current Appointment Details</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Service:</span>
+                        <div className="text-gray-900">{bookingToReschedule.serviceName || bookingToReschedule.title}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Date & Time:</span>
+                        <div className="text-gray-900">
+                          {bookingToReschedule.startTime && formatDate(new Date(bookingToReschedule.startTime))} at {bookingToReschedule.startTime && formatTime(bookingToReschedule.startTime)}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Staff:</span>
+                        <div className="text-gray-900">
+                          {bookingToReschedule.assigned_user_id ? 
+                            (staffMap[bookingToReschedule.assigned_user_id] || 'Unknown Staff') : 
+                            'Unassigned'
+                          }
+                        </div>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Customer:</span>
+                        <div className="text-gray-900">{bookingToReschedule.contactName}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Staff Selection */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-[#601625]">Select Staff Member</Label>
+                  {loadingStaff ? (
+                    <Skeleton className="h-12 w-full" />
+                  ) : (
+                    <Select value={selectedStaff} onValueChange={setSelectedStaff}>
+                      <SelectTrigger className="w-full border-[#601625]/30 focus:border-[#601625] focus:ring-[#601625]/20">
+                        <SelectValue placeholder="Choose a staff member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {staffOptions.map((staff) => (
+                          <SelectItem key={staff.value} value={staff.value}>
+                            <div className="flex items-center gap-2">
+                              <UserIcon className="h-4 w-4" />
+                              {staff.label}
+                              {staff.badge && (
+                                <Badge variant="secondary" className="text-xs bg-[#601625]/10 text-[#601625]">
+                                  {staff.badge}
+                                </Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Date Selection */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-[#601625]">Select Date</Label>
+                    {loadingSlots ? (
+                      <div className="h-60 rounded-xl bg-gray-100 animate-pulse border" />
+                    ) : (
+                      <div className="border border-[#601625]/20 rounded-xl p-4 max-h-60 overflow-y-auto">
+                        <div className="grid grid-cols-7 gap-2 text-xs">
+                          {availableDates.map((date) => (
+                            <div
+                              key={date.dateString}
+                              onClick={() => setSelectedDate(date.dateString)}
+                              className={`p-3 text-center cursor-pointer rounded-lg transition-colors ${
+                                selectedDate === date.dateString
+                                  ? 'bg-[#601625] text-white'
+                                  : 'hover:bg-[#601625]/10 text-gray-700'
+                              }`}
+                            >
+                              <div className="font-medium">{date.dayName}</div>
+                              <div className="text-xs opacity-80">{date.dateDisplay}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Time Selection */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-[#601625]">Select Time</Label>
+                    {selectedDate ? (
+                      <div className="border border-[#601625]/20 rounded-xl p-4 max-h-60 overflow-y-auto">
+                        <div className="grid grid-cols-2 gap-2">
+                          {availableSlots.map((slot) => (
+                            <Button
+                              key={slot.time}
+                              variant={selectedTime === slot.time ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => setSelectedTime(slot.time)}
+                              className={`text-xs justify-center rounded-lg ${
+                                selectedTime === slot.time 
+                                  ? "bg-[#601625] text-white hover:bg-[#751a29]" 
+                                  : "hover:bg-[#601625]/10 text-gray-700"
+                              }`}
+                            >
+                              {slot.time}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-60 rounded-xl border-2 border-dashed border-[#601625]/20 flex items-center justify-center text-gray-500">
+                        Select a date first
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Summary */}
+                {selectedDate && selectedTime && selectedStaff && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <h4 className="font-medium mb-3 text-green-800">New Appointment Summary</h4>
+                    <div className="grid grid-cols-3 gap-4 text-sm text-green-700">
+                      <div>
+                        <span className="font-medium">Staff:</span> {staffOptions.find(s => s.value === selectedStaff)?.label}
+                      </div>
+                      <div>
+                        <span className="font-medium">Date:</span> {new Date(selectedDate).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </div>
+                      <div>
+                        <span className="font-medium">Time:</span> {selectedTime}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setRescheduleOpen(false)}
+                    disabled={rescheduleLoading}
+                    className="border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  
+                  <Button
+                    onClick={confirmReschedule}
+                    disabled={!selectedDate || !selectedTime || !selectedStaff || rescheduleLoading}
+                    className="bg-[#601625] hover:bg-[#751a29] text-white rounded-xl"
+                  >
+                    {rescheduleLoading ? 'Rescheduling...' : 'Confirm Reschedule'}
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
