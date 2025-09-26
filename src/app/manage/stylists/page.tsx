@@ -1,564 +1,484 @@
-'use client'
+"use client"
 
-import { useCallback, useEffect, useState } from 'react'
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { RoleGuard } from "@/components/role-guard"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { TimePicker } from '@/components/ui/time-picker'
-import { Switch } from '@/components/ui/switch'
-import { useIsMobile } from '@/hooks/use-mobile'
-import { Calendar, Clock, Plus, Settings, Trash2, User, Users } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { 
+  Users, 
+  RefreshCw, 
+  Calendar,
+  Clock,
+  Mail,
+  Scissors,
+  Settings
+} from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+import { useIsMobile } from "@/hooks/use-mobile"
 
-type StaffMember = {
-  ghl_id: string
-  first_name: string
-  last_name: string
-  email: string
-  role: string
-  phone?: string
-  profilePhoto?: string
-  [key: string]: unknown // Allow additional properties for working days
+type BarberStaff = {
+  "🔒 Row ID"?: string
+  "ð Row ID"?: string // Handle encoding issue
+  "Barber/Name": string
+  "ghl_id": string
+  "Barber/Email": string
+  "Monday/Start Value": string | number | null
+  "Monday/End Value": string | number | null
+  "Tuesday/Start Value": string | number | null
+  "Tuesday/End Value": string | number | null
+  "Wednesday/Start Value": string | number | null
+  "Wednesday/End Value": string | number | null
+  "Thursday/Start Value": string | number | null
+  "Thursday/End Value": string | number | null
+  "Friday/Start Value": string | number | null
+  "Friday/End Value": string | number | null
+  "Saturday/Start Value": string | number | null
+  "Saturday/End Value": string | number | null
+  "Sunday/Start Value": string | number | null
+  "Sunday/End Value": string | number | null
 }
 
-interface NewUser {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  password: string
+// Helper function to get the row ID
+const getRowId = (staff: BarberStaff): string => {
+  return staff["🔒 Row ID"] || staff["ð Row ID"] || ""
 }
 
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const DAYS = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
+  'Friday', 'Saturday', 'Sunday'
+]
 
 export default function StylistsPage() {
+  const [staffData, setStaffData] = useState<BarberStaff[]>([])
+  const [loading, setLoading] = useState(true)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [selectedGhlId, setSelectedGhlId] = useState<string>("")
+  const [password, setPassword] = useState<string>("")
+  const router = useRouter()
   const isMobile = useIsMobile()
-  
-  // State for staff data and management
-  const [staff, setStaff] = useState<StaffMember[]>([])
-  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  
-  // State for creating new users
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [newUser, setNewUser] = useState<NewUser>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    password: ''
-  })
-
-  // Statistics calculated from staff data
-  const totalStylists = Array.isArray(staff) ? staff.length : 0
-  const activeStylists = Array.isArray(staff) ? staff.filter(member => member.role === 'barber').length : 0
-  const adminStylists = Array.isArray(staff) ? staff.filter(member => member.role === 'admin').length : 0
 
   // Fetch staff data
-  const fetchStaff = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+  const fetchStaffData = async () => {
     try {
-      const response = await fetch('/api/getUsers', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      setLoading(true)
+      const response = await fetch('/api/barber-hours')
+      const result = await response.json()
       
-      if (response.ok) {
-        const data = await response.json()
-        const staffArray = Array.isArray(data) ? data : []
-        setStaff(staffArray)
-        if (staffArray.length > 0 && !selectedStaff) {
-          setSelectedStaff(staffArray[0])
-        }
+      if (result.ok) {
+        setStaffData(result.data)
       } else {
-        const errorMsg = `Failed to fetch staff: ${response.status} ${response.statusText}`
-        console.error(errorMsg)
-        setError(errorMsg)
+        toast.error('Failed to load staff data')
       }
-    } catch (error) {
-      const errorMsg = `Error fetching staff: ${error}`
-      console.error(errorMsg)
-      setError(errorMsg)
+    } catch {
+      toast.error('Error loading staff data')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [selectedStaff])
+  }
 
   useEffect(() => {
-    fetchStaff()
-  }, [fetchStaff])
+    fetchStaffData()
+  }, [])
 
-  // Handle working hours updates using minutes-based system
-  const handleWorkingHoursUpdate = async (day: string, field: 'is_working' | 'start_time' | 'end_time', value: boolean | number) => {
-    if (!selectedStaff) return
-
-    const updatedStaff = { ...selectedStaff }
-    
-      try {
-        const updateData: Record<string, unknown> = { ghl_id: selectedStaff.ghl_id }
-        
-        if (field === 'is_working') {
-        updateData[`${day}_is_working`] = value as boolean
-        // If turning off working, set times to 0
-        if (!(value as boolean)) {
-          updateData[`${day}_start`] = 0
-          updateData[`${day}_end`] = 0
-        } else {
-          // If turning on working, set default times
-          updateData[`${day}_start`] = 540 // 9:00 AM
-          updateData[`${day}_end`] = 1020 // 5:00 PM
-        }
-      } else if (field === 'start_time') {
-        updateData[`${day}_start`] = value as number
-      } else if (field === 'end_time') {
-        updateData[`${day}_end`] = value as number
-      }
-
-      const response = await fetch('/api/barber-hours', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
-      })
-
-      if (response.ok) {
-        // Update local state
-        if (field === 'is_working') {
-          updatedStaff[`${day}_is_working`] = value as boolean
-          if (!(value as boolean)) {
-            updatedStaff[`${day}_start`] = 0
-            updatedStaff[`${day}_end`] = 0
-          } else {
-            updatedStaff[`${day}_start`] = 540
-            updatedStaff[`${day}_end`] = 1020
-          }
-        } else {
-          updatedStaff[field === 'start_time' ? `${day}_start` : `${day}_end`] = value as number
-        }
-        
-        setSelectedStaff(updatedStaff)
-        setStaff(prevStaff => 
-          Array.isArray(prevStaff) ? prevStaff.map(s => s.ghl_id === selectedStaff.ghl_id ? updatedStaff : s) : []
-        )
-      }
-    } catch (error) {
-      console.error('Error updating working hours:', error)
-    }
+  // Check if day is working
+  const isDayWorking = (staff: BarberStaff, day: string): boolean => {
+    const startValue = staff[`${day}/Start Value` as keyof BarberStaff]
+    const endValue = staff[`${day}/End Value` as keyof BarberStaff]
+    return String(startValue) !== '0' && String(endValue) !== '0' && startValue !== null && endValue !== null
   }
 
-  // Handle creating new user
-  const handleCreateUser = async () => {
-    try {
-      const response = await fetch('/api/create-barber-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          email: newUser.email,
-          phone: newUser.phone,
-          password: newUser.password,
-        }),
-      })
-
-      if (response.ok) {
-        setNewUser({
-          firstName: '',
-          lastName: '',
-          email: '',
-          phone: '',
-          password: ''
-        })
-        setIsCreateDialogOpen(false)
-        await fetchStaff() // Refresh the staff list
-      } else {
-        console.error('Failed to create user')
-      }
-    } catch (error) {
-      console.error('Error creating user:', error)
-    }
+  // Get working days count
+  const getWorkingDaysCount = (staff: BarberStaff): number => {
+    return DAYS.filter(day => isDayWorking(staff, day)).length
   }
 
-  // Handle deleting user
-  const handleDeleteUser = async (ghlId: string) => {
-    if (confirm('Are you sure you want to delete this stylist?')) {
-      try {
-        const response = await fetch('/api/deleteUser', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ghl_id: ghlId }),
-        })
-
-        if (response.ok) {
-          await fetchStaff()
-          if (selectedStaff?.ghl_id === ghlId) {
-            const remainingStaff = Array.isArray(staff) ? staff.filter(s => s.ghl_id !== ghlId) : []
-            setSelectedStaff(remainingStaff[0] || null)
-          }
-        }
-      } catch (error) {
-        console.error('Error deleting user:', error)
-      }
-    }
+  // Navigate to staff hours management
+  const manageAvailability = (staff: BarberStaff) => {
+    // Navigate directly to the staff-specific URL using ghl_id
+    router.push(`/settings/staff-hours/${staff.ghl_id}`)
   }
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
-  }
-
-  if (error) {
+  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-        <div className="text-red-500 text-center">
-          <h2 className="text-xl font-semibold mb-2">Error Loading Stylists</h2>
-          <p>{error}</p>
-        </div>
-        <Button onClick={fetchStaff}>Try Again</Button>
-      </div>
+      <RoleGuard requiredRole="manager">
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+              <div className="flex items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h1 className="text-xl font-semibold">Stylists</h1>
+              </div>
+            </header>
+            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+              <div className="flex items-center justify-center h-64">
+                <RefreshCw className="h-8 w-8 animate-spin" />
+              </div>
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </RoleGuard>
     )
   }
 
   return (
-    <RoleGuard requiredRole="admin">
+    <RoleGuard requiredRole="manager">
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2">
+          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
+              <h1 className="text-xl font-semibold">Stylists</h1>
             </div>
           </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            <div className="space-y-6">
-              {/* Header with Stats */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Stylists</h1>
-          <p className="text-muted-foreground">Manage your team and their schedules</p>
-        </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Stylist
-        </Button>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Stylists</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStylists}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Stylists</CardTitle>
-            <User className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeStylists}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Administrators</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStylists}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="schedules" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="schedules">Schedules</TabsTrigger>
-          <TabsTrigger value="directory">Directory</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="schedules" className="space-y-4">
-          {/* Staff Selection Grid */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Select Stylist
-              </CardTitle>
-              <CardDescription>
-                Choose a stylist to view and manage their schedule
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {Array.isArray(staff) && staff.map((member) => (
-                  <Card
-                    key={member.ghl_id}
-                    className={`cursor-pointer transition-colors hover:bg-accent ${
-                      selectedStaff?.ghl_id === member.ghl_id ? 'ring-2 ring-primary' : ''
-                    }`}
-                    onClick={() => setSelectedStaff(member)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                          <User className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-medium text-sm">{member.first_name} {member.last_name}</h3>
-                          <Badge variant={member.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
-                            {member.role}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+          
+          <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Stylist Management</h2>
+                <p className="text-muted-foreground">
+                  Manage your stylists and their availability
+                </p>
               </div>
-            </CardContent>
-          </Card>
+              <Button 
+                onClick={fetchStaffData} 
+                variant="outline" 
+                size="sm"
+                disabled={loading}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
 
-          {/* Selected Stylist Schedule */}
-          {selectedStaff && (
+            <div>
+              <Button className="bg-primary" onClick={() => setCreateDialogOpen(true)}>
+                <Scissors className="h-4 w-4 mr-2" />
+                Add Stylists
+              </Button>
+            </div>
+
+            {/* Staff Overview Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Stylists</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{staffData.length}</div>
+                  <p className="text-xs text-muted-foreground">Active staff members</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Working Today</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {staffData.filter(staff => {
+                      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+                      return isDayWorking(staff, today)
+                    }).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Staff scheduled today</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Full Time</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {staffData.filter(staff => getWorkingDaysCount(staff) >= 5).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">5+ working days</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Part Time</CardTitle>
+                  <Scissors className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {staffData.filter(staff => getWorkingDaysCount(staff) < 5 && getWorkingDaysCount(staff) > 0).length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Less than 5 days</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Staff Directory - responsive */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  {selectedStaff.first_name} {selectedStaff.last_name}&apos;s Schedule
+                  <Users className="h-5 w-5" />
+                  Staff Directory
                 </CardTitle>
+                <CardDescription>
+                  Complete list of stylists with their availability information
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {DAYS.map((day, index) => {
-                    const isWorking = Boolean(selectedStaff[`${day}_is_working`])
-                    const startTime = Number(selectedStaff[`${day}_start`]) || 540 // 9:00 AM
-                    const endTime = Number(selectedStaff[`${day}_end`]) || 1020 // 5:00 PM
-                    
-                    return (
-                      <Card key={day} className="h-fit">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg">{DAY_LABELS[index]}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center space-x-2">
-                            <Switch
-                              checked={isWorking}
-                              onCheckedChange={(checked) => 
-                                handleWorkingHoursUpdate(day, 'is_working', checked)
-                              }
-                            />
-                            <Label className="text-sm">
-                              {isWorking ? 'Working' : 'Not Working'}
-                            </Label>
-                          </div>
-                          
-                          {isWorking && (
-                            <div className="space-y-3">
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Start Time</Label>
-                                <TimePicker
-                                  value={startTime}
-                                  onChange={(minutes) => handleWorkingHoursUpdate(day, 'start_time', minutes)}
-                                  label=""
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground">End Time</Label>
-                                <TimePicker
-                                  value={endTime}
-                                  onChange={(minutes) => handleWorkingHoursUpdate(day, 'end_time', minutes)}
-                                  label=""
-                                />
+                {isMobile ? (
+                  <div className="grid gap-2">
+                    {staffData.map((staff) => {
+                      const workingDays = getWorkingDaysCount(staff)
+                      const scheduleType = workingDays >= 5 ? 'Full Time' : workingDays > 0 ? 'Part Time' : 'Inactive'
+                      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+                      const workingToday = isDayWorking(staff, today)
+                      return (
+                        <Card key={getRowId(staff)}>
+                          <CardContent className="p-3">
+                            {/* Row 1: identity */}
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                                  {staff["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="font-medium leading-tight truncate">{staff["Barber/Name"]}</div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {staff["Barber/Email"]}
+                                </div>
                               </div>
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
+
+                            {/* Row 2: chips + action */}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1 text-xs">
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
+                                  {workingDays} {workingDays === 1 ? 'day' : 'days'}
+                                </Badge>
+                                <Badge 
+                                  variant={scheduleType === 'Full Time' ? 'default' : scheduleType === 'Part Time' ? 'secondary' : 'outline'}
+                                  className={
+                                    scheduleType === 'Full Time' 
+                                      ? 'bg-green-100 text-green-800 border-green-300' 
+                                      : scheduleType === 'Part Time'
+                                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                      : 'bg-red-100 text-red-800 border-red-300'
+                                  }
+                                >
+                                  {scheduleType}
+                                </Badge>
+                                <Badge 
+                                  variant={workingToday ? 'default' : 'secondary'}
+                                  className={
+                                    workingToday 
+                                      ? 'bg-green-100 text-green-800 border-green-300' 
+                                      : 'bg-gray-100 text-gray-800 border-gray-300'
+                                  }
+                                >
+                                  {workingToday ? 'Working Today' : 'Off Today'}
+                                </Badge>
+                              </div>
+                              <Button size="sm" onClick={() => manageAvailability(staff)} className="bg-primary hover:bg-primary/90 px-3 h-8 shrink-0">
+                                <Settings className="h-4 w-4 mr-1.5" />
+                                Manage
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Staff Member</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Working Days</TableHead>
+                        <TableHead>Schedule Type</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {staffData.map((staff) => {
+                        const workingDays = getWorkingDaysCount(staff)
+                        const scheduleType = workingDays >= 5 ? 'Full Time' : workingDays > 0 ? 'Part Time' : 'Inactive'
+                        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+                        const workingToday = isDayWorking(staff, today)
+                        
+                        return (
+                          <TableRow key={getRowId(staff)}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                                    {staff["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium">{staff["Barber/Name"]}</div>
+                                  <div className="text-sm text-muted-foreground hidden">
+                                    ID: {staff["ghl_id"]}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                {staff["Barber/Email"]}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                                {workingDays} {workingDays === 1 ? 'day' : 'days'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={scheduleType === 'Full Time' ? 'default' : scheduleType === 'Part Time' ? 'secondary' : 'outline'}
+                                className={
+                                  scheduleType === 'Full Time' 
+                                    ? 'bg-green-100 text-green-800 border-green-300' 
+                                    : scheduleType === 'Part Time'
+                                    ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                    : 'bg-red-100 text-red-800 border-red-300'
+                                }
+                              >
+                                {scheduleType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={workingToday ? 'default' : 'secondary'}
+                                className={
+                                  workingToday 
+                                    ? 'bg-green-100 text-green-800 border-green-300' 
+                                    : 'bg-gray-100 text-gray-800 border-gray-300'
+                                }
+                              >
+                                {workingToday ? 'Working Today' : 'Off Today'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                onClick={() => manageAvailability(staff)}
+                                className="bg-primary hover:bg-primary/90"
+                              >
+                                <Settings className="h-4 w-4 mr-2" />
+                                Manage Availability
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
 
-        <TabsContent value="directory" className="space-y-4">
-          {/* Staff Directory */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Stylist Directory</CardTitle>
-              <CardDescription>
-                View all stylists and their information
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isMobile ? (
-                // Mobile Card View
-                <div className="space-y-4">
-                  {Array.isArray(staff) && staff.map((member) => (
-                    <Card key={member.ghl_id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-1">
-                            <div className="font-medium">
-                              {member.first_name} {member.last_name}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {member.email}
-                            </div>
-                            {member.phone && (
-                              <div className="text-sm text-muted-foreground">
-                                {member.phone}
-                              </div>
-                            )}
-                            <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                              {member.role}
-                            </Badge>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteUser(member.ghl_id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                // Desktop Table View
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Array.isArray(staff) && staff.map((member) => (
-                      <TableRow key={member.ghl_id}>
-                        <TableCell className="font-medium">
-                          {member.first_name} {member.last_name}
-                        </TableCell>
-                        <TableCell>{member.email}</TableCell>
-                        <TableCell>{member.phone || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                            {member.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteUser(member.ghl_id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Create User Dialog */}
-      {isCreateDialogOpen && (
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add New Stylist</DialogTitle>
-              <DialogDescription>
-                Create a new stylist account with login credentials.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    value={newUser.firstName}
-                    onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    value={newUser.lastName}
-                    onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  value={newUser.phone}
-                  onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateUser}>Create Stylist</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-            </div>
+            {staffData.length === 0 && (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Staff Found</h3>
+                  <p className="text-muted-foreground text-center">
+                    No staff data is available. Please check your database configuration.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add Stylist</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Select staff</div>
+                  <Select value={selectedGhlId} onValueChange={setSelectedGhlId}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Choose staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffData.map((s) => (
+                        <SelectItem key={getRowId(s)} value={s.ghl_id}>
+                          {s["Barber/Name"]} — {s["Barber/Email"]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Password</div>
+                  <Input
+                    type="password"
+                    placeholder="Min 8 characters"
+                    className="h-9"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <div className="pt-2">
+                  <Button
+                    className="w-full"
+                    disabled={creating || !selectedGhlId || password.length < 8}
+                    onClick={async () => {
+                      const staff = staffData.find((x) => x.ghl_id === selectedGhlId)
+                      if (!staff) return
+                      setCreating(true)
+                      try {
+                        const res = await fetch('/api/create-barber-user', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            email: staff["Barber/Email"],
+                            full_name: staff["Barber/Name"],
+                            ghl_id: staff.ghl_id,
+                            role: 'barber',
+                            password,
+                          }),
+                        })
+                        const out = await res.json()
+                        if (!res.ok || !out.ok) throw new Error(out.error || 'Failed')
+                        toast.success(`User created for ${staff["Barber/Name"]}`)
+                        setSelectedGhlId("")
+                        setPassword("")
+                        setCreateDialogOpen(false)
+                      } catch {
+                        toast.error('Failed to create user')
+                      } finally {
+                        setCreating(false)
+                      }
+                    }}
+                  >
+                    {creating ? 'Adding…' : 'Add Stylist'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>
