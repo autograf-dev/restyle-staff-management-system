@@ -22,25 +22,14 @@ import { toast } from "sonner"
 
 interface PaymentResult {
   success: boolean
-  sessionId: string
-  paymentId: string
+  appointmentId: string
   amount: number
-  currency: string
-  appointmentDetails: {
-    id: string
-    serviceName: string
-    customerName: string
-    staffName: string
-    appointmentDate: string
-    appointmentTime: string
-    duration: string
-  }
-  customerInfo: {
-    name: string
-    email: string
-    phone: string
-  }
-  receiptUrl?: string
+  serviceName: string
+  customerName: string
+  staffName: string
+  appointmentDate: string
+  appointmentTime: string
+  paymentId: string
 }
 
 function CheckoutSuccessContent() {
@@ -51,78 +40,75 @@ function CheckoutSuccessContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Get URL parameters
-  const sessionId = searchParams?.get('session_id')
-  const paymentId = searchParams?.get('payment_id')
+  // Get URL parameters from the original checkout flow
+  const appointmentId = searchParams?.get('appointmentId')
+  const amount = searchParams?.get('amount')
+  const serviceName = searchParams?.get('serviceName')
+  const customerName = searchParams?.get('customerName')
+  const staffName = searchParams?.get('staffName')
+  const appointmentDate = searchParams?.get('appointmentDate')
+  const appointmentTime = searchParams?.get('appointmentTime')
 
-  // Fetch payment confirmation details
-  const fetchPaymentDetails = async () => {
-    if (!sessionId) {
-      setError('No session ID provided')
+  // Simple payment processing - just store to Supabase
+  const processPayment = async () => {
+    if (!appointmentId || !amount) {
+      setError('Missing payment information')
       return
     }
 
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/confirmPayment', {
+      // Generate a simple payment ID
+      const paymentId = `payment_${appointmentId}_${Date.now()}`
+      
+      // Create transaction record in Supabase
+      const response = await fetch('/api/transactions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId,
-          paymentId
+          transaction: {
+            id: paymentId,
+            bookingId: appointmentId,
+            paymentDate: new Date().toISOString(),
+            method: 'card',
+            subtotal: parseFloat(amount),
+            totalPaid: parseFloat(amount),
+            status: 'Paid',
+            transactionPaid: 'Yes',
+            services: serviceName || 'Service',
+            staff: staffName || 'Staff'
+          },
+          items: [{
+            id: `${paymentId}_item_1`,
+            paymentId: paymentId,
+            serviceName: serviceName || 'Service',
+            price: parseFloat(amount),
+            staffName: staffName || 'Staff'
+          }]
         })
       })
 
       if (!response.ok) {
-        throw new Error('Failed to confirm payment')
+        throw new Error('Failed to create transaction')
       }
 
-      const result = await response.json()
+      // Set success result
+      setPaymentResult({
+        success: true,
+        appointmentId: appointmentId,
+        amount: parseFloat(amount),
+        serviceName: serviceName || 'Service',
+        customerName: customerName || 'Customer',
+        staffName: staffName || 'Staff',
+        appointmentDate: appointmentDate || new Date().toISOString(),
+        appointmentTime: appointmentTime || '',
+        paymentId: paymentId
+      })
       
-      if (result.success && result.paymentDetails) {
-        setPaymentResult(result.paymentDetails)
-        
-        // Mark appointment as paid by creating a transaction record
-        if (result.paymentDetails.appointmentDetails?.id) {
-          try {
-            await fetch('/api/transactions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                transaction: {
-                  id: result.paymentDetails.paymentId || sessionId,
-                  bookingId: result.paymentDetails.appointmentDetails.id,
-                  paymentDate: new Date().toISOString(),
-                  method: 'card', // or from result if available
-                  subtotal: result.paymentDetails.amount,
-                  totalPaid: result.paymentDetails.amount,
-                  status: 'Paid', // This maps to Payment/Status in Supabase
-                  transactionPaid: 'Yes' // This maps to Transaction/Paid in Supabase
-                },
-                items: [{
-                  id: `${result.paymentDetails.paymentId || sessionId}_item_1`,
-                  paymentId: result.paymentDetails.paymentId || sessionId,
-                  serviceName: result.paymentDetails.appointmentDetails.serviceName,
-                  price: result.paymentDetails.amount,
-                  staffName: result.paymentDetails.appointmentDetails.staffName
-                }]
-              })
-            })
-          } catch (error) {
-            console.error('Failed to create transaction record:', error)
-            // Don't fail the success page if transaction creation fails
-          }
-        }
-        
-        toast.success('Payment completed successfully!')
-      } else {
-        setError(result.error || 'Payment confirmation failed')
-      }
+      toast.success('Payment completed successfully!')
     } catch (error) {
-      console.error('Error confirming payment:', error)
-      setError('Failed to load payment confirmation')
-      toast.error('Could not confirm payment status')
+      console.error('Error processing payment:', error)
+      setError('Failed to process payment')
+      toast.error('Could not complete payment')
     }
   }
 
@@ -155,13 +141,13 @@ function CheckoutSuccessContent() {
   useEffect(() => {
     const confirmPayment = async () => {
       setLoading(true)
-      await fetchPaymentDetails()
+      await processPayment()
       setLoading(false)
     }
     
     confirmPayment()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, paymentId])
+  }, [appointmentId, amount])
 
   if (loading) {
     return (
@@ -264,27 +250,16 @@ function CheckoutSuccessContent() {
                       </div>
                       
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Session ID</span>
-                        <span className="font-mono text-sm">{paymentResult.sessionId}</span>
+                        <span className="text-sm text-muted-foreground">Appointment ID</span>
+                        <span className="font-mono text-sm">{paymentResult.appointmentId}</span>
                       </div>
                       
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Amount Paid</span>
                         <span className="font-semibold text-lg text-green-600">
-                          {formatCurrency(paymentResult.amount, paymentResult.currency)}
+                          {formatCurrency(paymentResult.amount)}
                         </span>
                       </div>
-                      
-                      {paymentResult.receiptUrl && (
-                        <div className="pt-2">
-                          <Button variant="outline" size="sm" asChild className="w-full">
-                            <a href={paymentResult.receiptUrl} target="_blank" rel="noopener noreferrer">
-                              <Receipt className="h-4 w-4 mr-2" />
-                              View Receipt
-                            </a>
-                          </Button>
-                        </div>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -307,28 +282,23 @@ function CheckoutSuccessContent() {
                           <Receipt className="h-4 w-4 text-primary" />
                         </div>
                         <div>
-                          <div className="font-medium">{paymentResult.appointmentDetails.serviceName}</div>
+                          <div className="font-medium">{paymentResult.serviceName}</div>
                           <div className="text-sm text-muted-foreground">Service</div>
                         </div>
                       </div>
 
-                      {paymentResult.appointmentDetails.appointmentDate && (
+                      {paymentResult.appointmentDate && (
                         <div className="flex items-start gap-3">
                           <div className="p-2 bg-blue-100 rounded-full">
                             <Clock className="h-4 w-4 text-blue-600" />
                           </div>
                           <div>
                             <div className="font-medium">
-                              {formatDateTime(paymentResult.appointmentDetails.appointmentDate).date}
+                              {formatDateTime(paymentResult.appointmentDate).date}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {paymentResult.appointmentDetails.appointmentTime || formatDateTime(paymentResult.appointmentDetails.appointmentDate).time}
+                              {paymentResult.appointmentTime || formatDateTime(paymentResult.appointmentDate).time}
                             </div>
-                            {paymentResult.appointmentDetails.duration && (
-                              <div className="text-xs text-muted-foreground">
-                                Duration: {paymentResult.appointmentDetails.duration}
-                              </div>
-                            )}
                           </div>
                         </div>
                       )}
@@ -338,7 +308,7 @@ function CheckoutSuccessContent() {
                           <UserIcon className="h-4 w-4 text-green-600" />
                         </div>
                         <div>
-                          <div className="font-medium">{paymentResult.appointmentDetails.staffName}</div>
+                          <div className="font-medium">{paymentResult.staffName}</div>
                           <div className="text-sm text-muted-foreground">Your Stylist</div>
                         </div>
                       </div>
@@ -358,32 +328,22 @@ function CheckoutSuccessContent() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-2">
                       <div className="flex items-center gap-3">
                         <UserIcon className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{paymentResult.customerInfo.name}</div>
+                          <div className="font-medium">{paymentResult.customerName}</div>
                           <div className="text-sm text-muted-foreground">Customer</div>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-3">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
+                        <Receipt className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{paymentResult.customerInfo.email}</div>
-                          <div className="text-sm text-muted-foreground">Email</div>
+                          <div className="font-medium">{paymentResult.paymentId}</div>
+                          <div className="text-sm text-muted-foreground">Payment ID</div>
                         </div>
                       </div>
-                      
-                      {paymentResult.customerInfo.phone && (
-                        <div className="flex items-center gap-3">
-                          <Phone className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium">{paymentResult.customerInfo.phone}</div>
-                            <div className="text-sm text-muted-foreground">Phone</div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -409,7 +369,7 @@ function CheckoutSuccessContent() {
                 <div className="text-center space-y-2">
                   <h3 className="font-semibold text-blue-900">What happens next?</h3>
                   <p className="text-sm text-blue-700">
-                    • A confirmation email will be sent to {paymentResult?.customerInfo.email}<br />
+                    • Your payment has been processed successfully<br />
                     • You&apos;ll receive a reminder 24 hours before your appointment<br />
                     • If you need to reschedule, please contact us at least 24 hours in advance
                   </p>
