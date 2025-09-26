@@ -7,7 +7,7 @@ import { RoleGuard } from "@/components/role-guard"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -64,11 +64,18 @@ export default function StylistsPage() {
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [selectedGhlId, setSelectedGhlId] = useState<string>("")
-  const [password, setPassword] = useState<string>("")
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const router = useRouter()
   const isMobile = useIsMobile()
+
+  // Form state for creating new stylist
+  const [newStylist, setNewStylist] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: ''
+  })
 
   // Get selected staff member data
   const selectedStaffData = staffData.find(staff => getRowId(staff) === selectedStaff)
@@ -531,68 +538,109 @@ export default function StylistsPage() {
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Add Stylist</DialogTitle>
+                <DialogTitle>Add New Stylist</DialogTitle>
               </DialogHeader>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium">Select staff</div>
-                  <Select value={selectedGhlId} onValueChange={setSelectedGhlId}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Choose staff" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {staffData.map((s) => (
-                        <SelectItem key={getRowId(s)} value={s.ghl_id}>
-                          {s["Barber/Name"]} — {s["Barber/Email"]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">First Name</Label>
+                    <Input
+                      placeholder="First name"
+                      value={newStylist.firstName}
+                      onChange={(e) => setNewStylist(prev => ({ ...prev, firstName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Last Name</Label>
+                    <Input
+                      placeholder="Last name"
+                      value={newStylist.lastName}
+                      onChange={(e) => setNewStylist(prev => ({ ...prev, lastName: e.target.value }))}
+                    />
+                  </div>
                 </div>
+                
                 <div className="space-y-1">
-                  <div className="text-sm font-medium">Password</div>
+                  <Label className="text-sm font-medium">Email</Label>
+                  <Input
+                    type="email"
+                    placeholder="stylist@example.com"
+                    value={newStylist.email}
+                    onChange={(e) => setNewStylist(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Phone (Optional)</Label>
+                  <Input
+                    type="tel"
+                    placeholder="Phone number"
+                    value={newStylist.phone}
+                    onChange={(e) => setNewStylist(prev => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Password</Label>
                   <Input
                     type="password"
                     placeholder="Min 8 characters"
-                    className="h-9"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={newStylist.password}
+                    onChange={(e) => setNewStylist(prev => ({ ...prev, password: e.target.value }))}
                   />
                 </div>
+                
                 <div className="pt-2">
                   <Button
                     className="w-full"
-                    disabled={creating || !selectedGhlId || password.length < 8}
+                    disabled={creating || 
+                      !newStylist.firstName.trim() || 
+                      !newStylist.lastName.trim() || 
+                      !newStylist.email.trim() || 
+                      newStylist.password.length < 8
+                    }
                     onClick={async () => {
-                      const staff = staffData.find((x) => x.ghl_id === selectedGhlId)
-                      if (!staff) return
                       setCreating(true)
                       try {
-                        const res = await fetch('/api/create-barber-user', {
+                        const res = await fetch('/api/createUser', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            email: staff["Barber/Email"],
-                            full_name: staff["Barber/Name"],
-                            ghl_id: staff.ghl_id,
+                            firstName: newStylist.firstName.trim(),
+                            lastName: newStylist.lastName.trim(),
+                            email: newStylist.email.trim(),
+                            phone: newStylist.phone.trim(),
+                            password: newStylist.password,
+                            full_name: `${newStylist.firstName.trim()} ${newStylist.lastName.trim()}`,
                             role: 'barber',
-                            password,
                           }),
                         })
                         const out = await res.json()
-                        if (!res.ok || !out.ok) throw new Error(out.error || 'Failed')
-                        toast.success(`User created for ${staff["Barber/Name"]}`)
-                        setSelectedGhlId("")
-                        setPassword("")
+                        if (!res.ok || !out.ok) throw new Error(out.error || 'Failed to create user')
+                        
+                        toast.success(`New stylist ${newStylist.firstName} ${newStylist.lastName} created successfully!`)
+                        
+                        // Reset form
+                        setNewStylist({
+                          firstName: '',
+                          lastName: '',
+                          email: '',
+                          phone: '',
+                          password: ''
+                        })
                         setCreateDialogOpen(false)
-                      } catch {
-                        toast.error('Failed to create user')
+                        
+                        // Refresh staff data to include new user
+                        await fetchStaffData()
+                      } catch (error) {
+                        console.error('Error creating stylist:', error)
+                        toast.error('Failed to create stylist')
                       } finally {
                         setCreating(false)
                       }
                     }}
                   >
-                    {creating ? 'Adding…' : 'Add Stylist'}
+                    {creating ? 'Creating Stylist...' : 'Create Stylist'}
                   </Button>
                 </div>
               </div>
