@@ -40,75 +40,70 @@ function CheckoutSuccessContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Get URL parameters from the original checkout flow
-  const appointmentId = searchParams?.get('appointmentId')
-  const amount = searchParams?.get('amount')
-  const serviceName = searchParams?.get('serviceName')
-  const customerName = searchParams?.get('customerName')
-  const staffName = searchParams?.get('staffName')
-  const appointmentDate = searchParams?.get('appointmentDate')
-  const appointmentTime = searchParams?.get('appointmentTime')
+  // Get transaction ID from URL
+  const transactionId = searchParams?.get('id')
 
-  // Simple payment processing - just store to Supabase
-  const processPayment = async () => {
-    if (!appointmentId || !amount) {
-      setError('Missing payment information')
+  // Fetch transaction data from Supabase
+  const fetchTransactionData = async () => {
+    if (!transactionId) {
+      setError('Missing transaction ID')
       return
     }
 
     try {
-      // Generate a simple payment ID
-      const paymentId = `payment_${appointmentId}_${Date.now()}`
-      
-      // Create transaction record in Supabase
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction: {
-            id: paymentId,
-            bookingId: appointmentId,
-            paymentDate: new Date().toISOString(),
-            method: 'card',
-            subtotal: parseFloat(amount),
-            totalPaid: parseFloat(amount),
-            status: 'Paid',
-            transactionPaid: 'Yes',
-            services: serviceName || 'Service',
-            staff: staffName || 'Staff'
-          },
-          items: [{
-            id: `${paymentId}_item_1`,
-            paymentId: paymentId,
-            serviceName: serviceName || 'Service',
-            price: parseFloat(amount),
-            staffName: staffName || 'Staff'
-          }]
+      // Try to get data from sessionStorage first (fallback)
+      const cachedData = sessionStorage.getItem(`tx:${transactionId}`)
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData)
+        setPaymentResult({
+          success: true,
+          appointmentId: parsedData.transaction.bookingId || transactionId,
+          amount: parsedData.transaction.totalPaid || 0,
+          serviceName: parsedData.transaction.serviceNamesJoined || 'Service',
+          customerName: parsedData.meta.customerName || 'Customer',
+          staffName: parsedData.transaction.paymentStaff || 'Staff',
+          appointmentDate: parsedData.transaction.paymentDate || new Date().toISOString(),
+          appointmentTime: '',
+          paymentId: transactionId
         })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create transaction')
+        toast.success('Payment completed successfully!')
+        return
       }
 
+      // Fetch from API
+      const response = await fetch(`/api/transactions/${transactionId}`)
+      
+      if (!response.ok) {
+        throw new Error('Transaction not found')
+      }
+
+      const result = await response.json()
+      
+      if (!result.ok || !result.data) {
+        throw new Error('Transaction data invalid')
+      }
+
+      const transaction = result.data
+      const items = transaction.items || []
+      
       // Set success result
       setPaymentResult({
         success: true,
-        appointmentId: appointmentId,
-        amount: parseFloat(amount),
-        serviceName: serviceName || 'Service',
-        customerName: customerName || 'Customer',
-        staffName: staffName || 'Staff',
-        appointmentDate: appointmentDate || new Date().toISOString(),
-        appointmentTime: appointmentTime || '',
-        paymentId: paymentId
+        appointmentId: transaction.bookingId || transactionId,
+        amount: transaction.totalPaid || 0,
+        serviceName: transaction.services || items.map((item: { serviceName: string }) => item.serviceName).join(', ') || 'Service',
+        customerName: 'Customer', // We don't store customer name in the current schema
+        staffName: transaction.staff || items.map((item: { staffName: string }) => item.staffName).join(', ') || 'Staff',
+        appointmentDate: transaction.paymentDate || new Date().toISOString(),
+        appointmentTime: '',
+        paymentId: transactionId
       })
       
       toast.success('Payment completed successfully!')
     } catch (error) {
-      console.error('Error processing payment:', error)
-      setError('Failed to process payment')
-      toast.error('Could not complete payment')
+      console.error('Error fetching transaction:', error)
+      setError('Failed to load transaction details')
+      toast.error('Could not load payment details')
     }
   }
 
@@ -139,15 +134,15 @@ function CheckoutSuccessContent() {
   }
 
   useEffect(() => {
-    const confirmPayment = async () => {
+    const loadTransactionData = async () => {
       setLoading(true)
-      await processPayment()
+      await fetchTransactionData()
       setLoading(false)
     }
     
-    confirmPayment()
+    loadTransactionData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointmentId, amount])
+  }, [transactionId])
 
   if (loading) {
     return (
