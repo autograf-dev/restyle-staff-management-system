@@ -37,10 +37,12 @@ import {
   Star,
   Gem,
   CheckCircle2,
+  Edit3,
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { useUser } from "@/contexts/user-context"
 
 interface AppointmentDetails {
   id: string
@@ -121,6 +123,7 @@ interface GroupServices {
 function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useUser()
   
   // URL Parameters
   const appointmentId = searchParams?.get('appointmentId')
@@ -161,6 +164,9 @@ function CheckoutContent() {
     staffId: string
     staffName: string
   }>>([])
+  const [editingService, setEditingService] = useState<{ type: 'appointment' | 'additional', index: number } | null>(null)
+  const [editPrice, setEditPrice] = useState<string>('')
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   // Get icon for group
   const getGroupIcon = (groupName: string) => {
@@ -639,6 +645,54 @@ function CheckoutContent() {
         totalEarning
       }
     }).sort((a, b) => b.totalServicePrice - a.totalServicePrice)
+  }
+
+  // Price editing functions
+  const handleEditPrice = (type: 'appointment' | 'additional', index: number) => {
+    setEditingService({ type, index })
+    if (type === 'appointment' && paymentSession) {
+      setEditPrice(paymentSession.appointments[index].servicePrice.toString())
+    } else if (type === 'additional') {
+      setEditPrice(additionalServices[index].price.toString())
+    }
+    setIsEditDialogOpen(true)
+  }
+
+  const handleSavePrice = () => {
+    if (!editingService || !paymentSession) return
+
+    const newPrice = parseFloat(editPrice)
+    if (isNaN(newPrice) || newPrice < 0) {
+      toast.error('Please enter a valid price')
+      return
+    }
+
+    if (editingService.type === 'appointment') {
+      // Update appointment service price
+      const updatedAppointments = [...paymentSession.appointments]
+      updatedAppointments[editingService.index] = {
+        ...updatedAppointments[editingService.index],
+        servicePrice: newPrice
+      }
+      
+      setPaymentSession(prev => prev ? {
+        ...prev,
+        appointments: updatedAppointments
+      } : null)
+    } else if (editingService.type === 'additional') {
+      // Update additional service price
+      const updatedAdditionalServices = [...additionalServices]
+      updatedAdditionalServices[editingService.index] = {
+        ...updatedAdditionalServices[editingService.index],
+        price: newPrice
+      }
+      setAdditionalServices(updatedAdditionalServices)
+    }
+
+    setIsEditDialogOpen(false)
+    setEditingService(null)
+    setEditPrice('')
+    toast.success('Price updated successfully')
   }
 
   // Formatters
@@ -1129,7 +1183,19 @@ function CheckoutContent() {
                                   <div className="text-[14px] font-medium text-neutral-900">{apt.serviceName}</div>
                                   <div className="text-[12px] text-neutral-500">{apt.duration} • {apt.staffName}</div>
                                 </div>
-                                <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(apt.servicePrice, paymentSession.pricing.currency)}</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(apt.servicePrice, paymentSession.pricing.currency)}</div>
+                                  {user?.role === 'admin' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditPrice('appointment', index)}
+                                      className="h-6 w-6 p-0 hover:bg-neutral-100"
+                                    >
+                                      <Edit3 className="h-3 w-3 text-neutral-500" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                             {additionalServices.map((service, index) => (
@@ -1138,7 +1204,19 @@ function CheckoutContent() {
                                   <div className="text-[14px] font-medium text-neutral-900">{service.name}</div>
                                   <div className="text-[12px] text-neutral-500">{service.duration} min • {service.staffName}</div>
                                 </div>
-                                <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(service.price, paymentSession.pricing.currency)}</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(service.price, paymentSession.pricing.currency)}</div>
+                                  {user?.role === 'admin' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditPrice('additional', index)}
+                                      className="h-6 w-6 p-0 hover:bg-neutral-100"
+                                    >
+                                      <Edit3 className="h-3 w-3 text-neutral-500" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1283,6 +1361,42 @@ function CheckoutContent() {
               </div>
             )}
           </div>
+
+          {/* Price Edit Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Service Price</DialogTitle>
+                <DialogDescription>
+                  Update the price for {editingService?.type === 'appointment' 
+                    ? paymentSession?.appointments[editingService.index]?.serviceName 
+                    : additionalServices[editingService?.index || 0]?.name || 'this service'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price (CAD)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSavePrice}>
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>

@@ -6,23 +6,18 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { 
   CheckCircle, 
   Calendar as CalendarIcon, 
   ArrowLeft,
   Receipt,
   User as UserIcon,
-  Phone,
-  Edit3
+  Phone
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
-import { useUser } from "@/contexts/user-context"
 
 interface TxItem {
   id: string
@@ -54,15 +49,11 @@ interface TxRow {
 function CheckoutSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useUser()
   
   const [tx, setTx] = useState<TxRow | null>(null)
   const [items, setItems] = useState<TxItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [editingItem, setEditingItem] = useState<TxItem | null>(null)
-  const [editPrice, setEditPrice] = useState<string>('')
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   // Get URL parameters
   const id = searchParams?.get('id')
@@ -153,81 +144,6 @@ function CheckoutSuccessContent() {
   }
 
 
-  // Calculate tip distribution based on service prices
-  const calculateTipDistribution = (items: TxItem[], totalTip: number) => {
-    const totalServicePrice = items.reduce((sum, item) => sum + (item.price || 0), 0)
-    if (totalServicePrice === 0) return items
-
-    return items.map(item => {
-      const servicePrice = item.price || 0
-      const tipPercentage = totalServicePrice > 0 ? servicePrice / totalServicePrice : 0
-      const tipAmount = totalTip * tipPercentage
-      
-      return {
-        ...item,
-        staffTipSplit: tipPercentage,
-        staffTipCollected: tipAmount
-      }
-    })
-  }
-
-  // Recalculate totals after price change
-  const recalculateTotals = (updatedItems: TxItem[]) => {
-    if (!tx) return
-
-    const newSubtotal = updatedItems.reduce((sum, item) => sum + (item.price || 0), 0)
-    const tipPercentage = 0.18 // 18% tip
-    const newTip = newSubtotal * tipPercentage
-    const gstRate = 0.05 // 5% GST
-    const pstRate = 0.07 // 7% PST
-    const newGst = newSubtotal * gstRate
-    const newPst = newSubtotal * pstRate
-    const newTotal = newSubtotal + newTip + newGst + newPst
-
-    // Update tip distribution
-    const itemsWithUpdatedTips = calculateTipDistribution(updatedItems, newTip)
-
-    setTx(prev => prev ? {
-      ...prev,
-      subtotal: newSubtotal,
-      tip: newTip,
-      tax: newGst + newPst,
-      totalPaid: newTotal,
-      items: itemsWithUpdatedTips
-    } : null)
-
-    setItems(itemsWithUpdatedTips)
-  }
-
-  // Handle price edit
-  const handleEditPrice = (item: TxItem) => {
-    setEditingItem(item)
-    setEditPrice(item.price?.toString() || '0')
-    setIsEditDialogOpen(true)
-  }
-
-  // Save price changes
-  const handleSavePrice = () => {
-    if (!editingItem || !tx) return
-
-    const newPrice = parseFloat(editPrice)
-    if (isNaN(newPrice) || newPrice < 0) {
-      toast.error('Please enter a valid price')
-      return
-    }
-
-    const updatedItems = items.map(item => 
-      item.id === editingItem.id 
-        ? { ...item, price: newPrice }
-        : item
-    )
-
-    recalculateTotals(updatedItems)
-    setIsEditDialogOpen(false)
-    setEditingItem(null)
-    setEditPrice('')
-    toast.success('Price updated successfully')
-  }
 
   useEffect(() => {
     const load = async () => {
@@ -404,18 +320,8 @@ function CheckoutSuccessContent() {
                               )}
                             </div>
                           </div>
-                          <div className="text-right flex items-center gap-2">
+                          <div className="text-right">
                             <div className="font-semibold text-neutral-900">{formatCurrency(it.price || 0, 'CAD')}</div>
-                            {user?.role === 'admin' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditPrice(it)}
-                                className="h-6 w-6 p-0 hover:bg-neutral-100"
-                              >
-                                <Edit3 className="h-3 w-3 text-neutral-500" />
-                              </Button>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -533,39 +439,6 @@ function CheckoutSuccessContent() {
             </Card>
           </div>
 
-          {/* Price Edit Dialog */}
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Edit Service Price</DialogTitle>
-                <DialogDescription>
-                  Update the price for {editingItem?.serviceName || 'this service'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price (CAD)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSavePrice}>
-                    Save Changes
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>
