@@ -122,13 +122,10 @@ export default function PaymentsPage() {
     setDeleteDialogOpen(false)
     
     try {
-      console.log('Attempting to delete transaction with ID:', selectedTransaction.id)
       const res = await fetch(`/api/transactions?id=${encodeURIComponent(selectedTransaction.id)}`, { method: 'DELETE' })
-      console.log('Delete response status:', res.status)
       const json = await res.json().catch(() => ({}))
-      console.log('Delete response JSON:', json)
       if (!res.ok || json?.ok === false) throw new Error(json.error || 'Delete failed')
-      toast.success('Transaction deleted')
+      toast.success('Transaction deleted successfully')
     } catch (e: unknown) {
       console.error('Error deleting transaction:', e)
       setRows(prev)

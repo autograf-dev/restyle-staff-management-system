@@ -218,16 +218,45 @@ export async function GET(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Missing SUPABASE_SERVICE_ROLE_KEY for DELETE operation')
+      return NextResponse.json(
+        { ok: false, error: "Missing SUPABASE_SERVICE_ROLE_KEY on server" },
+        { status: 500 }
+      )
+    }
+
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
+    console.log('DELETE request received for ID:', id)
+    
     if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 })
 
+    // First, delete related Transaction Items
+    console.log('Deleting transaction items for payment ID:', id)
+    const { error: itemsError } = await supabaseAdmin
+      .from('Transaction Items')
+      .delete()
+      .eq('Payment/ID', id)
+
+    if (itemsError) {
+      console.error('Error deleting transaction items:', itemsError)
+      return NextResponse.json({ ok: false, error: `Failed to delete transaction items: ${itemsError.message}` }, { status: 400 })
+    }
+
+    // Then delete the main transaction
+    console.log('Deleting main transaction with ID:', id)
     const { error } = await supabaseAdmin
       .from('Transactions')
       .delete()
       .eq('🔒 Row ID', id)
 
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
+    if (error) {
+      console.error('Error deleting transaction:', error)
+      return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
+    }
+    
+    console.log('Transaction deleted successfully')
     return NextResponse.json({ ok: true })
   } catch (e: unknown) {
     console.error('Error deleting transaction:', e)
