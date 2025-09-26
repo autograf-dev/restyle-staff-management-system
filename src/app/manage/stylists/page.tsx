@@ -19,7 +19,8 @@ import {
   Clock,
   Mail,
   Scissors,
-  Settings
+  Settings,
+  ExternalLink
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
@@ -65,8 +66,12 @@ export default function StylistsPage() {
   const [creating, setCreating] = useState(false)
   const [selectedGhlId, setSelectedGhlId] = useState<string>("")
   const [password, setPassword] = useState<string>("")
+  const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const router = useRouter()
   const isMobile = useIsMobile()
+
+  // Get selected staff member data
+  const selectedStaffData = staffData.find(staff => getRowId(staff) === selectedStaff)
 
   // Fetch staff data
   const fetchStaffData = async () => {
@@ -91,6 +96,13 @@ export default function StylistsPage() {
     fetchStaffData()
   }, [])
 
+  // Set first staff as selected when data loads
+  useEffect(() => {
+    if (staffData.length > 0 && !selectedStaff) {
+      setSelectedStaff(getRowId(staffData[0]))
+    }
+  }, [staffData, selectedStaff])
+
   // Check if day is working
   const isDayWorking = (staff: BarberStaff, day: string): boolean => {
     const startValue = staff[`${day}/Start Value` as keyof BarberStaff]
@@ -107,6 +119,11 @@ export default function StylistsPage() {
   const manageAvailability = (staff: BarberStaff) => {
     // Navigate directly to the staff-specific URL using ghl_id
     router.push(`/settings/staff-hours/${staff.ghl_id}`)
+  }
+
+  // Navigate to individual staff page
+  const openStaffPage = (ghlId: string) => {
+    router.push(`/settings/staff-hours/${ghlId}`)
   }
 
   if (loading) {
@@ -227,6 +244,108 @@ export default function StylistsPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Interactive Staff Selection */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Select Stylist</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+                {staffData.map((staff) => {
+                  const workingDays = getWorkingDaysCount(staff)
+                  const isSelected = getRowId(staff) === selectedStaff
+                  return (
+                    <div key={getRowId(staff)} className="relative">
+                      <button
+                        onClick={() => setSelectedStaff(getRowId(staff))}
+                        className={`
+                          w-full flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:shadow-md
+                          ${isSelected 
+                            ? 'border-primary bg-primary text-primary-foreground shadow-lg' 
+                            : 'border-border bg-card hover:border-primary/50'
+                          }
+                        `}
+                      >
+                        <Avatar className="h-12 w-12">
+                          <AvatarFallback className={`text-sm font-semibold ${
+                            isSelected ? 'bg-primary-foreground text-primary' : 'bg-primary/10 text-primary'
+                          }`}>
+                            {staff["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="text-center space-y-1">
+                          <div className="font-medium text-sm leading-tight">
+                            {staff["Barber/Name"]}
+                          </div>
+                          <Badge 
+                            variant={isSelected ? "secondary" : "outline"} 
+                            className={`text-xs ${
+                              isSelected 
+                                ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30' 
+                                : ''
+                            }`}
+                          >
+                            {workingDays} days
+                          </Badge>
+                        </div>
+                      </button>
+                      
+                      {/* Quick link to individual page */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="absolute -top-2 -right-2 h-6 w-6 p-0 bg-white border-primary/50 hover:bg-primary hover:text-primary-foreground"
+                        onClick={() => openStaffPage(staff.ghl_id)}
+                        title="Open in dedicated page"
+                      >
+                        <Settings className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Selected Stylist Details */}
+            {selectedStaffData && (
+              <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <Avatar className="h-20 w-20 border-4 border-primary/20">
+                        <AvatarFallback className="text-xl bg-primary/10 text-primary font-bold">
+                          {selectedStaffData["Barber/Name"].split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-1">
+                        <Scissors className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-2xl text-primary">{selectedStaffData["Barber/Name"]}</CardTitle>
+                      <CardDescription className="text-lg mt-1">{selectedStaffData["Barber/Email"]}</CardDescription>
+                      <div className="flex gap-3 mt-3">
+                        <Badge variant="default" className="bg-primary/20 text-primary border-primary/30">
+                          <Calendar className="h-3 w-3 mr-1" />
+                          {DAYS.filter(day => isDayWorking(selectedStaffData, day)).length} Working Days
+                        </Badge>
+                        <Badge variant="outline" className="bg-white/50">
+                          <Scissors className="h-3 w-3 mr-1" />
+                          Staff Member
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openStaffPage(selectedStaffData.ghl_id)}
+                          className="bg-white/50 hover:bg-white"
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Manage Hours
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            )}
 
             {/* Staff Directory - responsive */}
             <Card>
