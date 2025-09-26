@@ -88,8 +88,8 @@ function useAppointments() {
   const [loading, setLoading] = React.useState<boolean>(true)
   const [lastUpdated, setLastUpdated] = React.useState<number>(0)
 
-  React.useEffect(() => {
-    const fetchAppointments = async (forceRefresh: boolean = false) => {
+
+  const fetchAppointments = React.useCallback(async (forceRefresh: boolean = false) => {
       setLoading(true)
       try {
         // Cache read (10 min TTL)
@@ -183,14 +183,22 @@ function useAppointments() {
       } finally {
         setLoading(false)
       }
+    }, [])
+
+    React.useEffect(() => {
+      fetchAppointments()
+      const interval = setInterval(() => fetchAppointments(true), 10 * 60 * 1000)
+      return () => clearInterval(interval)
+    }, [fetchAppointments])
+
+  const refresh = async () => { 
+    try { 
+      localStorage.removeItem('restyle.calendar.appointments') 
+      await fetchAppointments(true) // Force refetch
+    } catch (error) {
+      console.error('Error refreshing appointments:', error)
     }
-
-    fetchAppointments()
-    const interval = setInterval(() => fetchAppointments(true), 10 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const refresh = () => { try { localStorage.removeItem('restyle.calendar.appointments') } catch {}; /* trigger by effect on next mount */ }
+  }
   return { data, loading, refresh, lastUpdated }
 }
 
@@ -551,7 +559,6 @@ const StaffOverviewView = ({
       </button>
       
       <div className="flex-1 flex items-center gap-2 px-2">
-        <span className="text-xs font-medium text-[#601625]/70 whitespace-nowrap">Staff Navigation</span>
         <div className="flex-1 flex items-center gap-1.5">
           {staff.slice(0, 8).map((_, index) => (
             <div 
@@ -784,18 +791,18 @@ const StaffOverviewView = ({
                         onClick={() => appointment.appointment_status !== 'cancelled' && onAppointmentClick(appointment)}
                         title={`${appointment.serviceName} - ${appointment.contactName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
                       >
-                        {/* Minimalist display for appointments */}
-                        <div className={`text-xs font-medium truncate leading-tight ${
+                        {/* Service name - always show for proper identification */}
+                        <div className={`font-medium truncate leading-tight ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-500 line-through' 
                             : 'text-[#601625]'
                         } ${isShortAppointment ? 'text-[10px]' : 'text-xs'}`}>
-                          {appointment.contactName}
+                          {appointment.serviceName}
                         </div>
                         
                         {!isShortAppointment && (
                           <div className="text-[10px] text-[#751a29]/70 truncate mt-0.5">
-                            {appointment.serviceName}
+                            {appointment.contactName}
                           </div>
                         )}
                         
