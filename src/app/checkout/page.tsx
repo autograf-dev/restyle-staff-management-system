@@ -528,6 +528,14 @@ function CheckoutContent() {
             .map((i) => i.serviceId)
             .filter((v) => Boolean(v))
             .join(', ') || null,
+          // Populate transaction table booking fields
+          bookingServiceLookup: items
+            .map((i) => i.serviceId)
+            .filter((v) => Boolean(v))
+            .join(', ') || null,
+          bookingBookedRate: totalPaid,
+          bookingCustomerPhone: appointmentDetails?.customerPhone || customerInfo.phone || null,
+          bookingType: 'Booking',
           customerPhone: appointmentDetails?.customerPhone ?? null,
           bookingId: appointmentDetails?.id ?? null,
           paymentStaff: appointmentDetails?.staffName ?? null,
