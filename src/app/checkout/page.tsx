@@ -489,7 +489,7 @@ function CheckoutContent() {
       // 1) Persist to Supabase first
       const addedTotal = getAdditionalServicesTotal()
       const subtotal = paymentSession.pricing.subtotal + addedTotal
-      const gst = paymentSession.pricing.taxes.gst.amount
+      const gst = subtotal * 0.05  // Recalculate GST on the correct subtotal (5% GST)
       const tip = getEffectiveTipAmount()
       const totalPaid = subtotal + gst + tip
 
@@ -602,6 +602,12 @@ function CheckoutContent() {
     const base = getCurrentSubtotal()
     const tip = (base * tipPercentage) / 100
     return Number(tip.toFixed(2))
+  }
+
+  // Calculate correct GST based on current subtotal (including additional services)
+  const getCurrentGST = () => {
+    const subtotal = getCurrentSubtotal()
+    return Number((subtotal * 0.05).toFixed(2))  // 5% GST
   }
 
   // Calculate staff tip distribution
@@ -1234,9 +1240,9 @@ function CheckoutContent() {
                             <Row label={`Tip (${useCustomTip ? 'Custom' : `${tipPercentage}%`})`} value={formatCurrency(getEffectiveTipAmount(), paymentSession.pricing.currency)} />
                           )}
                           <div className="h-px my-2 bg-neutral-200" />
-                          <Row small label={`GST (${paymentSession.pricing.taxes.gst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
+                          <Row small label={`GST (5%)`} value={formatCurrency(getCurrentGST(), paymentSession.pricing.currency)} />
                           <div className="h-px my-2 bg-neutral-200" />
-                          <Row strong label="Total Due" value={formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
+                          <Row strong label="Total Due" value={formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + getCurrentGST(), paymentSession.pricing.currency)} />
                         </div>
                       </CardContent>
                     </Card>
@@ -1375,7 +1381,7 @@ function CheckoutContent() {
                             Complete
                             {paymentSession && (
                               <span className="ml-2 font-bold">
-                                {formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)}
+                                {formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + getCurrentGST(), paymentSession.pricing.currency)}
                               </span>
                             )}
                           </>
