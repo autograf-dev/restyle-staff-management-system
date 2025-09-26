@@ -180,8 +180,8 @@ export default function PaymentsPage() {
                             <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Revenue</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.revenue)}</div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-green-100 flex items-center justify-center">
-                            <DollarSign className="h-5 w-5 text-green-600" />
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                            <DollarSign className="h-5 w-5 text-[#601625]" />
                           </div>
                         </div>
                       </CardContent>
@@ -194,8 +194,8 @@ export default function PaymentsPage() {
                             <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Tips</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.tips)}</div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                            <TrendingUp className="h-5 w-5 text-blue-600" />
+                          <div className="h-10 w-10 rounded-xl bg-[#751a29]/10 flex items-center justify-center">
+                            <TrendingUp className="h-5 w-5 text-[#751a29]" />
                           </div>
                         </div>
                       </CardContent>
@@ -208,8 +208,8 @@ export default function PaymentsPage() {
                             <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Transactions</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.count}</div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                            <CreditCard className="h-5 w-5 text-purple-600" />
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                            <CreditCard className="h-5 w-5 text-[#601625]" />
                           </div>
                         </div>
                       </CardContent>
@@ -222,8 +222,8 @@ export default function PaymentsPage() {
                             <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Active Staff</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.uniqueStaff}</div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                            <Users className="h-5 w-5 text-orange-600" />
+                          <div className="h-10 w-10 rounded-xl bg-[#751a29]/10 flex items-center justify-center">
+                            <Users className="h-5 w-5 text-[#751a29]" />
                           </div>
                         </div>
                       </CardContent>
@@ -236,8 +236,8 @@ export default function PaymentsPage() {
                             <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Avg. Ticket</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.avg)}</div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-indigo-100 flex items-center justify-center">
-                            <Calendar className="h-5 w-5 text-indigo-600" />
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                            <Calendar className="h-5 w-5 text-[#601625]" />
                           </div>
                         </div>
                       </CardContent>
@@ -255,37 +255,37 @@ export default function PaymentsPage() {
                       <div className="hidden lg:grid grid-cols-12 bg-gradient-to-r from-neutral-50 via-neutral-100 to-neutral-50 px-6 py-5 text-[11px] font-bold text-neutral-800 uppercase tracking-wider border-b border-neutral-200">
                         <div className="col-span-3 flex items-center">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                            Service & ID
+                            <div className="w-2 h-2 rounded-full bg-[#601625]"></div>
+                            Services
                           </div>
                         </div>
                         <div className="col-span-2 flex items-center">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                            <div className="w-2 h-2 rounded-full bg-[#751a29]"></div>
                             Staff Name
                           </div>
                         </div>
                         <div className="col-span-2 flex items-center">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                            Customer
+                            <div className="w-2 h-2 rounded-full bg-[#601625]"></div>
+                            Customer Name & Phone
                           </div>
                         </div>
                         <div className="col-span-2 flex items-center">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                            <div className="w-2 h-2 rounded-full bg-[#751a29]"></div>
                             Transaction Tips
                           </div>
                         </div>
                         <div className="col-span-2 flex items-center">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                            <div className="w-2 h-2 rounded-full bg-[#601625]"></div>
                             Total & Method
                           </div>
                         </div>
                         <div className="col-span-1 text-right flex items-center justify-end">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                            <div className="w-2 h-2 rounded-full bg-[#751a29]"></div>
                             Actions
                           </div>
                         </div>
@@ -295,12 +295,9 @@ export default function PaymentsPage() {
                           <div key={r.id} className={`hidden lg:grid grid-cols-12 items-center px-6 py-5 hover:bg-gradient-to-r hover:from-neutral-50/80 hover:to-white transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/30'}`}>
                             <div className="col-span-3 min-w-0">
                               <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded-full"></div>
+                                <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="min-w-0 flex-1">
                                   <div className="truncate text-[15px] font-semibold text-neutral-900 leading-tight">{r.services || '—'}</div>
-                                  <div className="mt-1.5 text-[10px] text-neutral-500 font-mono bg-gradient-to-r from-neutral-100 to-neutral-200 px-2.5 py-1 rounded-lg inline-block border border-neutral-200">
-                                    {r.serviceIds || r.id}
-                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -308,14 +305,14 @@ export default function PaymentsPage() {
                               <div className="flex flex-col gap-1.5">
                                 {r.items && r.items.length > 0 ? (
                                   r.items.map((item, idx) => (
-                                    <span key={idx} className="inline-flex items-center rounded-full border border-green-200 bg-gradient-to-r from-green-50 to-green-100 px-3 py-1.5 text-[12px] font-semibold text-green-800 shadow-sm">
-                                      <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                                    <span key={idx} className="inline-flex items-center rounded-full border border-[#601625]/20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 px-3 py-1.5 text-[12px] font-semibold text-[#601625] shadow-sm">
+                                      <div className="w-2 h-2 rounded-full bg-[#751a29] mr-2"></div>
                                       {item.staffName || '—'}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="inline-flex items-center rounded-full border border-green-200 bg-gradient-to-r from-green-50 to-green-100 px-3 py-1.5 text-[12px] font-semibold text-green-800 shadow-sm">
-                                    <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                                  <span className="inline-flex items-center rounded-full border border-[#601625]/20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 px-3 py-1.5 text-[12px] font-semibold text-[#601625] shadow-sm">
+                                    <div className="w-2 h-2 rounded-full bg-[#751a29] mr-2"></div>
                                     {r.staff || '—'}
                                   </span>
                                 )}
@@ -323,24 +320,28 @@ export default function PaymentsPage() {
                             </div>
                             <div className="col-span-2 min-w-0">
                               <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-purple-400 to-purple-600 rounded-full"></div>
+                                <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.customerPhone || '—'}</div>
-                                  <div className="text-[11px] text-neutral-500 truncate font-mono">{r.customerLookup || ''}</div>
+                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.customerLookup || 'Customer'}</div>
+                                  <div className="mt-1">
+                                    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 border border-[#601625]/20 px-2.5 py-1 text-[11px] font-medium text-[#601625]">
+                                      {r.customerPhone || 'No phone'}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                             <div className="col-span-2">
                               <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full"></div>
+                                <div className="w-1 h-8 bg-gradient-to-b from-[#751a29] to-[#601625] rounded-full"></div>
                                 <div className="flex flex-col gap-1">
-                                  <div className="text-[16px] font-bold text-green-600">{formatCurrency(r.tip)}</div>
+                                  <div className="text-[16px] font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
                                   {r.items && r.items.length > 0 && (
                                     <div className="text-[10px] text-neutral-500 space-y-0.5">
                                       {r.items.map((item, idx) => (
                                         <div key={idx} className="flex justify-between items-center">
                                           <span className="truncate">{item.staffName}:</span>
-                                          <span className="font-semibold text-green-600 ml-2">{formatCurrency(item.staffTipSplit)}</span>
+                                          <span className="font-semibold text-[#601625] ml-2">{formatCurrency(item.staffTipSplit)}</span>
                                         </div>
                                       ))}
                                     </div>
@@ -350,16 +351,16 @@ export default function PaymentsPage() {
                             </div>
                             <div className="col-span-2">
                               <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-indigo-400 to-indigo-600 rounded-full"></div>
+                                <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="flex flex-col gap-1">
                                   <div className="text-[18px] font-bold text-neutral-900">{formatCurrency(r.totalPaid)}</div>
-                                  <div className="text-[12px] text-neutral-600 capitalize font-medium">{r.method || '—'}</div>
+                                  <div className="text-[12px] text-[#601625] capitalize font-medium">{r.method || '—'}</div>
                                   <div className="text-[10px] text-neutral-400 font-mono">{formatDate(r.paymentDate)}</div>
                                 </div>
                               </div>
                             </div>
                             <div className="col-span-1 flex justify-end gap-2">
-                              <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-9 items-center rounded-xl border border-neutral-200 bg-white px-3 text-[12px] font-semibold hover:bg-gradient-to-r hover:from-blue-50 hover:to-blue-100 hover:border-blue-300 hover:text-blue-700 transition-all duration-200 shadow-sm">
+                              <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-9 items-center rounded-xl border border-neutral-200 bg-white px-3 text-[12px] font-semibold hover:bg-gradient-to-r hover:from-[#601625]/5 hover:to-[#751a29]/5 hover:border-[#601625]/30 hover:text-[#601625] transition-all duration-200 shadow-sm">
                                 <Eye className="h-4 w-4 mr-1.5" /> View
                               </Link>
                               <Button 
@@ -381,9 +382,6 @@ export default function PaymentsPage() {
                               <div className="flex justify-between items-start">
                                 <div className="flex-1 min-w-0">
                                   <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.services || '—'}</div>
-                                  <div className="text-[11px] text-neutral-500 font-mono bg-neutral-100 px-2 py-0.5 rounded-md inline-block mt-1">
-                                    {r.serviceIds || r.id}
-                                  </div>
                                 </div>
                                 <div className="text-right">
                                   <div className="text-[16px] font-bold text-neutral-900">{formatCurrency(r.totalPaid)}</div>
@@ -394,12 +392,12 @@ export default function PaymentsPage() {
                               <div className="flex flex-wrap gap-2">
                                 {r.items && r.items.length > 0 ? (
                                   r.items.map((item, idx) => (
-                                    <span key={idx} className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700">
+                                    <span key={idx} className="inline-flex items-center rounded-full border border-[#601625]/20 bg-[#601625]/5 px-2 py-1 text-[11px] font-medium text-[#601625]">
                                       {item.staffName || '—'}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700">
+                                  <span className="inline-flex items-center rounded-full border border-[#601625]/20 bg-[#601625]/5 px-2 py-1 text-[11px] font-medium text-[#601625]">
                                     {r.staff || '—'}
                                   </span>
                                 )}
@@ -408,11 +406,14 @@ export default function PaymentsPage() {
                               <div className="flex justify-between items-center">
                                 <div>
                                   <div className="text-[12px] text-neutral-600">Customer</div>
-                                  <div className="text-[13px] font-medium text-neutral-900">{r.customerPhone || '—'}</div>
+                                  <div className="text-[13px] font-medium text-neutral-900">{r.customerLookup || 'Customer'}</div>
+                                  <span className="inline-flex items-center rounded-full bg-[#601625]/10 border border-[#601625]/20 px-2 py-0.5 text-[10px] font-medium text-[#601625] mt-1">
+                                    {r.customerPhone || 'No phone'}
+                                  </span>
                                 </div>
                                 <div className="text-right">
                                   <div className="text-[12px] text-neutral-600">Tips</div>
-                                  <div className="text-[14px] font-bold text-green-600">{formatCurrency(r.tip)}</div>
+                                  <div className="text-[14px] font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
                                 </div>
                               </div>
                               
@@ -431,7 +432,7 @@ export default function PaymentsPage() {
                               )}
                               
                               <div className="flex justify-end gap-2 pt-2">
-                                <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-8 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium hover:bg-neutral-50 hover:border-neutral-300 transition-colors">
+                                <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-8 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium hover:bg-[#601625]/5 hover:border-[#601625]/30 hover:text-[#601625] transition-colors">
                                   <Eye className="h-3.5 w-3.5 mr-1.5" /> View
                                 </Link>
                                 <Button 

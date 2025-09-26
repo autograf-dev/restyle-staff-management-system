@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -177,10 +178,10 @@ export default function PaymentDetailPage() {
             
             {/* Header */}
             <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-                <CreditCard className="h-8 w-8 text-blue-600" />
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#601625]/10 mb-4">
+                <CreditCard className="h-8 w-8 text-[#601625]" />
               </div>
-              <h1 className="text-2xl font-bold text-blue-600 mb-1">Payment Details</h1>
+              <h1 className="text-2xl font-bold text-[#601625] mb-1">Payment Details</h1>
               <p className="text-muted-foreground">
                 Complete transaction information and service details.
               </p>
@@ -192,7 +193,7 @@ export default function PaymentDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Receipt className="h-5 w-5 text-primary" />
+                    <Receipt className="h-5 w-5 text-[#601625]" />
                     Transaction Summary
                   </CardTitle>
                   <CardDescription>
@@ -208,7 +209,7 @@ export default function PaymentDetailPage() {
                     
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Amount Paid</span>
-                      <span className="font-semibold text-lg text-green-600">{formatCurrency(data.totalPaid)}</span>
+                      <span className="font-semibold text-lg text-[#751a29]">{formatCurrency(data.totalPaid)}</span>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-2 pt-2">
@@ -246,7 +247,7 @@ export default function PaymentDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <CalendarIcon className="h-5 w-5 text-primary" />
+                    <CalendarIcon className="h-5 w-5 text-[#751a29]" />
                     Services
                   </CardTitle>
                   <CardDescription>
@@ -260,7 +261,7 @@ export default function PaymentDetailPage() {
                         <div className="min-w-0">
                           <div className="font-medium text-neutral-900 truncate">{String(it.serviceName) || 'Service'}</div>
                           <div className="mt-1 flex items-center gap-2 text-xs text-neutral-600">
-                            <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700 border border-neutral-200">
+                            <span className="inline-flex items-center rounded-full bg-[#601625]/10 px-2 py-0.5 font-medium text-[#601625] border border-[#601625]/20">
                               {String(it.staffName) || 'Staff'}
                             </span>
                             {it.serviceId != null && it.serviceId !== '' && (
@@ -270,8 +271,8 @@ export default function PaymentDetailPage() {
                         </div>
                         <div className="text-right">
                           <div className="font-semibold text-neutral-900">{formatCurrency(Number(it.price))}</div>
-                          {it.staffTipSplit != null && it.staffTipSplit !== 0 && (
-                            <div className="text-xs text-green-600">Tip: {formatCurrency(Number(it.staffTipSplit))}</div>
+                          {it.staffTipCollected != null && it.staffTipCollected !== 0 && (
+                            <div className="text-xs text-[#751a29] font-medium">Tip: {formatCurrency(Number(it.staffTipCollected))}</div>
                           )}
                         </div>
                       </div>
@@ -292,31 +293,21 @@ export default function PaymentDetailPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div className="flex items-center gap-3">
-                      <UserIcon className="h-5 w-5 text-muted-foreground" />
+                      <UserIcon className="h-5 w-5 text-[#601625]" />
                       <div>
-                        <div className="font-medium">Customer</div>
-                        <div className="text-sm text-muted-foreground">Name</div>
+                        <div className="font-medium text-[#601625]">{data.customerLookup || 'Customer'}</div>
+                        <div className="text-sm text-muted-foreground">Customer Name</div>
                       </div>
                     </div>
                     
                     {data.customerPhone && (
                       <div className="flex items-center gap-3">
-                        <Phone className="h-5 w-5 text-muted-foreground" />
+                        <Phone className="h-5 w-5 text-[#751a29]" />
                         <div>
-                          <div className="font-medium">{data.customerPhone}</div>
-                          <div className="text-sm text-muted-foreground">Phone</div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {data.customerLookup && (
-                      <div className="flex items-center gap-3">
-                        <CheckCircle className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium font-mono text-sm">{data.customerLookup}</div>
-                          <div className="text-sm text-muted-foreground">Lookup ID</div>
+                          <div className="font-medium text-[#751a29]">{data.customerPhone}</div>
+                          <div className="text-sm text-muted-foreground">Phone Number</div>
                         </div>
                       </div>
                     )}
@@ -328,7 +319,7 @@ export default function PaymentDetailPage() {
               <Card className="md:col-span-2">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Save className="h-5 w-5 text-primary" />
+                    <Save className="h-5 w-5 text-[#601625]" />
                     Edit Transaction
                   </CardTitle>
                   <CardDescription>
@@ -339,7 +330,20 @@ export default function PaymentDetailPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm text-muted-foreground mb-1">Payment Method</div>
-                      <Input value={data.method || ''} onChange={(e) => setData({ ...data, method: e.target.value })} className="rounded-lg" />
+                      <Select value={data.method || ''} onValueChange={(value) => setData({ ...data, method: value })}>
+                        <SelectTrigger className="rounded-lg border-[#601625]/20 focus:ring-[#601625]/20">
+                          <SelectValue placeholder="Select payment method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="card">Card</SelectItem>
+                          <SelectItem value="debit">Debit</SelectItem>
+                          <SelectItem value="credit">Credit</SelectItem>
+                          <SelectItem value="e-transfer">E-Transfer</SelectItem>
+                          <SelectItem value="tap">Tap</SelectItem>
+                          <SelectItem value="chip">Chip</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     {/* Staff and Services are now displayed from Transaction Items above */}
                   </div>
@@ -347,7 +351,7 @@ export default function PaymentDetailPage() {
                     <Button variant="outline" className="border-red-200 hover:bg-red-50 hover:text-red-600" onClick={del}>
                       <Trash2 className="h-4 w-4 mr-2" /> Delete Transaction
                     </Button>
-                    <Button onClick={save} disabled={saving} className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white">
+                    <Button onClick={save} disabled={saving} className="bg-[#601625] hover:bg-[#751a29] text-white">
                       <Save className="h-4 w-4 mr-2" /> Save Changes
                     </Button>
                   </div>
@@ -368,19 +372,7 @@ export default function PaymentDetailPage() {
               </Button>
             </div>
 
-            {/* Additional Information */}
-            <Card className="bg-blue-50/50 border-blue-200">
-              <CardContent className="pt-6">
-                <div className="text-center space-y-2">
-                  <h3 className="font-semibold text-blue-900">Transaction Management</h3>
-                  <p className="text-sm text-blue-700">
-                    • All changes are saved automatically to the database<br />
-                    • Deleted transactions cannot be recovered<br />
-                    • Staff tip splits are calculated based on service assignments
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+
           </div>
         </SidebarInset>
       </SidebarProvider>
