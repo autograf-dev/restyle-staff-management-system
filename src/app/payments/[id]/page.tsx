@@ -203,11 +203,6 @@ export default function PaymentDetailPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Transaction ID</span>
-                      <span className="font-mono text-sm">{data.id}</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Amount Paid</span>
                       <span className="font-semibold text-lg text-[#751a29]">{formatCurrency(data.totalPaid)}</span>
                     </div>
@@ -297,8 +292,8 @@ export default function PaymentDetailPage() {
                     <div className="flex items-center gap-3">
                       <UserIcon className="h-5 w-5 text-[#601625]" />
                       <div>
-                        <div className="font-medium text-[#601625]">{data.customerLookup || 'Customer'}</div>
-                        <div className="text-sm text-muted-foreground">Customer Name</div>
+                        <div className="font-medium text-[#601625]">{data.customerPhone || 'Unknown Customer'}</div>
+                        <div className="text-sm text-muted-foreground">Customer</div>
                       </div>
                     </div>
                     
@@ -336,12 +331,10 @@ export default function PaymentDetailPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="card">Card</SelectItem>
                           <SelectItem value="debit">Debit</SelectItem>
-                          <SelectItem value="credit">Credit</SelectItem>
-                          <SelectItem value="e-transfer">E-Transfer</SelectItem>
-                          <SelectItem value="tap">Tap</SelectItem>
-                          <SelectItem value="chip">Chip</SelectItem>
+                          <SelectItem value="visa">Visa</SelectItem>
+                          <SelectItem value="mastercard">Mastercard</SelectItem>
+                          <SelectItem value="amex">Amex</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

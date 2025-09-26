@@ -122,8 +122,11 @@ export default function PaymentsPage() {
     setDeleteDialogOpen(false)
     
     try {
+      console.log('Attempting to delete transaction with ID:', selectedTransaction.id)
       const res = await fetch(`/api/transactions?id=${encodeURIComponent(selectedTransaction.id)}`, { method: 'DELETE' })
+      console.log('Delete response status:', res.status)
       const json = await res.json().catch(() => ({}))
+      console.log('Delete response JSON:', json)
       if (!res.ok || json?.ok === false) throw new Error(json.error || 'Delete failed')
       toast.success('Transaction deleted')
     } catch (e: unknown) {
@@ -322,10 +325,10 @@ export default function PaymentsPage() {
                               <div className="flex items-center gap-3">
                                 <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.customerLookup || 'Customer'}</div>
+                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.customerPhone || 'Unknown Customer'}</div>
                                   <div className="mt-1">
                                     <span className="inline-flex items-center rounded-full bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 border border-[#601625]/20 px-2.5 py-1 text-[11px] font-medium text-[#601625]">
-                                      {r.customerPhone || 'No phone'}
+                                      ID: {r.customerLookup || 'N/A'}
                                     </span>
                                   </div>
                                 </div>
@@ -406,9 +409,9 @@ export default function PaymentsPage() {
                               <div className="flex justify-between items-center">
                                 <div>
                                   <div className="text-[12px] text-neutral-600">Customer</div>
-                                  <div className="text-[13px] font-medium text-neutral-900">{r.customerLookup || 'Customer'}</div>
+                                  <div className="text-[13px] font-medium text-neutral-900">{r.customerPhone || 'Unknown Customer'}</div>
                                   <span className="inline-flex items-center rounded-full bg-[#601625]/10 border border-[#601625]/20 px-2 py-0.5 text-[10px] font-medium text-[#601625] mt-1">
-                                    {r.customerPhone || 'No phone'}
+                                    ID: {r.customerLookup || 'N/A'}
                                   </span>
                                 </div>
                                 <div className="text-right">
