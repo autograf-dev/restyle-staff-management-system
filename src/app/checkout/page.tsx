@@ -24,6 +24,7 @@ import {
   Users,
   Percent,
   Phone,
+  Wallet,
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -99,6 +100,7 @@ function CheckoutContent() {
   const [tipPercentage, setTipPercentage] = useState(18)
   const [customTipAmount, setCustomTipAmount] = useState('')
   const [useCustomTip, setUseCustomTip] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
 
   // Fetch appointment details
   const fetchAppointmentDetails = async () => {
@@ -511,6 +513,40 @@ function CheckoutContent() {
                       </CardContent>
                     </Card>
                   )}
+
+                  <Card className="rounded-2xl border-neutral-200 shadow-none">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <Wallet className="h-5 w-5 text-[#7b1d1d]" />
+                        Payment Method
+                      </CardTitle>
+                      <CardDescription className="text-[13px]">Choose your preferred payment method</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { id: 'visa', name: 'Visa', icon: '💳' },
+                          { id: 'mastercard', name: 'Mastercard', icon: '💳' },
+                          { id: 'amex', name: 'Amex', icon: '💳' },
+                          { id: 'debit', name: 'Debit', icon: '💳' },
+                          { id: 'cash', name: 'Cash', icon: '💵' }
+                        ].map((method) => (
+                          <button
+                            key={method.id}
+                            onClick={() => setSelectedPaymentMethod(method.id)}
+                            className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all hover:border-[#7b1d1d]/30 ${
+                              selectedPaymentMethod === method.id
+                                ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                                : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                            }`}
+                          >
+                            <span className="text-2xl">{method.icon}</span>
+                            <span className="text-[14px] font-medium text-neutral-900">{method.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardContent className="pt-6">
