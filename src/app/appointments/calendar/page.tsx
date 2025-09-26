@@ -1475,40 +1475,53 @@ export default function CalendarPage() {
 
           {/* Appointment Details Dialog */}
           <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-lg">
-              <SheetHeader>
-                <SheetTitle className="text-lg font-semibold">
-                  {selectedAppointment?.serviceName || selectedAppointment?.title}
+            <SheetContent side="right" className="w-full sm:max-w-lg bg-white">
+              <SheetHeader className="pb-4">
+                <SheetTitle className="text-lg font-semibold text-[#601625]">
+                  Appointment Details
                 </SheetTitle>
-                <SheetDescription>
-                  Appointment details and actions
+                <SheetDescription className="text-gray-600">
+                  View and manage this appointment
                 </SheetDescription>
               </SheetHeader>
               
               {selectedAppointment && (
-                <div className="mt-6 space-y-4">
+                <div className="space-y-6">
                   {/* Streamlined Appointment Card */}
-                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 text-blue-800">
-                      <CalendarIcon className="h-4 w-4" />
-                      <span className="font-semibold">{selectedAppointment.serviceName || selectedAppointment.title}</span>
+                  <div className="p-5 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border border-[#601625]/20 rounded-2xl space-y-4">
+                    <div className="flex items-start gap-3">
+                      <CalendarIcon className="h-5 w-5 text-[#601625] mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-[#601625] text-base leading-tight">
+                          {selectedAppointment.serviceName || selectedAppointment.title}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {selectedAppointment.contactName}
+                        </p>
+                      </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Clock className="h-4 w-4" />
-                      <span className="font-medium">
+                    <div className="flex items-center gap-3">
+                      <Clock className="h-4 w-4 text-[#751a29] flex-shrink-0" />
+                      <span className="font-medium text-gray-800">
                         {selectedAppointment.startTime && formatTime(selectedAppointment.startTime)}
                         {selectedAppointment.endTime && ` - ${formatTime(selectedAppointment.endTime)}`}
                       </span>
                     </div>
                     
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <UserIcon className="h-4 w-4" />
-                      <span>with {`${selectedAppointment.assignedStaffFirstName || ''} ${selectedAppointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}</span>
+                    <div className="flex items-center gap-3">
+                      <UserIcon className="h-4 w-4 text-[#751a29] flex-shrink-0" />
+                      <span className="text-gray-800">
+                        with {selectedAppointment.assigned_user_id ? 
+                          (staffMap[selectedAppointment.assigned_user_id] || 'Unknown Staff') : 
+                          'Unassigned'
+                        }
+                      </span>
                     </div>
                     
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <span className="text-sm">
+                    <div className="flex items-center gap-3">
+                      <CalendarIcon className="h-4 w-4 text-[#751a29] flex-shrink-0" />
+                      <span className="text-sm text-gray-600">
                         {selectedAppointment.startTime && formatDate(new Date(selectedAppointment.startTime))}
                       </span>
                     </div>
@@ -1522,7 +1535,11 @@ export default function CalendarPage() {
                         selectedAppointment.appointment_status === 'cancelled' ? 'destructive' :
                         'secondary'
                       }
-                      className="px-3 py-1"
+                      className="px-4 py-1.5 text-sm font-medium"
+                      style={{
+                        backgroundColor: selectedAppointment.appointment_status === 'confirmed' ? '#601625' : undefined,
+                        color: selectedAppointment.appointment_status === 'confirmed' ? 'white' : undefined
+                      }}
                     >
                       {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
                     </Badge>
@@ -1531,8 +1548,7 @@ export default function CalendarPage() {
                   {/* Payment Section */}
                   {selectedAppointment.appointment_status === 'confirmed' && selectedAppointment.payment_status !== 'paid' && (
                     <Button 
-                      size="sm"
-                      className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg py-2"
+                      className="w-full bg-gradient-to-r from-[#601625] to-[#751a29] hover:from-[#4a1119] hover:to-[#5e1521] text-white rounded-xl py-3 font-medium shadow-lg"
                       onClick={() => {
                         router.push(`/checkout?appointmentId=${selectedAppointment.id}&calendarId=${selectedAppointment.calendar_id}&staffId=${selectedAppointment.assigned_user_id}`)
                       }}
@@ -1544,36 +1560,32 @@ export default function CalendarPage() {
 
                   {/* Paid Status Section */}
                   {selectedAppointment.payment_status === 'paid' && (
-                    <div className="p-3 border border-green-200 bg-green-50 rounded-lg text-center">
+                    <div className="p-4 border border-green-200 bg-green-50 rounded-xl text-center">
                       <div className="flex items-center justify-center gap-2 text-green-700">
-                        <CheckCircle className="h-4 w-4" />
+                        <CheckCircle className="h-5 w-5" />
                         <span className="font-medium">Payment Completed</span>
                       </div>
                     </div>
                   )}
                   
                   {/* Action Buttons */}
-                  <div className="space-y-2 pt-4 border-t">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                        onClick={() => handleRescheduleAppointment(selectedAppointment)}
-                      >
-                        <RefreshCcw className="h-4 w-4 mr-2" />
-                        Reschedule
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={() => handleCancelAppointment(selectedAppointment)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button 
+                      variant="outline"
+                      className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium"
+                      onClick={() => handleRescheduleAppointment(selectedAppointment)}
+                    >
+                      <RefreshCcw className="h-4 w-4 mr-2" />
+                      Reschedule
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium"
+                      onClick={() => handleCancelAppointment(selectedAppointment)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1582,22 +1594,27 @@ export default function CalendarPage() {
 
           {/* Cancel Confirmation Dialog */}
           <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
-            <DialogContent>
+            <DialogContent className="bg-white rounded-2xl border-[#601625]/20">
               <DialogHeader>
-                <DialogTitle>Cancel Appointment</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-[#601625] text-lg font-semibold">
+                  Cancel Appointment
+                </DialogTitle>
+                <DialogDescription className="text-gray-600">
                   Are you sure you want to cancel this appointment? This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" onClick={() => setCancelConfirmOpen(false)} className="flex-1">
+              <div className="flex gap-3 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setCancelConfirmOpen(false)} 
+                  className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 rounded-xl py-2.5 font-medium"
+                >
                   Keep Appointment
                 </Button>
                 <Button 
-                  variant="destructive" 
                   onClick={confirmCancelAppointment}
                   disabled={cancelLoading}
-                  className="flex-1"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 font-medium"
                 >
                   {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
                 </Button>
