@@ -48,12 +48,14 @@ interface AppointmentDetails {
   startTime: string
   endTime: string
   customerName: string
+  customerFirstName?: string
   customerPhone?: string
   staffName: string
   address?: string
   duration?: number
   calendar_id: string
   assigned_user_id: string
+  contact_id?: string
 }
 
 interface PricingBreakdown {
@@ -335,11 +337,13 @@ function CheckoutContent() {
           startTime: apt.startTime || '',
           endTime: apt.endTime || '',
           customerName,
+          customerFirstName: (customerName.split(' ')[0] || '').trim() || undefined,
           customerPhone,
           staffName,
           address: apt.address,
           calendar_id: calendarId || apt.calendarId || '',
-          assigned_user_id: assignedId
+          assigned_user_id: assignedId,
+          contact_id: apt.contactId || undefined
         }
         if (apt.startTime && apt.endTime) {
           const start = new Date(apt.startTime)
@@ -487,8 +491,8 @@ function CheckoutContent() {
 
       const baseItems = paymentSession.appointments.map((a) => ({
         id: crypto.randomUUID(),
-        // Try multiple fallbacks in case backend provides different keys
-        serviceId: (a as any).serviceId ?? (a as any).id ?? null,
+        // Prefer provided serviceId; fallback to appointment/calendar id from URL for default item
+        serviceId: (a as any).serviceId ?? (a as any).id ?? appointmentDetails?.calendar_id ?? calendarId ?? null,
         serviceName: a.serviceName,
         price: a.servicePrice,
         staffName: a.staffName,
@@ -536,12 +540,17 @@ function CheckoutContent() {
           bookingBookedRate: totalPaid,
           bookingCustomerPhone: appointmentDetails?.customerPhone || customerInfo.phone || null,
           bookingType: 'Booking',
+          customerLookup: appointmentDetails?.contact_id || null,
           customerPhone: appointmentDetails?.customerPhone ?? null,
           bookingId: appointmentDetails?.id ?? null,
           paymentStaff: appointmentDetails?.staffName ?? null,
           status: 'Paid',
         },
         items: itemsWithTip.map((i) => ({ ...i, paymentId: transactionId })),
+        meta: {
+          customerFirstName: appointmentDetails?.customerFirstName || (customerInfo.name.split(' ')[0] || ''),
+          customerName: appointmentDetails?.customerName || customerInfo.name || '',
+        }
       }
 
       const persistRes = await fetch('/api/transactions', {

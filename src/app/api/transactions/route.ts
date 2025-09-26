@@ -68,7 +68,6 @@ export async function POST(req: Request) {
       "DNU Service/Discount": null,
       "DNU Add-On/Discount": null,
       "Transaction/Product": null,
-      "Service/Acuity IDs": transaction.serviceAcuityIds ?? null,
       "DNU Add-On/IDs": null,
       "DNU Transaction/Tax": null,
       "DNU Transaction/Tip": null,
@@ -112,6 +111,114 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("/api/transactions error", error)
     return NextResponse.json({ ok: false, error: "Failed to create transaction" }, { status: 500 })
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { ok: false, error: "Missing SUPABASE_SERVICE_ROLE_KEY on server" },
+        { status: 500 }
+      )
+    }
+
+    const { searchParams } = new URL(req.url)
+    const limit = Number(searchParams.get('limit') || 50)
+    const offset = Number(searchParams.get('offset') || 0)
+
+    const { data, error } = await supabaseAdmin
+      .from('Transactions')
+      .select('*')
+      .limit(limit)
+
+    if (error) {
+      console.error('Supabase error:', error)
+      return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
+    }
+
+    // Get transaction IDs to fetch items
+    const transactionIds = (data || []).map((row: any) => row['🔒 Row ID'])
+    
+    // Fetch transaction items for all transactions
+    let itemsData: any[] = []
+    if (transactionIds.length > 0) {
+      const { data: items, error: itemsError } = await supabaseAdmin
+        .from('Transaction Items')
+        .select(`
+          "🔒 Row ID",
+          "Payment/ID",
+          "Service/ID",
+          "Service/Name",
+          "Service/Price",
+          "Staff/Name",
+          "Staff/Tip Split",
+          "Staff/Tip Collected"
+        `)
+        .in('Payment/ID', transactionIds)
+      
+      if (itemsError) {
+        console.error('Error fetching transaction items:', itemsError)
+      } else {
+        itemsData = items || []
+      }
+    }
+
+    // Group items by transaction ID
+    const itemsByTransaction = itemsData.reduce((acc: any, item: any) => {
+      const paymentId = item['Payment/ID']
+      if (!acc[paymentId]) acc[paymentId] = []
+      acc[paymentId].push({
+        id: item['🔒 Row ID'],
+        paymentId: item['Payment/ID'],
+        serviceId: item['Service/ID'],
+        serviceName: item['Service/Name'],
+        price: item['Service/Price'],
+        staffName: item['Staff/Name'],
+        staffTipSplit: item['Staff/Tip Split'],
+        staffTipCollected: item['Staff/Tip Collected'],
+      })
+      return acc
+    }, {})
+
+    const rows = (data || []).map((row: any) => ({
+      id: row['🔒 Row ID'],
+      paymentDate: row['Payment/Date'],
+      method: row['Payment/Method'],
+      subtotal: row['Payment/Subtotal'],
+      tax: row['Transaction/Tax'],
+      tip: row['Transaction/Tip'],
+      totalPaid: row['Transaction/Total Paid'],
+      services: row['Service/Joined List'],
+      serviceIds: row['Service/Acuity IDs'],
+      bookingId: row['Booking/ID'],
+      staff: row['Payment/Staff'],
+      customerPhone: row['Customer/Phone'],
+      customerLookup: row['Customer/Lookup'],
+      items: itemsByTransaction[row['🔒 Row ID']] || [],
+    }))
+
+    return NextResponse.json({ ok: true, data: rows })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: 'Failed to fetch transactions' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 })
+
+    const { error } = await supabaseAdmin
+      .from('Transactions')
+      .delete()
+      .eq('🔒 Row ID', id)
+
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: 'Failed to delete transaction' }, { status: 500 })
   }
 }
 

@@ -44,6 +44,8 @@ interface TxRow {
   bookingId: string | null
   paymentStaff: string | null
   customerPhone: string | null
+  customerFirstName?: string | null
+  items?: TxItem[]
 }
 
 function CheckoutSuccessContent() {
@@ -82,10 +84,10 @@ function CheckoutSuccessContent() {
           serviceAcuityIds: t.serviceAcuityIds || null,
           bookingId: t.bookingId || null,
           paymentStaff: t.paymentStaff || null,
-          customerPhone: t.customerPhone || null,
+          customerPhone: (t.customerPhone || null),
+          customerFirstName: (cachedJson.meta && (cachedJson.meta.customerFirstName || cachedJson.meta.customerName)) || null,
         }
-        setTx(mapped)
-        setItems((cachedJson.items || []).map((i: any) => ({
+        const mappedItems = (cachedJson.items || []).map((i: any) => ({
           id: i.id,
           serviceId: i.serviceId ?? null,
           serviceName: i.serviceName ?? null,
@@ -93,7 +95,10 @@ function CheckoutSuccessContent() {
           staffName: i.staffName ?? null,
           staffTipSplit: i.staffTipSplit ?? null,
           staffTipCollected: i.staffTipCollected ?? null,
-        })))
+        }))
+        mapped.items = mappedItems
+        setTx(mapped)
+        setItems(mappedItems)
         return
       }
 
@@ -241,7 +246,7 @@ function CheckoutSuccessContent() {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
                 <CheckCircle className="h-8 w-8 text-green-600" />
               </div>
-              <h1 className="text-2xl font-bold text-green-600 mb-2">Thank you! Your order is confirmed.</h1>
+              <h1 className="text-2xl font-bold text-green-600 mb-1">Thank you{tx?.customerFirstName ? `, ${tx.customerFirstName}` : ''}! Your order is confirmed.</h1>
               <p className="text-muted-foreground">
                 Your transaction has been saved. Below are the details of your purchase.
               </p>
@@ -299,63 +304,51 @@ function CheckoutSuccessContent() {
                   </CardContent>
                 </Card>
 
-                {/* Appointment Details */}
+                {/* Services and Staff */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <CalendarIcon className="h-5 w-5 text-primary" />
-                      Appointment Details
+                      Services
                     </CardTitle>
                     <CardDescription>
-                      Your service appointment
+                      Items in this transaction
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-primary/10 rounded-full">
-                          <Receipt className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <div className="font-medium">{tx.serviceNamesJoined || 'Services'}</div>
-                          <div className="text-sm text-muted-foreground">Service</div>
-                        </div>
-                      </div>
-
-                      {tx.paymentDate && (
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 bg-blue-100 rounded-full">
-                            <Clock className="h-4 w-4 text-blue-600" />
+                    <div className="space-y-3">
+                      {(tx.items && tx.items.length > 0 ? tx.items : items).map((it) => (
+                        <div key={it.id} className="flex items-center justify-between rounded-xl border border-neutral-200 p-3">
+                          <div className="min-w-0">
+                            <div className="font-medium text-neutral-900 truncate">{it.serviceName || 'Service'}</div>
+                            <div className="mt-1 flex items-center gap-2 text-xs text-neutral-600">
+                              <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700 border border-neutral-200">
+                                {it.staffName || tx.paymentStaff || 'Staff'}
+                              </span>
+                              {it.serviceId && (
+                                <span className="text-[11px] text-neutral-400">ID: {it.serviceId}</span>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-medium">{formatDateTime(tx.paymentDate).date}</div>
-                            <div className="text-sm text-muted-foreground">{formatDateTime(tx.paymentDate).time}</div>
+                          <div className="text-right">
+                            <div className="font-semibold text-neutral-900">{formatCurrency(it.price || 0, 'CAD')}</div>
                           </div>
                         </div>
-                      )}
-
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-green-100 rounded-full">
-                          <UserIcon className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div>
-                          <div className="font-medium">{tx.paymentStaff || 'Staff Member'}</div>
-                          <div className="text-sm text-muted-foreground">Your Stylist</div>
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Customer Information */}
+                {/* Customer Information */
+                }
                 <Card className="md:col-span-2">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <UserIcon className="h-5 w-5 text-primary" />
-                      Confirmation Details
+                      Customer Details
                     </CardTitle>
                     <CardDescription>
-                      Where we&apos;ll send your appointment confirmation and reminders
+                      Contact details associated with this transaction
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -363,16 +356,8 @@ function CheckoutSuccessContent() {
                       <div className="flex items-center gap-3">
                         <UserIcon className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">Customer</div>
-                          <div className="text-sm text-muted-foreground">Customer</div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">—</div>
-                          <div className="text-sm text-muted-foreground">Email</div>
+                          <div className="font-medium">{tx.customerFirstName || 'Customer'}</div>
+                          <div className="text-sm text-muted-foreground">Name</div>
                         </div>
                       </div>
                       
