@@ -33,16 +33,16 @@ export async function POST(req: Request) {
       "Payment/Date": transaction.paymentDate ?? null,
       "Payment/Method": transaction.method ?? null,
       "Payment/Sort": transaction.paymentSort ?? null,
-      // Remove "Payment/Staff" - use Transaction Items for individual staff assignments
+      "Payment/Staff": transaction.paymentStaff ?? null,
       "Payment/Subtotal": transaction.subtotal ?? null,
       "Payment/Status": transaction.status ?? "Paid",
       "Transaction/Services": transaction.transactionServices ?? transaction.subtotal ?? null,
       "Transaction/Services Total": transaction.transactionServicesTotal ?? transaction.subtotal ?? null,
       "Transaction/Tax": transaction.tax ?? null,
       "Transaction/Total Paid": transaction.totalPaid ?? null,
-      // Remove concatenated fields - use Transaction Items for individual services
-      // "Service/Joined List": null,  // Don't store concatenated service names
-      // "Service/Acuity IDs": null,   // Don't store concatenated service IDs
+      "Service/Joined List": transaction.serviceNamesJoined ?? null,
+      // Store concatenated service IDs for the transaction (from payload)
+      "Service/Acuity IDs": transaction.serviceAcuityIds ?? null,
       "DNU Service/Name": null,
       "DNU Service/Subtotal": null,
       "DNU Service/Total": null,
@@ -196,13 +196,16 @@ export async function GET(req: Request) {
       tax: row['Transaction/Tax'],
       tip: row['Transaction/Tip'],
       totalPaid: row['Transaction/Total Paid'],
-      // Add payment status fields from Supabase
+      services: row['Service/Joined List'],
+      serviceIds: row['Service/Acuity IDs'],
+      bookingId: row['Booking/ID'],
+      staff: row['Payment/Staff'],
+      customerPhone: row['Customer/Phone'],
+      customerLookup: row['Customer/Lookup'],
+      // Add payment status fields without breaking existing structure
       status: row['Payment/Status'],
       paymentStatus: row['Payment/Status'], 
       paid: row['Transaction/Paid'],
-      bookingId: row['Booking/ID'],
-      customerPhone: row['Customer/Phone'],
-      customerLookup: row['Customer/Lookup'],
       items: itemsByTransaction[String(row['🔒 Row ID'] || '')] || [],
     }))
 

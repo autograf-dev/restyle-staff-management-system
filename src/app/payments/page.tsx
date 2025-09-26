@@ -22,9 +22,15 @@ interface TxRow {
   tax: number | null
   tip: number | null
   totalPaid: number | null
+  services: string | null
+  serviceIds: string | null
+  staff: string | null
   customerPhone: string | null
   customerLookup: string | null
-  // Remove concatenated fields - use items array for services and staff
+  // Keep payment status for new functionality
+  status?: string | null
+  paymentStatus?: string | null
+  paid?: string | null
   items?: Array<{
     id: string
     serviceId: string
@@ -46,38 +52,17 @@ export default function PaymentsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return rows
-    return rows.filter(r => {
-      // Search in Transaction Items for services and staff
-      const itemsMatch = r.items?.some(item => 
-        (item.serviceName || "").toLowerCase().includes(q) ||
-        (item.staffName || "").toLowerCase().includes(q)
-      )
-      return itemsMatch ||
-        (r.customerPhone || "").toLowerCase().includes(q) ||
-        (r.customerLookup || "").toLowerCase().includes(q) ||
-        (r.id || "").toLowerCase().includes(q)
-    })
+    return rows.filter(r =>
+      (r.services || "").toLowerCase().includes(q) ||
+      (r.staff || "").toLowerCase().includes(q) ||
+      (r.customerPhone || "").toLowerCase().includes(q) ||
+      (r.customerLookup || "").toLowerCase().includes(q) ||
+      (r.id || "").toLowerCase().includes(q)
+    )
   }, [rows, query])
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
   const formatDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-CA') : "—")
-  
-  // Helper functions to extract data from Transaction Items
-  const getServicesDisplay = (row: TxRow) => {
-    if (!row.items?.length) return '—'
-    return row.items.map(item => item.serviceName).filter(Boolean).join(', ') || '—'
-  }
-  
-  const getStaffDisplay = (row: TxRow) => {
-    if (!row.items?.length) return '—'
-    const uniqueStaff = [...new Set(row.items.map(item => item.staffName).filter(Boolean))]
-    return uniqueStaff.join(', ') || '—'
-  }
-  
-  const getServiceIds = (row: TxRow) => {
-    if (!row.items?.length) return row.id
-    return row.items.map(item => item.serviceId).filter(Boolean).join(',') || row.id
-  }
 
   const kpis = useMemo(() => {
     const count = filtered.length
@@ -86,9 +71,7 @@ export default function PaymentsPage() {
     const avg = count > 0 ? revenue / count : 0
     
     // Calculate unique staff count
-    const uniqueStaff = new Set(
-      filtered.flatMap(r => r.items?.map(item => item.staffName).filter(Boolean) || [])
-    ).size
+    const uniqueStaff = new Set(filtered.map(r => r.staff).filter(Boolean)).size
     
     // Calculate total tip splits (sum of all staff tip splits)
     const totalTipSplits = filtered.reduce((sum, r) => {
@@ -308,9 +291,9 @@ export default function PaymentsPage() {
                               <div className="flex items-center gap-3">
                                 <div className="w-1 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded-full"></div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="truncate text-[15px] font-semibold text-neutral-900 leading-tight">{getServicesDisplay(r)}</div>
+                                  <div className="truncate text-[15px] font-semibold text-neutral-900 leading-tight">{r.services || '—'}</div>
                                   <div className="mt-1.5 text-[10px] text-neutral-500 font-mono bg-gradient-to-r from-neutral-100 to-neutral-200 px-2.5 py-1 rounded-lg inline-block border border-neutral-200">
-                                    {getServiceIds(r)}
+                                    {r.serviceIds || r.id}
                                   </div>
                                 </div>
                               </div>
@@ -327,7 +310,7 @@ export default function PaymentsPage() {
                                 ) : (
                                   <span className="inline-flex items-center rounded-full border border-green-200 bg-gradient-to-r from-green-50 to-green-100 px-3 py-1.5 text-[12px] font-semibold text-green-800 shadow-sm">
                                     <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-                                    {getStaffDisplay(r)}
+                                    {r.staff || '—'}
                                   </span>
                                 )}
                               </div>
@@ -391,9 +374,9 @@ export default function PaymentsPage() {
                             <div className="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
                               <div className="flex justify-between items-start">
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{getServicesDisplay(r)}</div>
+                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.services || '—'}</div>
                                   <div className="text-[11px] text-neutral-500 font-mono bg-neutral-100 px-2 py-0.5 rounded-md inline-block mt-1">
-                                    {getServiceIds(r)}
+                                    {r.serviceIds || r.id}
                                   </div>
                                 </div>
                                 <div className="text-right">
@@ -411,7 +394,7 @@ export default function PaymentsPage() {
                                   ))
                                 ) : (
                                   <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700">
-                                    {getStaffDisplay(r)}
+                                    {r.staff || '—'}
                                   </span>
                                 )}
                               </div>
@@ -492,7 +475,7 @@ export default function PaymentsPage() {
                 </div>
                 <div className="flex justify-between text-[14px]">
                   <span className="text-neutral-600">Services:</span>
-                  <span className="font-medium">{getServicesDisplay(selectedTransaction)}</span>
+                  <span className="font-medium">{selectedTransaction.services || '—'}</span>
                 </div>
                 <div className="flex justify-between text-[14px]">
                   <span className="text-neutral-600">Total:</span>
@@ -500,7 +483,7 @@ export default function PaymentsPage() {
                 </div>
                 <div className="flex justify-between text-[14px]">
                   <span className="text-neutral-600">Staff:</span>
-                  <span className="font-medium">{getStaffDisplay(selectedTransaction)}</span>
+                  <span className="font-medium">{selectedTransaction.staff || '—'}</span>
                 </div>
               </div>
             </div>
