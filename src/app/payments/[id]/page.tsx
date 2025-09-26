@@ -35,6 +35,7 @@ interface TransactionData {
   bookingId: string | null
   customerPhone: string | null
   customerLookup: string | null
+  customerName?: string | null
   // Remove concatenated fields - use items array for services and staff
   items: Array<{
     id: string
@@ -55,8 +56,30 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<TransactionData | null>(null)
+  const [customerName, setCustomerName] = useState<string>('Unknown Customer')
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
+
+  // Function to fetch customer name from GHL contacts API
+  const fetchCustomerName = async (customerLookupId: string) => {
+    try {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${encodeURIComponent(customerLookupId)}`)
+      if (!res.ok) throw new Error(`Failed to fetch contact ${customerLookupId}`)
+      const json = await res.json()
+      
+      if (json?.contact) {
+        const contact = json.contact
+        return contact.contactName || 
+          contact.name || 
+          `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 
+          'Unknown Customer'
+      }
+      return 'Unknown Customer'
+    } catch (error) {
+      console.error(`Error fetching customer name for ID ${customerLookupId}:`, error)
+      return 'Unknown Customer'
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -68,7 +91,16 @@ export default function PaymentDetailPage() {
         const json = await res.json()
         console.log('Response data:', json)
         if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
-        setData(json.data)
+        
+        const transactionData = json.data
+        
+        // Fetch customer name if customerLookup exists
+        if (transactionData.customerLookup) {
+          const customerName = await fetchCustomerName(transactionData.customerLookup)
+          transactionData.customerName = customerName
+        }
+        
+        setData(transactionData)
       } catch (e: unknown) {
         console.error('Error loading transaction:', e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
@@ -292,8 +324,8 @@ export default function PaymentDetailPage() {
                     <div className="flex items-center gap-3">
                       <UserIcon className="h-5 w-5 text-[#601625]" />
                       <div>
-                        <div className="font-medium text-[#601625]">{data.customerPhone || 'Unknown Customer'}</div>
-                        <div className="text-sm text-muted-foreground">Customer</div>
+                        <div className="font-medium text-[#601625]">{data.customerName || 'Unknown Customer'}</div>
+                        <div className="text-sm text-muted-foreground">Customer Name</div>
                       </div>
                     </div>
                     

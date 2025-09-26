@@ -48,6 +48,7 @@ export default function PaymentsPage() {
   const [query, setQuery] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<TxRow | null>(null)
+  const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -63,6 +64,47 @@ export default function PaymentsPage() {
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
   const formatDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-CA') : "—")
+  
+  // Helper function to get customer display name
+  const getCustomerName = (transaction: TxRow) => {
+    if (transaction.customerLookup && customerNames[transaction.customerLookup]) {
+      return customerNames[transaction.customerLookup]
+    }
+    return 'Unknown Customer'
+  }
+
+  // Function to fetch customer names from GHL contacts API
+  const fetchCustomerNames = async (customerLookupIds: string[]) => {
+    if (customerLookupIds.length === 0) return {}
+    
+    const nameMap: Record<string, string> = {}
+    
+    // Fetch each contact individually using the getContact endpoint
+    await Promise.allSettled(
+      customerLookupIds.map(async (contactId) => {
+        try {
+          const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${encodeURIComponent(contactId)}`)
+          if (!res.ok) throw new Error(`Failed to fetch contact ${contactId}`)
+          const json = await res.json()
+          
+          if (json?.contact) {
+            const contact = json.contact
+            nameMap[contactId] = contact.contactName || 
+              contact.name || 
+              `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 
+              'Unknown Customer'
+          } else {
+            nameMap[contactId] = 'Unknown Customer'
+          }
+        } catch (error) {
+          console.error(`Error fetching contact ${contactId}:`, error)
+          nameMap[contactId] = 'Unknown Customer'
+        }
+      })
+    )
+    
+    return nameMap
+  }
 
   const kpis = useMemo(() => {
     const count = filtered.length
@@ -97,7 +139,21 @@ export default function PaymentsPage() {
         const res = await fetch(`/api/transactions?limit=100`)
         const json = await res.json()
         if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
-        setRows(json.data || [])
+        
+        const transactions = json.data || []
+        setRows(transactions)
+        
+        // Extract unique customer lookup IDs and fetch names
+        const customerLookupIds = [...new Set(
+          transactions
+            .map((tx: TxRow) => tx.customerLookup)
+            .filter(Boolean)
+        )] as string[]
+        
+        if (customerLookupIds.length > 0) {
+          const names = await fetchCustomerNames(customerLookupIds)
+          setCustomerNames(names)
+        }
       } catch (e: unknown) {
         console.error('Error loading payments:', e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
@@ -322,10 +378,10 @@ export default function PaymentsPage() {
                               <div className="flex items-center gap-3">
                                 <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.customerPhone || 'Unknown Customer'}</div>
+                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{getCustomerName(r)}</div>
                                   <div className="mt-1">
                                     <span className="inline-flex items-center rounded-full bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 border border-[#601625]/20 px-2.5 py-1 text-[11px] font-medium text-[#601625]">
-                                      ID: {r.customerLookup || 'N/A'}
+                                      {r.customerPhone || 'No phone'}
                                     </span>
                                   </div>
                                 </div>
@@ -406,9 +462,9 @@ export default function PaymentsPage() {
                               <div className="flex justify-between items-center">
                                 <div>
                                   <div className="text-[12px] text-neutral-600">Customer</div>
-                                  <div className="text-[13px] font-medium text-neutral-900">{r.customerPhone || 'Unknown Customer'}</div>
+                                  <div className="text-[13px] font-medium text-neutral-900">{getCustomerName(r)}</div>
                                   <span className="inline-flex items-center rounded-full bg-[#601625]/10 border border-[#601625]/20 px-2 py-0.5 text-[10px] font-medium text-[#601625] mt-1">
-                                    ID: {r.customerLookup || 'N/A'}
+                                    {r.customerPhone || 'No phone'}
                                   </span>
                                 </div>
                                 <div className="text-right">
