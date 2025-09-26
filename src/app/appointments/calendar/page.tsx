@@ -532,12 +532,12 @@ const StaffOverviewView = ({
   }
 
   return (
-    <>
+    <div className="space-y-3">
 {(user?.role === 'admin' || user?.role === 'manager') && (
-  <div className="pr-2 py-4">
-    <div className="bg-muted rounded-lg p-2 flex items-center gap-2 max-w-md">
+  <div className="w-full">
+    <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 rounded-lg border border-[#601625]/20 p-3 flex items-center gap-3">
       <button
-        className="h-6 w-6 rounded flex items-center justify-center hover:bg-background transition-colors"
+        className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625]"
         onClick={() => {
           const delta = -columnWidth*3
           const h = headerScrollRef.current
@@ -547,27 +547,30 @@ const StaffOverviewView = ({
         }}
         aria-label="Scroll left"
       >
-        <ArrowLeft className="h-3 w-3" />
+        <ArrowLeft className="h-4 w-4" />
       </button>
       
-      <div className="flex-1 flex items-center gap-1">
-        {staff.slice(0, 6).map((_, index) => (
-          <div 
-            key={index}
-            className="h-1.5 bg-background rounded-full flex-1 cursor-pointer hover:bg-primary/20 transition-colors"
-            onClick={() => {
-              const scrollPosition = (index * columnWidth * staff.length) / 6
-              const h = headerScrollRef.current
-              const b = columnsScrollRef.current
-              if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-              if (b) b.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-            }}
-          />
-        ))}
+      <div className="flex-1 flex items-center gap-2 px-2">
+        <span className="text-xs font-medium text-[#601625]/70 whitespace-nowrap">Staff Navigation</span>
+        <div className="flex-1 flex items-center gap-1.5">
+          {staff.slice(0, 8).map((_, index) => (
+            <div 
+              key={index}
+              className="h-2 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full flex-1 cursor-pointer hover:from-[#601625]/40 hover:to-[#751a29]/40 transition-all duration-200 border border-[#601625]/10"
+              onClick={() => {
+                const scrollPosition = (index * columnWidth * staff.length) / 8
+                const h = headerScrollRef.current
+                const b = columnsScrollRef.current
+                if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+                if (b) b.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+              }}
+            />
+          ))}
+        </div>
       </div>
       
       <button
-        className="h-6 w-6 rounded flex items-center justify-center hover:bg-background transition-colors"
+        className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625]"
         onClick={() => {
           const delta = columnWidth*3
           const h = headerScrollRef.current
@@ -577,7 +580,7 @@ const StaffOverviewView = ({
         }}
         aria-label="Scroll right"
       >
-        <ArrowRight className="h-3 w-3" />
+        <ArrowRight className="h-4 w-4" />
       </button>
     </div>
   </div>
@@ -762,55 +765,81 @@ const StaffOverviewView = ({
                     const style = getAppointmentStyleImproved(appointment)
                     if (style.display === 'none') return null
 
-                    const staffName = staff.find(s => s.ghl_id === staffMember.ghl_id)?.name || ''
+                    const duration = appointment.startTime && appointment.endTime 
+                      ? (new Date(appointment.endTime).getTime() - new Date(appointment.startTime).getTime()) / (1000 * 60)
+                      : 30
+                    
+                    // Determine if this is a short appointment (30 mins or less)
+                    const isShortAppointment = duration <= 30
+                    
                     return (
                       <div
                         key={appointment.id}
-                        className={`absolute rounded-md px-3 py-2 cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 backdrop-blur-sm ${
+                        className={`group absolute rounded-md cursor-pointer transition-all duration-200 hover:shadow-lg border-l-4 backdrop-blur-sm overflow-hidden ${
                           appointment.appointment_status === 'cancelled'
                             ? 'border-l-gray-300 bg-gray-100/60 hover:bg-gray-200/80 opacity-60 cursor-default'
-                            : 'border-l-primary bg-primary/10 hover:bg-primary/20'
-                        }`}
+                            : 'border-l-[#601625] bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 hover:from-[#601625]/20 hover:to-[#751a29]/20'
+                        } ${isShortAppointment ? 'px-2 py-1' : 'px-3 py-2'}`}
                         style={style}
                         onClick={() => appointment.appointment_status !== 'cancelled' && onAppointmentClick(appointment)}
-                        title={`${appointment.serviceName} - ${appointment.contactName}${appointment.appointment_status === 'cancelled' ? ' (Cancelled)' : ''}`}
+                        title={`${appointment.serviceName} - ${appointment.contactName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
                       >
-                        <div className={`text-sm font-medium truncate ${
+                        {/* Minimalist display for appointments */}
+                        <div className={`text-xs font-medium truncate leading-tight ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-500 line-through' 
-                            : 'text-primary'
-                        }`}>
-                          {appointment.serviceName}
-                        </div>
-                        {staffName && (
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {staffName}
-                          </div>
-                        )}
-                        <div className="text-xs text-muted-foreground truncate mt-1">
+                            : 'text-[#601625]'
+                        } ${isShortAppointment ? 'text-[10px]' : 'text-xs'}`}>
                           {appointment.contactName}
                         </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <div className="text-xs text-primary/80 font-medium">
+                        
+                        {!isShortAppointment && (
+                          <div className="text-[10px] text-[#751a29]/70 truncate mt-0.5">
+                            {appointment.serviceName}
+                          </div>
+                        )}
+                        
+                        {/* Status indicator - always visible */}
+                        <div className="absolute top-1 right-1 flex items-center gap-1">
+                          {appointment.payment_status === 'paid' && (
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" title="Paid"></div>
+                          )}
+                          <div className={`w-2 h-2 rounded-full ${
+                            appointment.appointment_status === 'confirmed' 
+                              ? 'bg-green-500' 
+                              : appointment.appointment_status === 'cancelled'
+                              ? 'bg-red-500'
+                              : 'bg-gray-400'
+                          }`} title={appointment.appointment_status}></div>
+                        </div>
+                        
+                        {/* Hover overlay with full details */}
+                        <div className="absolute inset-0 bg-[#601625]/95 text-white p-2 rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 flex flex-col justify-center">
+                          <div className="text-xs font-medium truncate mb-1">
+                            {appointment.serviceName}
+                          </div>
+                          <div className="text-xs truncate mb-1">
+                            {appointment.contactName}
+                          </div>
+                          <div className="text-xs text-white/80 mb-2">
                             {appointment.startTime && formatTime(appointment.startTime)}
                             {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
                           </div>
-                          <div className="flex items-center gap-1">
-                            {appointment.payment_status === 'paid' && (
-                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">
-                                <CheckCircle className="h-2.5 w-2.5" />
-                                PAID
-                              </span>
-                            )}
-                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                               appointment.appointment_status === 'confirmed' 
-                                ? 'bg-green-100 text-green-700' 
+                                ? 'bg-green-500/20 text-green-200' 
                                 : appointment.appointment_status === 'cancelled'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-gray-100 text-gray-700'
+                                ? 'bg-red-500/20 text-red-200'
+                                : 'bg-gray-500/20 text-gray-200'
                             }`}>
                               {appointment.appointment_status}
                             </span>
+                            {appointment.payment_status === 'paid' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200">
+                                PAID
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -823,7 +852,7 @@ const StaffOverviewView = ({
         </div>
       </div>
     </div>
-    </>
+    </div>
   )
 }
 
