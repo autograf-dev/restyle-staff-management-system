@@ -28,6 +28,15 @@ import {
   Phone,
   Wallet,
   Plus,
+  Scissors,
+  Sparkles,
+  Heart,
+  Crown,
+  Zap,
+  Flame,
+  Star,
+  Gem,
+  CheckCircle2,
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -93,6 +102,14 @@ interface Service {
   price: number
   duration: number
   description?: string
+  title?: string
+  servicePrice?: number
+  durationMinutes?: number
+  teamMembers?: Array<{
+    userId: string
+    priority: number
+    selected: boolean
+  }>
 }
 
 interface GroupServices {
@@ -129,6 +146,143 @@ function CheckoutContent() {
   const [groupServices, setGroupServices] = useState<GroupServices>({})
   const [loadingGroups, setLoadingGroups] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
+  const [selectedService, setSelectedService] = useState<Service | null>(null)
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('')
+  const [showStaffSelection, setShowStaffSelection] = useState(false)
+  const [staffData, setStaffData] = useState<Array<{ ghl_id: string; name: string }>>([])
+  const [selectedStaffTab, setSelectedStaffTab] = useState<'all' | 'available'>('all')
+  const [additionalServices, setAdditionalServices] = useState<Array<{
+    id: string
+    name: string
+    price: number
+    duration: number
+    staffId: string
+    staffName: string
+  }>>([])
+
+  // Get icon for group
+  const getGroupIcon = (groupName: string) => {
+    const name = groupName.toLowerCase()
+    if (name.includes('bridal')) return Crown
+    if (name.includes('facial')) return Sparkles
+    if (name.includes('gents')) return UserIcon
+    if (name.includes('ladies')) return Heart
+    if (name.includes('laser')) return Zap
+    if (name.includes('threading')) return Scissors
+    if (name.includes('waxing')) return Flame
+    return Star
+  }
+
+  // Get icon for service
+  const getServiceIcon = (serviceName: string) => {
+    const name = serviceName.toLowerCase()
+    if (name.includes('makeup')) return Sparkles
+    if (name.includes('hair')) return Scissors
+    if (name.includes('facial')) return Heart
+    if (name.includes('massage')) return Gem
+    if (name.includes('nail')) return Star
+    return Crown
+  }
+
+  // Handle service selection
+  const handleServiceClick = (service: Service) => {
+    setSelectedService(service)
+    setShowStaffSelection(true)
+    setSelectedStaffId('') // No default selection
+    setSelectedStaffTab('all') // Default to all staff tab
+  }
+
+  // Handle add service
+  const handleAddService = () => {
+    if (selectedService && selectedStaffId) {
+      const staffName = getStaffName(selectedStaffId)
+      
+      // Add service to additional services
+      const newService = {
+        id: selectedService.id,
+        name: selectedService.name,
+        price: selectedService.price,
+        duration: selectedService.duration,
+        staffId: selectedStaffId,
+        staffName: staffName
+      }
+      
+      setAdditionalServices(prev => [...prev, newService])
+      
+      console.log('Adding service:', selectedService.name, 'with staff:', staffName)
+      toast.success(`${selectedService.name} added to appointment`)
+      
+      // Reset states and close dialog
+      setSelectedService(null)
+      setSelectedStaffId('')
+      setShowStaffSelection(false)
+      setAddServiceDialogOpen(false)
+    }
+  }
+
+  // Fetch staff data
+  const fetchStaffData = async () => {
+    try {
+      const response = await fetch('/api/barber-hours')
+      if (!response.ok) throw new Error('Failed to fetch staff data')
+      const result = await response.json()
+      
+      console.log('Staff API response:', result)
+      
+      if (result.ok && result.data) {
+        const staff = result.data.map((barber: any) => ({
+          ghl_id: barber['ghl_id'],
+          name: barber['Barber/Name']
+        }))
+        console.log('Mapped staff data:', staff)
+        setStaffData(staff)
+      }
+    } catch (error) {
+      console.error('Error fetching staff data:', error)
+    }
+  }
+
+  // Get staff name by userId
+  const getStaffName = (userId: string) => {
+    console.log('Looking for staff with userId:', userId)
+    console.log('Available staff data:', staffData)
+    const staff = staffData.find(s => s.ghl_id === userId)
+    console.log('Found staff:', staff)
+    return staff ? staff.name : `Staff ${userId.substring(0, 4)}`
+  }
+
+  // Get staff initials
+  const getStaffInitials = (userId: string) => {
+    const staffName = getStaffName(userId)
+    if (staffName.includes('Staff')) {
+      return userId.substring(0, 2).toUpperCase()
+    }
+    // Extract initials from name
+    const words = staffName.split(' ')
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase()
+    }
+    return staffName.substring(0, 2).toUpperCase()
+  }
+
+  // Get filtered staff based on selected tab
+  const getFilteredStaff = () => {
+    if (!selectedService?.teamMembers) return []
+    
+    if (selectedStaffTab === 'all') {
+      // Show all staff from staffData
+      return staffData.map(staff => ({
+        userId: staff.ghl_id,
+        name: staff.name
+      }))
+    } else {
+      // Show only available staff (from service teamMembers)
+      return selectedService.teamMembers.map(member => ({
+        userId: member.userId,
+        name: getStaffName(member.userId)
+      }))
+    }
+  }
 
   // Fetch appointment details
   const fetchAppointmentDetails = async () => {
@@ -264,6 +418,17 @@ function CheckoutContent() {
     }
   }
 
+  // Extract price from HTML description
+  const extractPriceFromDescription = (description: string): number => {
+    try {
+      // Look for CA$XX.XX pattern in the HTML
+      const priceMatch = description.match(/CA\$(\d+\.?\d*)/)
+      return priceMatch ? parseFloat(priceMatch[1]) : 0
+    } catch {
+      return 0
+    }
+  }
+
   // Fetch services for a specific group
   const fetchServicesForGroup = async (groupId: string) => {
     try {
@@ -271,9 +436,23 @@ function CheckoutContent() {
       if (!response.ok) throw new Error('Failed to fetch services')
       const data = await response.json()
       
+      // Transform the services data to match our interface
+      const transformedServices = (data.services || []).map((service: any) => {
+        const price = extractPriceFromDescription(service.description || '')
+        console.log(`Service: ${service.name}, Price: ${price}, Duration: ${service.slotDuration}`)
+        return {
+          id: service.id,
+          name: service.name,
+          price: price,
+          duration: service.slotDuration || 0,
+          description: service.description,
+          teamMembers: service.teamMembers || []
+        }
+      })
+      
       setGroupServices(prev => ({
         ...prev,
-        [groupId]: data.services || []
+        [groupId]: transformedServices
       }))
     } catch (error) {
       console.error(`Error fetching services for group ${groupId}:`, error)
@@ -298,29 +477,151 @@ function CheckoutContent() {
     }
     setProcessingPayment(true)
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/createPaymentSession', {
+      // 1) Persist to Supabase first
+      const addedTotal = getAdditionalServicesTotal()
+      const subtotal = paymentSession.pricing.subtotal + addedTotal
+      const gst = paymentSession.pricing.taxes.gst.amount
+      const pst = paymentSession.pricing.taxes.pst?.amount || 0
+      const tip = getEffectiveTipAmount()
+      const totalPaid = subtotal + gst + pst + tip
+
+      const baseItems = paymentSession.appointments.map((a) => ({
+        id: crypto.randomUUID(),
+        // Try multiple fallbacks in case backend provides different keys
+        serviceId: (a as any).serviceId ?? (a as any).id ?? null,
+        serviceName: a.serviceName,
+        price: a.servicePrice,
+        staffName: a.staffName,
+      }))
+      const addItems = additionalServices.map((s) => ({
+        id: crypto.randomUUID(),
+        serviceId: s.id,
+        serviceName: s.name,
+        price: s.price,
+        staffName: s.staffName,
+      }))
+      const items = [...baseItems, ...addItems]
+
+      const distribution = getStaffTipDistribution() // per-staff tip shares
+      const itemsWithTip = items.map((it) => {
+        const share = distribution.find((d: any) => d.staffName === it.staffName)
+        return {
+          ...it,
+          staffTipSplit: share ? Number(share.sharePercentage.toFixed(2)) : null,
+          staffTipCollected: share ? Number(share.tipShare.toFixed(2)) : null,
+        }
+      })
+
+      const transactionId = crypto.randomUUID()
+      const payload = {
+        transaction: {
+          id: transactionId,
+          paymentDate: new Date().toISOString(),
+          method: selectedPaymentMethod,
+          subtotal,
+          tax: gst + pst,
+          tip,
+          totalPaid,
+          serviceNamesJoined: items.map((i) => i.serviceName).join(', '),
+          // Provide all known service IDs for reporting/relations on Supabase
+          serviceAcuityIds: items
+            .map((i) => i.serviceId)
+            .filter((v) => Boolean(v))
+            .join(', ') || null,
+          customerPhone: appointmentDetails?.customerPhone ?? null,
+          bookingId: appointmentDetails?.id ?? null,
+          paymentStaff: appointmentDetails?.staffName ?? null,
+          status: 'Paid',
+        },
+        items: itemsWithTip.map((i) => ({ ...i, paymentId: transactionId })),
+      }
+
+      const persistRes = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentSessionData: paymentSession,
-          successUrl: `${window.location.origin}/checkout/success`,
-          cancelUrl: `${window.location.origin}/checkout/cancel`,
-          paymentMethods: ['card']
-        })
+        body: JSON.stringify(payload),
       })
-      if (!response.ok) throw new Error('Failed to create checkout session')
-      const result = await response.json()
-      if (result.success && result.urls?.checkoutUrl) {
-        window.location.href = result.urls.checkoutUrl
-      } else {
-        throw new Error(result.error || 'Checkout creation failed')
+      if (!persistRes.ok) {
+        const err = await persistRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to persist transaction')
       }
+
+      // Cache for success page fallback (in case Supabase read is blocked)
+      try {
+        sessionStorage.setItem(`tx:${transactionId}`, JSON.stringify(payload))
+      } catch {}
+
+      // 2) Skip external payment; redirect to local success page
+      window.location.href = `/checkout/success?id=${transactionId}`
     } catch (error) {
       console.error('Error creating checkout:', error)
       toast.error('Failed to start checkout process')
     } finally {
       setProcessingPayment(false)
     }
+  }
+
+  // Calculate additional services total
+  const getAdditionalServicesTotal = () => {
+    return additionalServices.reduce((total, service) => total + service.price, 0)
+  }
+
+  // Effective tip amount including added services when using percentage-based tips
+  const getEffectiveTipAmount = () => {
+    if (!paymentSession) return 0
+    if (useCustomTip) return paymentSession.pricing.tipAmount
+    const base = paymentSession.pricing.subtotal + getAdditionalServicesTotal()
+    const tip = (base * tipPercentage) / 100
+    return Number(tip.toFixed(2))
+  }
+
+  // Calculate staff tip distribution
+  const getStaffTipDistribution = () => {
+    if (!paymentSession || getEffectiveTipAmount() <= 0) return []
+    
+    const allServices = [
+      ...paymentSession.appointments.map(apt => ({
+        staffId: apt.staffName, // Using staffName as ID for now
+        staffName: apt.staffName,
+        servicePrice: apt.servicePrice
+      })),
+      ...additionalServices.map(service => ({
+        staffId: service.staffId,
+        staffName: service.staffName,
+        servicePrice: service.price
+      }))
+    ]
+    
+    // Group by staff member
+    const staffTotals = allServices.reduce((acc, service) => {
+      if (!acc[service.staffId]) {
+        acc[service.staffId] = {
+          staffId: service.staffId,
+          staffName: service.staffName,
+          totalServicePrice: 0,
+          services: []
+        }
+      }
+      acc[service.staffId].totalServicePrice += service.servicePrice
+      acc[service.staffId].services.push(service)
+      return acc
+    }, {} as Record<string, { staffId: string; staffName: string; totalServicePrice: number; services: any[] }>)
+    
+    const totalServicePrice = Object.values(staffTotals).reduce((sum, staff) => sum + staff.totalServicePrice, 0)
+    const tipAmount = getEffectiveTipAmount()
+    
+    return Object.values(staffTotals).map(staff => {
+      const sharePercentage = (staff.totalServicePrice / totalServicePrice) * 100
+      const tipShare = (staff.totalServicePrice / totalServicePrice) * tipAmount
+      const totalEarning = staff.totalServicePrice + tipShare
+      
+      return {
+        ...staff,
+        sharePercentage,
+        tipShare,
+        totalEarning
+      }
+    }).sort((a, b) => b.totalServicePrice - a.totalServicePrice)
   }
 
   // Formatters
@@ -346,8 +647,9 @@ function CheckoutContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentDetails, tipPercentage, customTipAmount, useCustomTip])
 
-  useEffect(() => { // fetch groups on page load
+  useEffect(() => { // fetch groups and staff data on page load
     void fetchGroups()
+    void fetchStaffData()
   }, [])
 
   useEffect(() => { // fetch services when groups are loaded
@@ -355,6 +657,12 @@ function CheckoutContent() {
       void fetchAllServices()
     }
   }, [groups])
+
+  useEffect(() => { // fetch staff data when dialog opens
+    if (addServiceDialogOpen && staffData.length === 0) {
+      void fetchStaffData()
+    }
+  }, [addServiceDialogOpen, staffData.length])
 
   if (!appointmentId || !calendarId) {
     return (
@@ -547,64 +855,246 @@ function CheckoutContent() {
                                 Add Service
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-hidden">
-                              <DialogHeader>
-                                <DialogTitle>Add Service</DialogTitle>
-                                <DialogDescription>
+                            <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
+                              <DialogHeader className="pb-6">
+                                <DialogTitle className="text-2xl font-semibold">Add Service</DialogTitle>
+                                <DialogDescription className="text-base">
                                   Select a service category and choose an additional service to add to this appointment.
                                 </DialogDescription>
                               </DialogHeader>
-                              <div className="space-y-4 overflow-hidden">
+                              <div className="space-y-6 overflow-hidden">
                                 {loadingGroups ? (
-                                  <div className="flex items-center justify-center py-8">
-                                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                                    <span>Loading service categories...</span>
+                                  <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="h-8 w-8 animate-spin mr-3" />
+                                    <span className="text-lg">Loading service categories...</span>
                                   </div>
                                 ) : groups.length > 0 ? (
-                                  <Tabs value={selectedGroupId} onValueChange={setSelectedGroupId} className="w-full">
-                                    <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                      {groups.map((group) => (
-                                        <TabsTrigger key={group.id} value={group.id} className="text-xs">
-                                          {group.name}
-                                        </TabsTrigger>
-                                      ))}
-                                    </TabsList>
+                                  <div className="w-full">
+                                    {!showStaffSelection ? (
+                                      <Tabs value={selectedGroupId} onValueChange={setSelectedGroupId} className="w-full">
+                                        <div className="flex gap-2 overflow-x-auto pb-2">
+                                          {groups.map((group) => {
+                                            const IconComponent = getGroupIcon(group.name)
+                                            return (
+                                              <button
+                                                key={group.id}
+                                                onClick={() => setSelectedGroupId(group.id)}
+                                                className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-[#7b1d1d]/30 flex-shrink-0 ${
+                                                  selectedGroupId === group.id
+                                                    ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                                                }`}
+                                              >
+                                                <IconComponent className={`h-5 w-5 ${
+                                                  selectedGroupId === group.id
+                                                    ? 'text-white'
+                                                    : 'text-neutral-600'
+                                                }`} />
+                                                <span className={`text-sm font-medium whitespace-nowrap ${
+                                                  selectedGroupId === group.id
+                                                    ? 'text-white'
+                                                    : 'text-neutral-900'
+                                                }`}>{group.name}</span>
+                                              </button>
+                                            )
+                                          })}
+                                        </div>
                                     {groups.map((group) => (
-                                      <TabsContent key={group.id} value={group.id} className="mt-4">
-                                        <div className="max-h-96 overflow-y-auto">
+                                      <TabsContent key={group.id} value={group.id} className="mt-6">
+                                        <div className="max-h-[60vh] overflow-y-auto">
                                           {groupServices[group.id] ? (
                                             groupServices[group.id].length > 0 ? (
-                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                {groupServices[group.id].map((service, index) => (
-                                                  <div key={index} className="p-4 border rounded-lg hover:bg-neutral-50 cursor-pointer">
-                                                    <h4 className="font-medium text-sm">{service.name}</h4>
-                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                      {service.duration} min • ${service.price}
-                                                    </p>
-                                                    {service.description && (
-                                                      <p className="text-xs text-muted-foreground mt-2">{service.description}</p>
-                                                    )}
-                                                  </div>
-                                                ))}
+                                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {groupServices[group.id].map((service, index) => {
+                                                  const ServiceIcon = getServiceIcon(service.name || '')
+                                                  const serviceName = service.name || 'Service'
+                                                  const servicePrice = service.price || 0
+                                                  const serviceDuration = service.duration || 0
+                                                  
+                                                  return (
+                                                    <div 
+                                                      key={index} 
+                                                      onClick={() => handleServiceClick(service)}
+                                                      className="group p-6 border-2 border-neutral-200 rounded-2xl hover:border-[#7b1d1d]/30 hover:bg-[#7b1d1d]/5 cursor-pointer transition-all"
+                                                    >
+                                                      <div className="flex items-start gap-4">
+                                                        <div className={`p-3 rounded-xl ${
+                                                          selectedGroupId === group.id
+                                                            ? 'bg-[#7b1d1d]/10'
+                                                            : 'bg-neutral-100'
+                                                        }`}>
+                                                          <ServiceIcon className={`h-6 w-6 ${
+                                                            selectedGroupId === group.id
+                                                              ? 'text-[#7b1d1d]'
+                                                              : 'text-neutral-600'
+                                                          }`} />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                          <h4 className="font-semibold text-base text-neutral-900 group-hover:text-[#7b1d1d] transition-colors">
+                                                            {serviceName}
+                                                          </h4>
+                                                          <div className="flex items-center gap-2 mt-2">
+                                                            <Clock className="h-4 w-4 text-neutral-500" />
+                                                            <span className="text-sm text-neutral-600">
+                                                              {serviceDuration} min
+                                                            </span>
+                                                            <span className="text-neutral-300">•</span>
+                                                            <span className="text-sm font-semibold text-[#7b1d1d]">
+                                                              CA${servicePrice.toFixed(2)}
+                                                            </span>
+                                                          </div>
+                                                          {service.teamMembers && service.teamMembers.length > 0 && (
+                                                            <div className="flex items-center gap-1 mt-2">
+                                                              <Users className="h-3 w-3 text-neutral-400" />
+                                                              <span className="text-xs text-neutral-500">
+                                                                {service.teamMembers.length} staff available
+                                                              </span>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  )
+                                                })}
                                               </div>
                                             ) : (
-                                              <div className="text-center py-8">
-                                                <p className="text-sm text-muted-foreground">No services available in this category</p>
+                                              <div className="text-center py-12">
+                                                <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                                                  <AlertCircle className="h-8 w-8 text-neutral-400" />
+                                                </div>
+                                                <p className="text-lg text-neutral-600">No services available in this category</p>
+                                                <p className="text-sm text-neutral-500 mt-1">Try selecting a different category</p>
                                               </div>
                                             )
                                           ) : (
-                                            <div className="flex items-center justify-center py-8">
-                                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                              <span className="text-sm">Loading services...</span>
+                                            <div className="flex items-center justify-center py-12">
+                                              <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                                              <span className="text-lg">Loading services...</span>
                                             </div>
                                           )}
                                         </div>
                                       </TabsContent>
                                     ))}
-                                  </Tabs>
+                                      </Tabs>
+                                    ) : (
+                                      // Staff Selection UI
+                                      <div className="w-full">
+                                        <div className="flex items-center gap-3 mb-6">
+                                          <button
+                                            onClick={() => setShowStaffSelection(false)}
+                                            className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+                                          >
+                                            <ArrowLeft className="h-5 w-5 text-neutral-600" />
+                                          </button>
+                                          <div>
+                                            <h3 className="text-lg font-semibold text-neutral-900">Choose Staff</h3>
+                                            <p className="text-sm text-neutral-600">Select a staff member for {selectedService?.name}</p>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Staff Tabs */}
+                                        <div className="flex gap-2 mb-6">
+                                          <button
+                                            onClick={() => setSelectedStaffTab('all')}
+                                            className={`flex items-center gap-2 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-[#7b1d1d]/30 ${
+                                              selectedStaffTab === 'all'
+                                                ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                                : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                                            }`}
+                                          >
+                                            <Users className={`h-4 w-4 ${
+                                              selectedStaffTab === 'all'
+                                                ? 'text-white'
+                                                : 'text-neutral-600'
+                                            }`} />
+                                            <span className={`text-sm font-medium ${
+                                              selectedStaffTab === 'all'
+                                                ? 'text-white'
+                                                : 'text-neutral-900'
+                                            }`}>All Staff</span>
+                                          </button>
+                                          <button
+                                            onClick={() => setSelectedStaffTab('available')}
+                                            className={`flex items-center gap-2 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-[#7b1d1d]/30 ${
+                                              selectedStaffTab === 'available'
+                                                ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                                : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                                            }`}
+                                          >
+                                            <CheckCircle2 className={`h-4 w-4 ${
+                                              selectedStaffTab === 'available'
+                                                ? 'text-white'
+                                                : 'text-neutral-600'
+                                            }`} />
+                                            <span className={`text-sm font-medium ${
+                                              selectedStaffTab === 'available'
+                                                ? 'text-white'
+                                                : 'text-neutral-900'
+                                            }`}>Available Staff</span>
+                                          </button>
+                                        </div>
+                                        
+                                        {staffData.length === 0 ? (
+                                          <div className="flex items-center justify-center py-12">
+                                            <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                                            <span className="text-lg">Loading staff data...</span>
+                                          </div>
+                                        ) : (
+                                          <div className="grid grid-cols-5 gap-4">
+                                            {getFilteredStaff().map((staff, index) => (
+                                              <button
+                                                key={staff.userId}
+                                                onClick={() => setSelectedStaffId(staff.userId)}
+                                                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                                                  selectedStaffId === staff.userId
+                                                    ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                                                    : 'border-neutral-200 bg-white hover:border-[#7b1d1d]/30 hover:bg-neutral-50'
+                                                }`}
+                                              >
+                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
+                                                  selectedStaffId === staff.userId
+                                                    ? 'bg-[#7b1d1d]'
+                                                    : 'bg-neutral-400'
+                                                }`}>
+                                                  {getStaffInitials(staff.userId)}
+                                                </div>
+                                                <div className="text-center">
+                                                  <p className="text-sm font-medium text-neutral-900">
+                                                    {staff.name}
+                                                  </p>
+                                                </div>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+                                        
+                                        <div className="flex gap-3 mt-8">
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => setShowStaffSelection(false)}
+                                            className="flex-1 rounded-xl"
+                                          >
+                                            Back
+                                          </Button>
+                                          <Button
+                                            onClick={handleAddService}
+                                            disabled={!selectedStaffId}
+                                            className="flex-1 rounded-xl bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                                          >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Add Service
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 ) : (
-                                  <div className="text-center py-8">
-                                    <p className="text-sm text-muted-foreground">No service categories available</p>
+                                  <div className="text-center py-12">
+                                    <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                                      <AlertCircle className="h-8 w-8 text-neutral-400" />
+                                    </div>
+                                    <p className="text-lg text-neutral-600">No service categories available</p>
+                                    <p className="text-sm text-neutral-500 mt-1">Please try again later</p>
                                   </div>
                                 )}
                               </div>
@@ -625,14 +1115,23 @@ function CheckoutContent() {
                                 <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(apt.servicePrice, paymentSession.pricing.currency)}</div>
                               </div>
                             ))}
+                            {additionalServices.map((service, index) => (
+                              <div key={`additional-${index}`} className="flex items-center justify-between px-4 py-3">
+                                <div>
+                                  <div className="text-[14px] font-medium text-neutral-900">{service.name}</div>
+                                  <div className="text-[12px] text-neutral-500">{service.duration} min • {service.staffName}</div>
+                                </div>
+                                <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(service.price, paymentSession.pricing.currency)}</div>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
                         {/* Totals */}
                         <div className="rounded-xl border border-neutral-200 p-4">
-                          <Row label="Subtotal" value={formatCurrency(paymentSession.pricing.subtotal, paymentSession.pricing.currency)} />
-                          {paymentSession.pricing.tipAmount > 0 && (
-                            <Row label={`Tip (${useCustomTip ? 'Custom' : `${tipPercentage}%`})`} value={formatCurrency(paymentSession.pricing.tipAmount, paymentSession.pricing.currency)} />
+                          <Row label="Subtotal" value={formatCurrency(paymentSession.pricing.subtotal + getAdditionalServicesTotal(), paymentSession.pricing.currency)} />
+                          {getEffectiveTipAmount() > 0 && (
+                            <Row label={`Tip (${useCustomTip ? 'Custom' : `${tipPercentage}%`})`} value={formatCurrency(getEffectiveTipAmount(), paymentSession.pricing.currency)} />
                           )}
                           <div className="h-px my-2 bg-neutral-200" />
                           <Row small label={`GST (${paymentSession.pricing.taxes.gst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
@@ -641,13 +1140,13 @@ function CheckoutContent() {
                             <Row small label={`PST (${paymentSession.pricing.taxes.pst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)} />
                           ) : null}
                           <div className="h-px my-2 bg-neutral-200" />
-                          <Row strong label="Total Due" value={formatCurrency(paymentSession.pricing.totalAmount, paymentSession.pricing.currency)} />
+                          <Row strong label="Total Due" value={formatCurrency((paymentSession.pricing.subtotal + getAdditionalServicesTotal()) + (getEffectiveTipAmount()) + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)} />
                         </div>
                       </CardContent>
                     </Card>
                   )}
 
-                  {paymentSession && paymentSession.tipDistribution.length > 0 && (
+                  {paymentSession && paymentSession.pricing.tipAmount > 0 && getStaffTipDistribution().length > 0 && (
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
@@ -658,16 +1157,27 @@ function CheckoutContent() {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {paymentSession.tipDistribution.map((staff, index) => (
-                            <div key={index} className="rounded-xl bg-neutral-50 p-3">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <div className="text-[14px] font-medium text-neutral-900">{staff.staffName}</div>
-                                  <div className="text-[12px] text-neutral-500">Service: {formatCurrency(staff.servicePrice, paymentSession.pricing.currency)} ({staff.sharePercentage.toFixed(1)}% share)</div>
+                          {getStaffTipDistribution().map((staff, index) => (
+                            <div key={staff.staffId} className="rounded-xl bg-neutral-50 p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-[#7b1d1d] flex items-center justify-center text-white font-semibold text-sm">
+                                    {staff.staffName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="text-[14px] font-medium text-neutral-900">{staff.staffName}</div>
+                                    <div className="text-[12px] text-neutral-500">
+                                      {formatCurrency(staff.totalServicePrice, paymentSession.pricing.currency)} ({staff.sharePercentage.toFixed(1)}% share)
+                                    </div>
+                                  </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-[14px] font-semibold text-green-600">+{formatCurrency(staff.tipAmount, paymentSession.pricing.currency)}</div>
-                                  <div className="text-[12px] text-neutral-500">Total: {formatCurrency(staff.totalEarning, paymentSession.pricing.currency)}</div>
+                                  <div className="text-[14px] font-semibold text-green-600 mb-1">
+                                    +{formatCurrency(staff.tipShare, paymentSession.pricing.currency)}
+                                  </div>
+                                  <div className="text-[12px] font-medium text-neutral-900">
+                                    {formatCurrency(staff.totalEarning, paymentSession.pricing.currency)}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -741,7 +1251,7 @@ function CheckoutContent() {
                             Complete
                             {paymentSession && (
                               <span className="ml-2 font-bold">
-                                {formatCurrency(paymentSession.pricing.totalAmount, paymentSession.pricing.currency)}
+                                {formatCurrency((paymentSession.pricing.subtotal + getAdditionalServicesTotal()) + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)}
                               </span>
                             )}
                           </>

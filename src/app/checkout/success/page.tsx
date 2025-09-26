@@ -18,78 +18,117 @@ import {
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 
-interface PaymentResult {
-  success: boolean
-  sessionId: string
-  paymentId: string
-  amount: number
-  currency: string
-  appointmentDetails: {
-    id: string
-    serviceName: string
-    customerName: string
-    staffName: string
-    appointmentDate: string
-    appointmentTime: string
-    duration: string
-  }
-  customerInfo: {
-    name: string
-    email: string
-    phone: string
-  }
-  receiptUrl?: string
+interface TxItem {
+  id: string
+  serviceId: string | null
+  serviceName: string | null
+  price: number | null
+  staffName: string | null
+  staffTipSplit: number | null
+  staffTipCollected: number | null
+}
+
+interface TxRow {
+  id: string
+  paymentDate: string | null
+  method: string | null
+  subtotal: number | null
+  tax: number | null
+  tip: number | null
+  totalPaid: number | null
+  serviceNamesJoined: string | null
+  serviceAcuityIds: string | null
+  bookingId: string | null
+  paymentStaff: string | null
+  customerPhone: string | null
 }
 
 function CheckoutSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null)
+  const [tx, setTx] = useState<TxRow | null>(null)
+  const [items, setItems] = useState<TxItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Get URL parameters
-  const sessionId = searchParams?.get('session_id')
-  const paymentId = searchParams?.get('payment_id')
+  const id = searchParams?.get('id')
 
-  // Fetch payment confirmation details
-  const fetchPaymentDetails = async () => {
-    if (!sessionId) {
-      setError('No session ID provided')
+  // Fetch transaction details (prefer local cache from previous page)
+  const fetchTransaction = async () => {
+    if (!id) {
+      setError('No transaction ID provided')
       return
     }
 
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/confirmPayment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          sessionId,
-          paymentId
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to confirm payment')
+      const cached = typeof window !== 'undefined' ? sessionStorage.getItem(`tx:${id}`) : null
+      if (cached) {
+        const cachedJson = JSON.parse(cached)
+        const t = cachedJson.transaction || {}
+        const mapped: TxRow = {
+          id: String(t.id || id),
+          paymentDate: t.paymentDate || null,
+          method: t.method || null,
+          subtotal: t.subtotal ?? null,
+          tax: t.tax ?? null,
+          tip: t.tip ?? null,
+          totalPaid: t.totalPaid ?? null,
+          serviceNamesJoined: t.serviceNamesJoined || null,
+          serviceAcuityIds: t.serviceAcuityIds || null,
+          bookingId: t.bookingId || null,
+          paymentStaff: t.paymentStaff || null,
+          customerPhone: t.customerPhone || null,
+        }
+        setTx(mapped)
+        setItems((cachedJson.items || []).map((i: any) => ({
+          id: i.id,
+          serviceId: i.serviceId ?? null,
+          serviceName: i.serviceName ?? null,
+          price: i.price ?? null,
+          staffName: i.staffName ?? null,
+          staffTipSplit: i.staffTipSplit ?? null,
+          staffTipCollected: i.staffTipCollected ?? null,
+        })))
+        return
       }
 
-      const result = await response.json()
-      
-      if (result.success && result.paymentDetails) {
-        setPaymentResult(result.paymentDetails)
-        toast.success('Payment completed successfully!')
-      } else {
-        setError(result.error || 'Payment confirmation failed')
+      // If no cached payload, optionally try a minimal fetch of latest row as a fallback
+      const { data: latest, error: latestErr } = await supabase
+        .from('Transactions')
+        .select('*')
+        .order('Payment/Date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (latestErr || !latest) {
+        setError('Transaction not found')
+        return
       }
-    } catch (error) {
-      console.error('Error confirming payment:', error)
-      setError('Failed to load payment confirmation')
-      toast.error('Could not confirm payment status')
+
+      const mappedLatest: TxRow = {
+        id: latest['🔒 Row ID'] || String(id),
+        paymentDate: latest['Payment/Date'] || null,
+        method: latest['Payment/Method'] || null,
+        subtotal: latest['Payment/Subtotal'] || null,
+        tax: latest['Transaction/Tax'] || null,
+        tip: latest['Transaction/Tip'] || null,
+        totalPaid: latest['Transaction/Total Paid'] || null,
+        serviceNamesJoined: latest['Service/Joined List'] || null,
+        serviceAcuityIds: latest['Service/Acuity IDs'] || null,
+        bookingId: latest['Booking/ID'] || null,
+        paymentStaff: latest['Payment/Staff'] || null,
+        customerPhone: latest['Customer/Phone'] || null,
+      }
+      setTx(mappedLatest)
+    } catch (e: any) {
+      console.error('Error loading transaction:', e)
+      setError('Failed to load transaction')
+      toast.error('Could not load transaction')
     }
   }
 
@@ -120,15 +159,14 @@ function CheckoutSuccessContent() {
   }
 
   useEffect(() => {
-    const confirmPayment = async () => {
+    const load = async () => {
       setLoading(true)
-      await fetchPaymentDetails()
+      await fetchTransaction()
       setLoading(false)
     }
-    
-    confirmPayment()
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, paymentId])
+  }, [id])
 
   if (loading) {
     return (
@@ -184,13 +222,13 @@ function CheckoutSuccessContent() {
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-            <div className="flex items-center justify-between w-full px-4">
+                <div className="flex items-center justify-between w-full px-4">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
-                  <h1 className="text-xl font-semibold">Payment Successful</h1>
+                      <h1 className="text-xl font-semibold">Transaction Complete</h1>
                 </div>
               </div>
             </div>
@@ -203,13 +241,13 @@ function CheckoutSuccessContent() {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
                 <CheckCircle className="h-8 w-8 text-green-600" />
               </div>
-              <h1 className="text-2xl font-bold text-green-600 mb-2">Payment Completed!</h1>
+              <h1 className="text-2xl font-bold text-green-600 mb-2">Thank you! Your order is confirmed.</h1>
               <p className="text-muted-foreground">
-                Thank you for your payment. Your appointment is confirmed and you should receive a confirmation email shortly.
+                Your transaction has been saved. Below are the details of your purchase.
               </p>
             </div>
 
-            {paymentResult && (
+            {tx && (
               <div className="grid gap-6 md:grid-cols-2">
                 
                 {/* Payment Details */}
@@ -217,41 +255,46 @@ function CheckoutSuccessContent() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Receipt className="h-5 w-5 text-primary" />
-                      Payment Details
+                      Transaction Summary
                     </CardTitle>
                     <CardDescription>
-                      Transaction information and receipt
+                      Saved transaction information
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid gap-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Payment ID</span>
-                        <span className="font-mono text-sm">{paymentResult.paymentId}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Session ID</span>
-                        <span className="font-mono text-sm">{paymentResult.sessionId}</span>
+                        <span className="text-sm text-muted-foreground">Transaction ID</span>
+                        <span className="font-mono text-sm">{tx.id}</span>
                       </div>
                       
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Amount Paid</span>
-                        <span className="font-semibold text-lg text-green-600">
-                          {formatCurrency(paymentResult.amount, paymentResult.currency)}
-                        </span>
+                        <span className="font-semibold text-lg text-green-600">{formatCurrency(tx.totalPaid || 0, 'CAD')}</span>
                       </div>
                       
-                      {paymentResult.receiptUrl && (
-                        <div className="pt-2">
-                          <Button variant="outline" size="sm" asChild className="w-full">
-                            <a href={paymentResult.receiptUrl} target="_blank" rel="noopener noreferrer">
-                              <Receipt className="h-4 w-4 mr-2" />
-                              View Receipt
-                            </a>
-                          </Button>
+                      <div className="grid grid-cols-2 gap-2 pt-2">
+                        <div className="text-sm">
+                          <div className="text-muted-foreground">Subtotal</div>
+                          <div className="font-medium">{formatCurrency(tx.subtotal || 0, 'CAD')}</div>
                         </div>
-                      )}
+                        <div className="text-sm">
+                          <div className="text-muted-foreground">Tax</div>
+                          <div className="font-medium">{formatCurrency(tx.tax || 0, 'CAD')}</div>
+                        </div>
+                        {typeof tx.tip === 'number' && tx.tip > 0 && (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Tip</div>
+                            <div className="font-medium">{formatCurrency(tx.tip || 0, 'CAD')}</div>
+                          </div>
+                        )}
+                        {tx.method && (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Method</div>
+                            <div className="font-medium capitalize">{tx.method}</div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -261,10 +304,10 @@ function CheckoutSuccessContent() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <CalendarIcon className="h-5 w-5 text-primary" />
-                      Appointment Confirmed
+                      Appointment Details
                     </CardTitle>
                     <CardDescription>
-                      Your upcoming service appointment
+                      Your service appointment
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -274,28 +317,19 @@ function CheckoutSuccessContent() {
                           <Receipt className="h-4 w-4 text-primary" />
                         </div>
                         <div>
-                          <div className="font-medium">{paymentResult.appointmentDetails.serviceName}</div>
+                          <div className="font-medium">{tx.serviceNamesJoined || 'Services'}</div>
                           <div className="text-sm text-muted-foreground">Service</div>
                         </div>
                       </div>
 
-                      {paymentResult.appointmentDetails.appointmentDate && (
+                      {tx.paymentDate && (
                         <div className="flex items-start gap-3">
                           <div className="p-2 bg-blue-100 rounded-full">
                             <Clock className="h-4 w-4 text-blue-600" />
                           </div>
                           <div>
-                            <div className="font-medium">
-                              {formatDateTime(paymentResult.appointmentDetails.appointmentDate).date}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {paymentResult.appointmentDetails.appointmentTime || formatDateTime(paymentResult.appointmentDetails.appointmentDate).time}
-                            </div>
-                            {paymentResult.appointmentDetails.duration && (
-                              <div className="text-xs text-muted-foreground">
-                                Duration: {paymentResult.appointmentDetails.duration}
-                              </div>
-                            )}
+                            <div className="font-medium">{formatDateTime(tx.paymentDate).date}</div>
+                            <div className="text-sm text-muted-foreground">{formatDateTime(tx.paymentDate).time}</div>
                           </div>
                         </div>
                       )}
@@ -305,7 +339,7 @@ function CheckoutSuccessContent() {
                           <UserIcon className="h-4 w-4 text-green-600" />
                         </div>
                         <div>
-                          <div className="font-medium">{paymentResult.appointmentDetails.staffName}</div>
+                          <div className="font-medium">{tx.paymentStaff || 'Staff Member'}</div>
                           <div className="text-sm text-muted-foreground">Your Stylist</div>
                         </div>
                       </div>
@@ -329,7 +363,7 @@ function CheckoutSuccessContent() {
                       <div className="flex items-center gap-3">
                         <UserIcon className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{paymentResult.customerInfo.name}</div>
+                          <div className="font-medium">Customer</div>
                           <div className="text-sm text-muted-foreground">Customer</div>
                         </div>
                       </div>
@@ -337,16 +371,16 @@ function CheckoutSuccessContent() {
                       <div className="flex items-center gap-3">
                         <Mail className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{paymentResult.customerInfo.email}</div>
+                          <div className="font-medium">—</div>
                           <div className="text-sm text-muted-foreground">Email</div>
                         </div>
                       </div>
                       
-                      {paymentResult.customerInfo.phone && (
+                      {tx.customerPhone && (
                         <div className="flex items-center gap-3">
                           <Phone className="h-5 w-5 text-muted-foreground" />
                           <div>
-                            <div className="font-medium">{paymentResult.customerInfo.phone}</div>
+                            <div className="font-medium">{tx.customerPhone}</div>
                             <div className="text-sm text-muted-foreground">Phone</div>
                           </div>
                         </div>
@@ -371,12 +405,12 @@ function CheckoutSuccessContent() {
             </div>
 
             {/* Additional Information */}
-            <Card className="bg-blue-50/50 border-blue-200">
+              <Card className="bg-blue-50/50 border-blue-200">
               <CardContent className="pt-6">
                 <div className="text-center space-y-2">
                   <h3 className="font-semibold text-blue-900">What happens next?</h3>
                   <p className="text-sm text-blue-700">
-                    • A confirmation email will be sent to {paymentResult?.customerInfo.email}<br />
+                    • A confirmation SMS will be sent if a phone was provided<br />
                     • You&apos;ll receive a reminder 24 hours before your appointment<br />
                     • If you need to reschedule, please contact us at least 24 hours in advance
                   </p>
