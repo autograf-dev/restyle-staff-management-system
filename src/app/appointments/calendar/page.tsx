@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { 
   ChevronLeft, 
@@ -16,10 +17,7 @@ import {
   Calendar as CalendarIcon, 
   Clock, 
   User as UserIcon, 
-  MapPin,
   Plus,
-  Eye,
-  Edit,
   Trash2,
   ArrowLeft,
   ArrowRight,
@@ -889,6 +887,70 @@ export default function CalendarPage() {
     "Block/Date": string;
   }[]>([])
 
+  // Cancel booking state
+  const [cancelConfirmOpen, setCancelConfirmOpen] = React.useState(false)
+  const [bookingToCancel, setBookingToCancel] = React.useState<Appointment | null>(null)
+  const [cancelLoading, setCancelLoading] = React.useState(false)
+
+  // Helper function to check if appointment is within 2 hours
+  const isWithinTwoHours = (startTimeString?: string) => {
+    if (!startTimeString) return false
+    const start = new Date(startTimeString)
+    const now = new Date()
+    return start.getTime() <= now.getTime() + 2 * 60 * 60 * 1000
+  }
+
+  // Cancel appointment function
+  const handleCancelAppointment = async (appointment: Appointment) => {
+    if (isWithinTwoHours(appointment.startTime)) {
+      toast.error("Cannot cancel - booking starts within 2 hours")
+      return
+    }
+    setBookingToCancel(appointment)
+    setCancelConfirmOpen(true)
+  }
+
+  const confirmCancelAppointment = async () => {
+    if (!bookingToCancel) return
+    
+    setCancelLoading(true)
+    try {
+      const res = await fetch("https://restyle-api.netlify.app/.netlify/functions/cancelbooking", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookingId: bookingToCancel.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Cancel failed")
+      
+      // Refresh appointments
+      await refresh()
+      toast.success("Appointment cancelled successfully")
+      setCancelConfirmOpen(false)
+      setBookingToCancel(null)
+      setDetailsOpen(false)
+      setSelectedAppointment(null)
+    } catch (error) {
+      console.error(error)
+      toast.error(`Cancellation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setCancelLoading(false)
+    }
+  }
+
+  // Reschedule appointment function - simplified to redirect to appointments page
+  const handleRescheduleAppointment = (appointment: Appointment) => {
+    if (isWithinTwoHours(appointment.startTime)) {
+      toast.error("Cannot reschedule - booking starts within 2 hours")
+      return
+    }
+    setDetailsOpen(false)
+    router.push(`/appointments?view=reschedule&id=${appointment.id}`)
+  }
+
   // Fetch salon hours
   React.useEffect(() => {
     const fetchSalonHours = async () => {
@@ -1415,78 +1477,52 @@ export default function CalendarPage() {
           <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
             <SheetContent side="right" className="w-full sm:max-w-lg">
               <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-primary" />
+                <SheetTitle className="text-lg font-semibold">
                   {selectedAppointment?.serviceName || selectedAppointment?.title}
                 </SheetTitle>
                 <SheetDescription>
-                  Appointment Details & Payment
+                  Appointment details and actions
                 </SheetDescription>
               </SheetHeader>
               
               {selectedAppointment && (
-                <div className="mt-6 space-y-6">
-                  {/* Appointment Info Card */}
-                  <div className="p-4 bg-muted/30 rounded-lg space-y-4">
-                    <div className="flex items-center gap-3">
-                      <UserIcon className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{selectedAppointment.contactName || 'Unknown Customer'}</div>
-                        <div className="text-sm text-muted-foreground">{selectedAppointment.contactPhone || 'No phone'}</div>
-                      </div>
+                <div className="mt-6 space-y-4">
+                  {/* Streamlined Appointment Card */}
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 text-blue-800">
+                      <CalendarIcon className="h-4 w-4" />
+                      <span className="font-semibold">{selectedAppointment.serviceName || selectedAppointment.title}</span>
                     </div>
                     
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">
-                          {selectedAppointment.startTime && formatTime(selectedAppointment.startTime)}
-                          {selectedAppointment.endTime && ` - ${formatTime(selectedAppointment.endTime)}`}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {selectedAppointment.startTime && formatDate(new Date(selectedAppointment.startTime))}
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Clock className="h-4 w-4" />
+                      <span className="font-medium">
+                        {selectedAppointment.startTime && formatTime(selectedAppointment.startTime)}
+                        {selectedAppointment.endTime && ` - ${formatTime(selectedAppointment.endTime)}`}
+                      </span>
                     </div>
                     
-                    <div className="flex items-center gap-3">
-                      <UserIcon className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">
-                          {`${selectedAppointment.assignedStaffFirstName || ''} ${selectedAppointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Staff Member</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{selectedAppointment.serviceName || selectedAppointment.title}</div>
-                        <div className="text-sm text-muted-foreground">Service</div>
-                      </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <UserIcon className="h-4 w-4" />
+                      <span>with {`${selectedAppointment.assignedStaffFirstName || ''} ${selectedAppointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'}</span>
                     </div>
                     
-                    {selectedAppointment.address && (
-                      <div className="flex items-center gap-3">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">{selectedAppointment.address}</div>
-                          <div className="text-sm text-muted-foreground">Location</div>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <span className="text-sm">
+                        {selectedAppointment.startTime && formatDate(new Date(selectedAppointment.startTime))}
+                      </span>
+                    </div>
                   </div>
                   
                   {/* Status Badge */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Status:</span>
+                  <div className="flex items-center justify-center">
                     <Badge 
                       variant={
                         selectedAppointment.appointment_status === 'confirmed' ? 'default' :
                         selectedAppointment.appointment_status === 'cancelled' ? 'destructive' :
                         'secondary'
                       }
+                      className="px-3 py-1"
                     >
                       {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
                     </Badge>
@@ -1494,66 +1530,46 @@ export default function CalendarPage() {
                   
                   {/* Payment Section */}
                   {selectedAppointment.appointment_status === 'confirmed' && selectedAppointment.payment_status !== 'paid' && (
-                    <div className="p-4 border-2 border-primary/20 bg-primary/5 rounded-lg">
-                      <div className="text-center space-y-3">
-                        <div className="flex items-center justify-center gap-2 text-primary">
-                          <DollarSign className="h-5 w-5" />
-                          <span className="font-semibold">Ready for Payment</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Process payment for this appointment with tip calculation and staff distribution
-                        </p>
-                        <Button 
-                          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                          onClick={() => {
-                            router.push(`/checkout?appointmentId=${selectedAppointment.id}&calendarId=${selectedAppointment.calendar_id}&staffId=${selectedAppointment.assigned_user_id}`)
-                          }}
-                        >
-                          <DollarSign className="h-4 w-4 mr-2" />
-                          Complete Checkout
-                        </Button>
-                      </div>
-                    </div>
+                    <Button 
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg py-2"
+                      onClick={() => {
+                        router.push(`/checkout?appointmentId=${selectedAppointment.id}&calendarId=${selectedAppointment.calendar_id}&staffId=${selectedAppointment.assigned_user_id}`)
+                      }}
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Checkout
+                    </Button>
                   )}
 
                   {/* Paid Status Section */}
                   {selectedAppointment.payment_status === 'paid' && (
-                    <div className="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
-                      <div className="text-center space-y-3">
-                        <div className="flex items-center justify-center gap-2 text-green-700">
-                          <CheckCircle className="h-5 w-5" />
-                          <span className="font-semibold">Payment Completed</span>
-                        </div>
-                        <p className="text-sm text-green-600">
-                          This appointment has been paid for and is confirmed
-                        </p>
-                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                          PAID
-                        </Badge>
+                    <div className="p-3 border border-green-200 bg-green-50 rounded-lg text-center">
+                      <div className="flex items-center justify-center gap-2 text-green-700">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="font-medium">Payment Completed</span>
                       </div>
                     </div>
                   )}
                   
                   {/* Action Buttons */}
-                  <div className="flex flex-col gap-2 pt-4 border-t">
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      onClick={() => {
-                        setDetailsOpen(false)
-                        router.push(`/appointments?view=details&id=${selectedAppointment.id}`)
-                      }}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Full Details
-                    </Button>
-                    
+                  <div className="space-y-2 pt-4 border-t">
                     <div className="grid grid-cols-2 gap-2">
-                      <Button size="sm" variant="outline">
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        onClick={() => handleRescheduleAppointment(selectedAppointment)}
+                      >
+                        <RefreshCcw className="h-4 w-4 mr-2" />
+                        Reschedule
                       </Button>
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => handleCancelAppointment(selectedAppointment)}
+                      >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Cancel
                       </Button>
@@ -1563,6 +1579,31 @@ export default function CalendarPage() {
               )}
             </SheetContent>
           </Sheet>
+
+          {/* Cancel Confirmation Dialog */}
+          <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Cancel Appointment</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to cancel this appointment? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" onClick={() => setCancelConfirmOpen(false)} className="flex-1">
+                  Keep Appointment
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={confirmCancelAppointment}
+                  disabled={cancelLoading}
+                  className="flex-1"
+                >
+                  {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>

@@ -65,7 +65,6 @@ interface PricingBreakdown {
   tipAmount: number
   taxes: {
     gst: { rate: number; amount: number }
-    pst?: { rate: number; amount: number }
     totalTax: number
   }
   totalAmount: number
@@ -491,9 +490,8 @@ function CheckoutContent() {
       const addedTotal = getAdditionalServicesTotal()
       const subtotal = paymentSession.pricing.subtotal + addedTotal
       const gst = paymentSession.pricing.taxes.gst.amount
-      const pst = paymentSession.pricing.taxes.pst?.amount || 0
       const tip = getEffectiveTipAmount()
-      const totalPaid = subtotal + gst + pst + tip
+      const totalPaid = subtotal + gst + tip
 
       const baseItems = paymentSession.appointments.map((a) => ({
         id: crypto.randomUUID(),
@@ -529,7 +527,7 @@ function CheckoutContent() {
           paymentDate: new Date().toISOString(),
           method: selectedPaymentMethod,
           subtotal,
-          tax: gst + pst,
+          tax: gst,
           tip,
           totalPaid,
           serviceNamesJoined: items.map((i) => i.serviceName).join(', '),
@@ -687,8 +685,7 @@ function CheckoutContent() {
       const newSubtotal = updatedAppointments.reduce((sum, apt) => sum + apt.servicePrice, 0) + getAdditionalServicesTotal()
       const newTipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (newSubtotal * tipPercentage) / 100
       const newGst = newSubtotal * 0.05 // 5% GST
-      const newPst = newSubtotal * 0.07 // 7% PST
-      const newTotal = newSubtotal + newTipAmount + newGst + newPst
+      const newTotal = newSubtotal + newTipAmount + newGst
       
       setPaymentSession(prev => prev ? {
         ...prev,
@@ -698,10 +695,8 @@ function CheckoutContent() {
           subtotal: newSubtotal,
           tipAmount: newTipAmount,
           taxes: {
-            ...prev.pricing.taxes,
             gst: { rate: 5, amount: newGst },
-            pst: { rate: 7, amount: newPst },
-            totalTax: newGst + newPst
+            totalTax: newGst
           },
           totalAmount: newTotal
         }
@@ -719,8 +714,7 @@ function CheckoutContent() {
       const newSubtotal = paymentSession.appointments.reduce((sum, apt) => sum + apt.servicePrice, 0) + updatedAdditionalServices.reduce((sum, service) => sum + service.price, 0)
       const newTipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (newSubtotal * tipPercentage) / 100
       const newGst = newSubtotal * 0.05 // 5% GST
-      const newPst = newSubtotal * 0.07 // 7% PST
-      const newTotal = newSubtotal + newTipAmount + newGst + newPst
+      const newTotal = newSubtotal + newTipAmount + newGst
       
       setPaymentSession(prev => prev ? {
         ...prev,
@@ -729,10 +723,8 @@ function CheckoutContent() {
           subtotal: newSubtotal,
           tipAmount: newTipAmount,
           taxes: {
-            ...prev.pricing.taxes,
             gst: { rate: 5, amount: newGst },
-            pst: { rate: 7, amount: newPst },
-            totalTax: newGst + newPst
+            totalTax: newGst
           },
           totalAmount: newTotal
         }
@@ -771,8 +763,7 @@ function CheckoutContent() {
       const currentSubtotal = getCurrentSubtotal()
       const newTipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (currentSubtotal * tipPercentage) / 100
       const newGst = currentSubtotal * 0.05 // 5% GST
-      const newPst = currentSubtotal * 0.07 // 7% PST
-      const newTotal = currentSubtotal + newTipAmount + newGst + newPst
+      const newTotal = currentSubtotal + newTipAmount + newGst
       
       setPaymentSession(prev => prev ? {
         ...prev,
@@ -781,10 +772,8 @@ function CheckoutContent() {
           subtotal: currentSubtotal,
           tipAmount: newTipAmount,
           taxes: {
-            ...prev.pricing.taxes,
             gst: { rate: 5, amount: newGst },
-            pst: { rate: 7, amount: newPst },
-            totalTax: newGst + newPst
+            totalTax: newGst
           },
           totalAmount: newTotal
         }
@@ -918,66 +907,7 @@ function CheckoutContent() {
               <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
                 {/* Right column stack: Tip, Pricing, Distribution, Complete */}
                 <div className="space-y-6">
-                  <Card className="rounded-2xl border-neutral-200 shadow-none">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <Percent className="h-5 w-5 text-[#7b1d1d]" />
-                        Tip Amount
-                      </CardTitle>
-                      <CardDescription className="text-[13px]">Add a tip to show appreciation for great service</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-4 gap-2">
-                        {[15, 18, 20, 25].map(percent => (
-                          <Button
-                            key={percent}
-                            variant={!useCustomTip && tipPercentage === percent ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => { setUseCustomTip(false); setTipPercentage(percent) }}
-                            className={`h-9 rounded-lg text-[13px] ${(!useCustomTip && tipPercentage === percent) ? 'bg-[#7b1d1d] hover:bg-[#6b1717] text-white' : ''}`}
-                          >
-                            {percent}%
-                          </Button>
-                        ))}
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[13px]">Custom Tip Amount</Label>
-                        <div className="flex gap-2">
-                          <Select value={useCustomTip ? "custom" : "percentage"} onValueChange={(v) => setUseCustomTip(v === "custom")}>
-                            <SelectTrigger className="w-40 rounded-xl text-[14px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">Percentage</SelectItem>
-                              <SelectItem value="custom">Fixed Amount</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          {useCustomTip ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={customTipAmount}
-                              onChange={(e) => setCustomTipAmount(e.target.value)}
-                              placeholder="0.00"
-                              className="flex-1 rounded-xl"
-                            />
-                          ) : (
-                            <Input
-                              type="number"
-                              min="0"
-                              max="50"
-                              value={tipPercentage}
-                              onChange={(e) => setTipPercentage(Number(e.target.value))}
-                              className="flex-1 rounded-xl"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
 
                   {paymentSession && (
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
@@ -1305,103 +1235,127 @@ function CheckoutContent() {
                           )}
                           <div className="h-px my-2 bg-neutral-200" />
                           <Row small label={`GST (${paymentSession.pricing.taxes.gst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
-                          {/* Hide PST row entirely if amount is 0 or missing */}
-                          {paymentSession.pricing.taxes.pst && paymentSession.pricing.taxes.pst.amount > 0 ? (
-                            <Row small label={`PST (${paymentSession.pricing.taxes.pst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)} />
-                          ) : null}
                           <div className="h-px my-2 bg-neutral-200" />
-                          <Row strong label="Total Due" value={formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)} />
+                          <Row strong label="Total Due" value={formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
                         </div>
                       </CardContent>
                     </Card>
                   )}
 
-                  {paymentSession && paymentSession.pricing.tipAmount > 0 && getStaffTipDistribution().length > 0 && (
+
+
+                  {/* Bottom Section: Payment Method + Tip Selection in Two Columns */}
+                  <div className="grid gap-6 md:grid-cols-2">
+                    {/* Payment Method Card */}
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                          <Users className="h-5 w-5 text-[#7b1d1d]" />
-                          Staff Tip Distribution
+                          <Wallet className="h-5 w-5 text-[#7b1d1d]" />
+                          Payment Method
                         </CardTitle>
-                        <CardDescription className="text-[13px]">How tips will be shared among staff members</CardDescription>
+                        <CardDescription className="text-[13px]">Choose your preferred payment method</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <div className="space-y-3">
-                          {getStaffTipDistribution().map((staff, index) => (
-                            <div key={staff.staffId} className="rounded-xl bg-neutral-50 p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-[#7b1d1d] flex items-center justify-center text-white font-semibold text-sm">
-                                    {staff.staffName.split(' ').map(n => n[0]).join('').toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <div className="text-[14px] font-medium text-neutral-900">{staff.staffName}</div>
-                                    <div className="text-[12px] text-neutral-500">
-                                      {formatCurrency(staff.totalServicePrice, paymentSession.pricing.currency)} ({staff.sharePercentage.toFixed(1)}% share)
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-[14px] font-semibold text-green-600 mb-1">
-                                    +{formatCurrency(staff.tipShare, paymentSession.pricing.currency)}
-                                  </div>
-                                  <div className="text-[12px] font-medium text-neutral-900">
-                                    {formatCurrency(staff.totalEarning, paymentSession.pricing.currency)}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-1 lg:grid-cols-2">
+                          {[
+                            { id: 'visa', name: 'Visa', icon: CreditCard },
+                            { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
+                            { id: 'amex', name: 'Amex', icon: CreditCard },
+                            { id: 'debit', name: 'Debit', icon: CreditCard },
+                            { id: 'cash', name: 'Cash', icon: DollarSign }
+                          ].map((method) => {
+                            const IconComponent = method.icon
+                            return (
+                              <button
+                                key={method.id}
+                                onClick={() => setSelectedPaymentMethod(method.id)}
+                                className={`flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 transition-all hover:border-[#7b1d1d]/30 cursor-pointer ${
+                                  selectedPaymentMethod === method.id
+                                    ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                                }`}
+                              >
+                                <IconComponent className={`h-4 w-4 ${
+                                  selectedPaymentMethod === method.id
+                                    ? 'text-white'
+                                    : 'text-neutral-600'
+                                }`} />
+                                <span className={`text-[12px] font-medium ${
+                                  selectedPaymentMethod === method.id
+                                    ? 'text-white'
+                                    : 'text-neutral-900'
+                                }`}>{method.name}</span>
+                              </button>
+                            )
+                          })}
                         </div>
                       </CardContent>
                     </Card>
-                  )}
 
-                  <Card className="rounded-2xl border-neutral-200 shadow-none">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <Wallet className="h-5 w-5 text-[#7b1d1d]" />
-                        Payment Method
-                      </CardTitle>
-                      <CardDescription className="text-[13px]">Choose your preferred payment method</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex gap-2">
-                        {[
-                          { id: 'visa', name: 'Visa', icon: CreditCard },
-                          { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
-                          { id: 'amex', name: 'Amex', icon: CreditCard },
-                          { id: 'debit', name: 'Debit', icon: CreditCard },
-                          { id: 'cash', name: 'Cash', icon: DollarSign }
-                        ].map((method) => {
-                          const IconComponent = method.icon
-                          return (
-                            <button
-                              key={method.id}
-                              onClick={() => setSelectedPaymentMethod(method.id)}
-                              className={`flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 transition-all hover:border-[#7b1d1d]/30 flex-1 cursor-pointer ${
-                                selectedPaymentMethod === method.id
-                                  ? 'border-[#7b1d1d] bg-[#7b1d1d]'
-                                  : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                              }`}
+                    {/* Tip Selection Card */}
+                    <Card className="rounded-2xl border-neutral-200 shadow-none">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                          <Percent className="h-5 w-5 text-[#7b1d1d]" />
+                          Tip Amount
+                        </CardTitle>
+                        <CardDescription className="text-[13px]">Add a tip to show appreciation for great service</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-4 gap-2">
+                          {[15, 18, 20, 25].map(percent => (
+                            <Button
+                              key={percent}
+                              variant={!useCustomTip && tipPercentage === percent ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => { setUseCustomTip(false); setTipPercentage(percent) }}
+                              className={`h-9 rounded-lg text-[13px] ${(!useCustomTip && tipPercentage === percent) ? 'bg-[#7b1d1d] hover:bg-[#6b1717] text-white' : ''}`}
                             >
-                              <IconComponent className={`h-4 w-4 ${
-                                selectedPaymentMethod === method.id
-                                  ? 'text-white'
-                                  : 'text-neutral-600'
-                              }`} />
-                              <span className={`text-[12px] font-medium ${
-                                selectedPaymentMethod === method.id
-                                  ? 'text-white'
-                                  : 'text-neutral-900'
-                              }`}>{method.name}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
+                              {percent}%
+                            </Button>
+                          ))}
+                        </div>
 
+                        <div className="space-y-2">
+                          <Label className="text-[13px]">Custom Tip Amount</Label>
+                          <div className="flex gap-2">
+                            <Select value={useCustomTip ? "custom" : "percentage"} onValueChange={(v) => setUseCustomTip(v === "custom")}>
+                              <SelectTrigger className="w-24 rounded-xl text-[14px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="percentage">%</SelectItem>
+                                <SelectItem value="custom">$</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            {useCustomTip ? (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={customTipAmount}
+                                onChange={(e) => setCustomTipAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="flex-1 rounded-xl"
+                              />
+                            ) : (
+                              <Input
+                                type="number"
+                                min="0"
+                                max="50"
+                                value={tipPercentage}
+                                onChange={(e) => setTipPercentage(Number(e.target.value))}
+                                className="flex-1 rounded-xl"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Complete Checkout Button */}
                   <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardContent className="pt-6">
                       <Button
@@ -1421,7 +1375,7 @@ function CheckoutContent() {
                             Complete
                             {paymentSession && (
                               <span className="ml-2 font-bold">
-                                {formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount + (paymentSession.pricing.taxes.pst?.amount || 0), paymentSession.pricing.currency)}
+                                {formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)}
                               </span>
                             )}
                           </>
