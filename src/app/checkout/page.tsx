@@ -22,7 +22,8 @@ import {
   Loader2,
   Receipt,
   Users,
-  Percent
+  Percent,
+  Phone,
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -344,7 +345,7 @@ function CheckoutContent() {
                 <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                 <h1 className="text-xl font-semibold mb-2">Invalid Checkout Link</h1>
                 <p className="text-muted-foreground mb-4">Required appointment information is missing</p>
-                <Button onClick={() => router.push('/calendar')}>
+                <Button onClick={() => router.push('/calendar')} className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Return to Calendar
                 </Button>
@@ -356,33 +357,74 @@ function CheckoutContent() {
     )
   }
 
+  const startLabel = appointmentDetails?.startTime ? formatTime(appointmentDetails.startTime) : ''
+  const dateLabel = appointmentDetails?.startTime ? formatDate(appointmentDetails.startTime) : ''
+
   return (
     <RoleGuard>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-            <div className="flex items-center justify-between w-full px-4">
+          {/* Header with slimmer chrome */}
+          <header className="flex h-14 items-center border-b bg-white/60 backdrop-blur px-4">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mx-2 h-4" />
               <div className="flex items-center gap-2">
-                <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-primary" />
-                  <h1 className="text-xl font-semibold">Checkout</h1>
-                </div>
+                <CreditCard className="h-5 w-5 text-[#7b1d1d]" />
+                <h1 className="text-[15px] font-semibold tracking-tight">Checkout</h1>
               </div>
-              <Button variant="outline" onClick={() => router.push('/calendar')}>
+            </div>
+            <div className="ml-auto">
+              <Button variant="outline" onClick={() => router.push('/calendar')} className="rounded-lg">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Calendar
               </Button>
             </div>
           </header>
 
-          <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+          <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
+            {/* HERO CARD — matches screenshot hierarchy */}
+            {appointmentDetails && (
+              <div className="mx-auto w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white px-6 py-5">
+                <p className="text-[13px] font-medium text-neutral-500">Transaction In Progress</p>
+                <h2 className="mt-1 text-[28px] font-semibold leading-tight text-neutral-900">{appointmentDetails.serviceName}</h2>
+                <p className="mt-1 text-[14px] text-neutral-600">with {appointmentDetails.staffName}</p>
+                <div className="mt-3 flex items-center gap-3 text-[14px] text-neutral-700">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span className="font-medium">{startLabel}</span>
+                  <span className="text-neutral-400">•</span>
+                  <span>{dateLabel}</span>
+                </div>
+
+                {/* Customer pill */}
+                <div className="mt-5 rounded-xl border border-neutral-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Users className="h-4 w-4 text-neutral-400" />
+                      <div>
+                        <div className="text-[14px] font-semibold uppercase tracking-wide">{appointmentDetails.customerName}</div>
+                        {appointmentDetails.customerPhone && (
+                          <div className="mt-0.5 flex items-center gap-2 text-[12px] text-neutral-600">
+                            <Phone className="h-3.5 w-3.5" />
+                            {appointmentDetails.customerPhone}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button variant="outline" className="h-8 rounded-lg border-neutral-200 text-[13px]">Booking Link</Button>
+                      <Button variant="outline" className="h-8 rounded-lg border-neutral-200 text-[13px]">Club Card Link</Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {loading ? (
-              <div className="grid gap-6 md:grid-cols-2">
-                <Skeleton className="h-96" />
-                <Skeleton className="h-96" />
+              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
+                <Skeleton className="h-96 rounded-2xl" />
+                <Skeleton className="h-96 rounded-2xl" />
               </div>
             ) : !appointmentDetails ? (
               <div className="text-center py-12">
@@ -391,92 +433,80 @@ function CheckoutContent() {
                 <p className="text-muted-foreground">Could not load appointment details</p>
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                
-                {/* Left Column - Appointment Details */}
+              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
+                {/* Left Column - Appointment & Customer */}
                 <div className="space-y-6">
-                  
-                  {/* Appointment Information */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CalendarIcon className="h-5 w-5 text-primary" />
+                  <Card className="rounded-2xl border-neutral-200 shadow-none">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <CalendarIcon className="h-5 w-5 text-[#7b1d1d]" />
                         Appointment Details
                       </CardTitle>
-                      <CardDescription>
-                        Service and timing information
-                      </CardDescription>
+                      <CardDescription className="text-[13px]">Service and timing information</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid gap-4">
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-primary/10 rounded-full">
-                            <Receipt className="h-4 w-4 text-primary" />
+                          <div className="p-2 rounded-full bg-neutral-100">
+                            <Receipt className="h-4 w-4 text-neutral-700" />
                           </div>
                           <div>
-                            <div className="font-medium">{appointmentDetails.serviceName}</div>
-                            <div className="text-sm text-muted-foreground">Service</div>
+                            <div className="text-[14px] font-medium text-neutral-900">{appointmentDetails.serviceName}</div>
+                            <div className="text-[12px] text-neutral-500">Service</div>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-blue-100 rounded-full">
-                            <Clock className="h-4 w-4 text-blue-600" />
+                          <div className="p-2 rounded-full bg-neutral-100">
+                            <Clock className="h-4 w-4 text-neutral-700" />
                           </div>
                           <div>
-                            <div className="font-medium">
+                            <div className="text-[14px] font-medium text-neutral-900">
                               {appointmentDetails.startTime && formatTime(appointmentDetails.startTime)}
                               {appointmentDetails.endTime && ` - ${formatTime(appointmentDetails.endTime)}`}
                             </div>
-                            <div className="text-sm text-muted-foreground">
+                            <div className="text-[12px] text-neutral-500">
                               {appointmentDetails.startTime && formatDate(appointmentDetails.startTime)}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              Duration: {formatDuration(appointmentDetails.duration)}
-                            </div>
+                            <div className="text-[12px] text-neutral-500">Duration: {formatDuration(appointmentDetails.duration)}</div>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-green-100 rounded-full">
-                            <UserIcon className="h-4 w-4 text-green-600" />
+                          <div className="p-2 rounded-full bg-neutral-100">
+                            <UserIcon className="h-4 w-4 text-neutral-700" />
                           </div>
                           <div>
-                            <div className="font-medium">{appointmentDetails.staffName}</div>
-                            <div className="text-sm text-muted-foreground">Assigned Staff</div>
+                            <div className="text-[14px] font-medium text-neutral-900">{appointmentDetails.staffName}</div>
+                            <div className="text-[12px] text-neutral-500">Assigned Staff</div>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-3">
-                          <div className="p-2 bg-purple-100 rounded-full">
-                            <UserIcon className="h-4 w-4 text-purple-600" />
+                          <div className="p-2 rounded-full bg-neutral-100">
+                            <UserIcon className="h-4 w-4 text-neutral-700" />
                           </div>
                           <div>
-                            <div className="font-medium">{appointmentDetails.customerName}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {appointmentDetails.customerPhone || 'Customer'}
-                            </div>
+                            <div className="text-[14px] font-medium text-neutral-900">{appointmentDetails.customerName}</div>
+                            <div className="text-[12px] text-neutral-500">{appointmentDetails.customerPhone || 'Customer'}</div>
                           </div>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Customer Information */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <UserIcon className="h-5 w-5 text-primary" />
+                  <Card className="rounded-2xl border-neutral-200 shadow-none">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <UserIcon className="h-5 w-5 text-[#7b1d1d]" />
                         Customer Information
                       </CardTitle>
-                      <CardDescription>
-                        Contact details for receipt and confirmation
-                      </CardDescription>
+                      <CardDescription className="text-[13px]">Contact details for receipt and confirmation</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="customer-name">Full Name *</Label>
+                          <Label htmlFor="customer-name" className="text-[13px]">Full Name *</Label>
                           <Input
                             id="customer-name"
                             type="text"
@@ -484,11 +514,12 @@ function CheckoutContent() {
                             onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
                             placeholder="Enter customer name"
                             required
+                            className="rounded-xl"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="customer-email">Email Address *</Label>
+                          <Label htmlFor="customer-email" className="text-[13px]">Email Address *</Label>
                           <Input
                             id="customer-email"
                             type="email"
@@ -496,17 +527,19 @@ function CheckoutContent() {
                             onChange={(e) => setCustomerInfo(prev => ({ ...prev, email: e.target.value }))}
                             placeholder="customer@example.com"
                             required
+                            className="rounded-xl"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="customer-phone">Phone Number</Label>
+                          <Label htmlFor="customer-phone" className="text-[13px]">Phone Number</Label>
                           <Input
                             id="customer-phone"
                             type="tel"
                             value={customerInfo.phone}
                             onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
                             placeholder="+1 (555) 123-4567"
+                            className="rounded-xl"
                           />
                         </div>
                       </div>
@@ -514,19 +547,15 @@ function CheckoutContent() {
                   </Card>
                 </div>
 
-                {/* Right Column - Pricing & Payment */}
+                {/* Right Column - Tip, Pricing, Checkout */}
                 <div className="space-y-6">
-                  
-                  {/* Tip Selection */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Percent className="h-5 w-5 text-primary" />
+                  <Card className="rounded-2xl border-neutral-200 shadow-none">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <Percent className="h-5 w-5 text-[#7b1d1d]" />
                         Tip Amount
                       </CardTitle>
-                      <CardDescription>
-                        Add a tip to show appreciation for great service
-                      </CardDescription>
+                      <CardDescription className="text-[13px]">Add a tip to show appreciation for great service</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-4 gap-2">
@@ -535,25 +564,19 @@ function CheckoutContent() {
                             key={percent}
                             variant={!useCustomTip && tipPercentage === percent ? "default" : "outline"}
                             size="sm"
-                            onClick={() => {
-                              setUseCustomTip(false)
-                              setTipPercentage(percent)
-                            }}
-                            className="text-xs"
+                            onClick={() => { setUseCustomTip(false); setTipPercentage(percent) }}
+                            className={`h-9 rounded-lg text-[13px] ${(!useCustomTip && tipPercentage === percent) ? 'bg-[#7b1d1d] hover:bg-[#6b1717] text-white' : ''}`}
                           >
                             {percent}%
                           </Button>
                         ))}
                       </div>
-                      
+
                       <div className="space-y-2">
-                        <Label>Custom Tip Amount</Label>
+                        <Label className="text-[13px]">Custom Tip Amount</Label>
                         <div className="flex gap-2">
-                          <Select
-                            value={useCustomTip ? "custom" : "percentage"}
-                            onValueChange={(value) => setUseCustomTip(value === "custom")}
-                          >
-                            <SelectTrigger className="w-32">
+                          <Select value={useCustomTip ? "custom" : "percentage"} onValueChange={(v) => setUseCustomTip(v === "custom")}>
+                            <SelectTrigger className="w-40 rounded-xl text-[14px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -561,7 +584,7 @@ function CheckoutContent() {
                               <SelectItem value="custom">Fixed Amount</SelectItem>
                             </SelectContent>
                           </Select>
-                          
+
                           {useCustomTip ? (
                             <Input
                               type="number"
@@ -570,7 +593,7 @@ function CheckoutContent() {
                               value={customTipAmount}
                               onChange={(e) => setCustomTipAmount(e.target.value)}
                               placeholder="0.00"
-                              className="flex-1"
+                              className="flex-1 rounded-xl"
                             />
                           ) : (
                             <Input
@@ -579,7 +602,7 @@ function CheckoutContent() {
                               max="50"
                               value={tipPercentage}
                               onChange={(e) => setTipPercentage(Number(e.target.value))}
-                              className="flex-1"
+                              className="flex-1 rounded-xl"
                             />
                           )}
                         </div>
@@ -587,104 +610,66 @@ function CheckoutContent() {
                     </CardContent>
                   </Card>
 
-                  {/* Pricing Breakdown */}
                   {paymentSession && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <DollarSign className="h-5 w-5 text-primary" />
+                    <Card className="rounded-2xl border-neutral-200 shadow-none">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                          <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
                           Pricing Summary
                         </CardTitle>
-                        <CardDescription>
-                          Complete breakdown of charges and taxes
-                        </CardDescription>
+                        <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        
-                        {/* Service Items */}
-                        <div className="space-y-2">
-                          {paymentSession.appointments.map((apt, index) => (
-                            <div key={index} className="flex justify-between items-center py-2">
-                              <div>
-                                <div className="font-medium">{apt.serviceName}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {apt.duration} • {apt.staffName}
+                        <div className="overflow-hidden rounded-xl border border-neutral-200">
+                          <div className="divide-y">
+                            {paymentSession.appointments.map((apt, index) => (
+                              <div key={index} className="flex items-center justify-between px-4 py-3">
+                                <div>
+                                  <div className="text-[14px] font-medium text-neutral-900">{apt.serviceName}</div>
+                                  <div className="text-[12px] text-neutral-500">{apt.duration} • {apt.staffName}</div>
                                 </div>
+                                <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(apt.servicePrice, paymentSession.pricing.currency)}</div>
                               </div>
-                              <div className="font-medium">
-                                {formatCurrency(apt.servicePrice, paymentSession.pricing.currency)}
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
 
-                        <UISeparator />
-
-                        {/* Totals */}
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span>Subtotal</span>
-                            <span>{formatCurrency(paymentSession.pricing.subtotal, paymentSession.pricing.currency)}</span>
-                          </div>
-                          
+                        <div className="rounded-xl border border-neutral-200 p-4">
+                          <Row label="Subtotal" value={formatCurrency(paymentSession.pricing.subtotal, paymentSession.pricing.currency)} />
                           {paymentSession.pricing.tipAmount > 0 && (
-                            <div className="flex justify-between">
-                              <span>Tip ({useCustomTip ? 'Custom' : `${tipPercentage}%`})</span>
-                              <span>{formatCurrency(paymentSession.pricing.tipAmount, paymentSession.pricing.currency)}</span>
-                            </div>
+                            <Row label={`Tip (${useCustomTip ? 'Custom' : `${tipPercentage}%`})`} value={formatCurrency(paymentSession.pricing.tipAmount, paymentSession.pricing.currency)} />
                           )}
-                          
-                          <div className="flex justify-between text-sm">
-                            <span>GST ({paymentSession.pricing.taxes.gst.rate}%)</span>
-                            <span>{formatCurrency(paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)}</span>
-                          </div>
-                          
-                          <div className="flex justify-between text-sm">
-                            <span>PST ({paymentSession.pricing.taxes.pst.rate}%)</span>
-                            <span>{formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)}</span>
-                          </div>
-
-                          <UISeparator />
-                          
-                          <div className="flex justify-between text-lg font-bold">
-                            <span>Total</span>
-                            <span>{formatCurrency(paymentSession.pricing.totalAmount, paymentSession.pricing.currency)}</span>
-                          </div>
+                          <div className="h-px my-2 bg-neutral-200" />
+                          <Row small label={`GST (${paymentSession.pricing.taxes.gst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
+                          <Row small label={`PST (${paymentSession.pricing.taxes.pst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)} />
+                          <div className="h-px my-2 bg-neutral-200" />
+                          <Row strong label="Total Due" value={formatCurrency(paymentSession.pricing.totalAmount, paymentSession.pricing.currency)} />
                         </div>
                       </CardContent>
                     </Card>
                   )}
 
-                  {/* Staff Tip Distribution */}
                   {paymentSession && paymentSession.tipDistribution.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Users className="h-5 w-5 text-primary" />
+                    <Card className="rounded-2xl border-neutral-200 shadow-none">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                          <Users className="h-5 w-5 text-[#7b1d1d]" />
                           Staff Tip Distribution
                         </CardTitle>
-                        <CardDescription>
-                          How tips will be shared among staff members
-                        </CardDescription>
+                        <CardDescription className="text-[13px]">How tips will be shared among staff members</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
                           {paymentSession.tipDistribution.map((staff, index) => (
-                            <div key={index} className="p-3 bg-muted/30 rounded-lg">
+                            <div key={index} className="rounded-xl bg-neutral-50 p-3">
                               <div className="flex justify-between items-start">
                                 <div>
-                                  <div className="font-medium">{staff.staffName}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    Service: {formatCurrency(staff.servicePrice, paymentSession.pricing.currency)} ({staff.sharePercentage.toFixed(1)}% share)
-                                  </div>
+                                  <div className="text-[14px] font-medium text-neutral-900">{staff.staffName}</div>
+                                  <div className="text-[12px] text-neutral-500">Service: {formatCurrency(staff.servicePrice, paymentSession.pricing.currency)} ({staff.sharePercentage.toFixed(1)}% share)</div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="font-medium text-green-600">
-                                    +{formatCurrency(staff.tipAmount, paymentSession.pricing.currency)}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    Total: {formatCurrency(staff.totalEarning, paymentSession.pricing.currency)}
-                                  </div>
+                                  <div className="text-[14px] font-semibold text-green-600">+{formatCurrency(staff.tipAmount, paymentSession.pricing.currency)}</div>
+                                  <div className="text-[12px] text-neutral-500">Total: {formatCurrency(staff.totalEarning, paymentSession.pricing.currency)}</div>
                                 </div>
                               </div>
                             </div>
@@ -694,12 +679,11 @@ function CheckoutContent() {
                     </Card>
                   )}
 
-                  {/* Checkout Button */}
-                  <Card>
+                  <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardContent className="pt-6">
                       <Button
                         size="lg"
-                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                        className="w-full rounded-2xl bg-[#7b1d1d] text-white hover:bg-[#6b1717]"
                         onClick={proceedToCheckout}
                         disabled={processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession}
                       >
@@ -711,7 +695,7 @@ function CheckoutContent() {
                         ) : (
                           <>
                             <CreditCard className="h-5 w-5 mr-2" />
-                            Proceed to Payment
+                            Complete
                             {paymentSession && (
                               <span className="ml-2 font-bold">
                                 {formatCurrency(paymentSession.pricing.totalAmount, paymentSession.pricing.currency)}
@@ -720,8 +704,7 @@ function CheckoutContent() {
                           </>
                         )}
                       </Button>
-                      
-                      <p className="text-xs text-center text-muted-foreground mt-3">
+                      <p className="text-[12px] text-center text-neutral-500 mt-3">
                         You will be redirected to our secure payment processor to complete your transaction
                       </p>
                     </CardContent>
@@ -736,6 +719,15 @@ function CheckoutContent() {
   )
 }
 
+function Row({ label, value, strong, small }: { label: string; value: string; strong?: boolean; small?: boolean }) {
+  return (
+    <div className="flex items-center justify-between py-1.5">
+      <span className={`${small ? 'text-[12px]' : 'text-[14px]'} ${strong ? 'font-semibold text-neutral-900' : 'text-neutral-700'}`}>{label}</span>
+      <span className={`${small ? 'text-[12px]' : 'text-[14px]'} ${strong ? 'font-semibold text-neutral-900' : 'text-neutral-900'}`}>{value}</span>
+    </div>
+  )
+}
+
 export default function CheckoutPage() {
   return (
     <Suspense fallback={
@@ -745,7 +737,7 @@ export default function CheckoutPage() {
           <SidebarInset>
             <div className="flex items-center justify-center min-h-screen">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7b1d1d] mx-auto mb-4"></div>
                 <p>Loading checkout...</p>
               </div>
             </div>
