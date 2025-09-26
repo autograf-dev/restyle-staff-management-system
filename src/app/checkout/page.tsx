@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator as UISeparator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   DollarSign, 
   Clock, 
@@ -78,6 +79,26 @@ interface PaymentSession {
   tipDistribution: TipDistribution[]
 }
 
+interface Group {
+  id: string
+  name: string
+  description: string
+  slug: string
+  isActive: boolean
+}
+
+interface Service {
+  id: string
+  name: string
+  price: number
+  duration: number
+  description?: string
+}
+
+interface GroupServices {
+  [groupId: string]: Service[]
+}
+
 function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -104,6 +125,10 @@ function CheckoutContent() {
   const [useCustomTip, setUseCustomTip] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
   const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [groupServices, setGroupServices] = useState<GroupServices>({})
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('')
 
   // Fetch appointment details
   const fetchAppointmentDetails = async () => {
@@ -218,6 +243,53 @@ function CheckoutContent() {
     }
   }
 
+  // Fetch groups from Supabase
+  const fetchGroups = async () => {
+    try {
+      setLoadingGroups(true)
+      const response = await fetch('/api/groups')
+      if (!response.ok) throw new Error('Failed to fetch groups')
+      const data = await response.json()
+      setGroups(data.groups || [])
+      
+      // Set first group as selected if available
+      if (data.groups && data.groups.length > 0) {
+        setSelectedGroupId(data.groups[0].id)
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error)
+      toast.error('Failed to load service categories')
+    } finally {
+      setLoadingGroups(false)
+    }
+  }
+
+  // Fetch services for a specific group
+  const fetchServicesForGroup = async (groupId: string) => {
+    try {
+      const response = await fetch(`/api/services?groupId=${groupId}`)
+      if (!response.ok) throw new Error('Failed to fetch services')
+      const data = await response.json()
+      
+      setGroupServices(prev => ({
+        ...prev,
+        [groupId]: data.services || []
+      }))
+    } catch (error) {
+      console.error(`Error fetching services for group ${groupId}:`, error)
+      // Don't show toast for background fetches
+    }
+  }
+
+  // Fetch all services for all groups
+  const fetchAllServices = async () => {
+    if (groups.length === 0) return
+    
+    // Fetch services for all groups in parallel
+    const promises = groups.map(group => fetchServicesForGroup(group.id))
+    await Promise.all(promises)
+  }
+
   // Create checkout session and redirect
   const proceedToCheckout = async () => {
     if (!paymentSession || !customerInfo.email) {
@@ -273,6 +345,16 @@ function CheckoutContent() {
     if (appointmentDetails) { void initializePayment() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentDetails, tipPercentage, customTipAmount, useCustomTip])
+
+  useEffect(() => { // fetch groups on page load
+    void fetchGroups()
+  }, [])
+
+  useEffect(() => { // fetch services when groups are loaded
+    if (groups.length > 0) {
+      void fetchAllServices()
+    }
+  }, [groups])
 
   if (!appointmentId || !calendarId) {
     return (
@@ -465,19 +547,66 @@ function CheckoutContent() {
                                 Add Service
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-md">
+                            <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-hidden">
                               <DialogHeader>
                                 <DialogTitle>Add Service</DialogTitle>
                                 <DialogDescription>
-                                  Add an additional service to this appointment.
+                                  Select a service category and choose an additional service to add to this appointment.
                                 </DialogDescription>
                               </DialogHeader>
-                              <div className="space-y-4">
-                                <div className="text-center py-8">
-                                  <p className="text-sm text-muted-foreground">
-                                    Service selection will be implemented here.
-                                  </p>
-                                </div>
+                              <div className="space-y-4 overflow-hidden">
+                                {loadingGroups ? (
+                                  <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                                    <span>Loading service categories...</span>
+                                  </div>
+                                ) : groups.length > 0 ? (
+                                  <Tabs value={selectedGroupId} onValueChange={setSelectedGroupId} className="w-full">
+                                    <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                      {groups.map((group) => (
+                                        <TabsTrigger key={group.id} value={group.id} className="text-xs">
+                                          {group.name}
+                                        </TabsTrigger>
+                                      ))}
+                                    </TabsList>
+                                    {groups.map((group) => (
+                                      <TabsContent key={group.id} value={group.id} className="mt-4">
+                                        <div className="max-h-96 overflow-y-auto">
+                                          {groupServices[group.id] ? (
+                                            groupServices[group.id].length > 0 ? (
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {groupServices[group.id].map((service, index) => (
+                                                  <div key={index} className="p-4 border rounded-lg hover:bg-neutral-50 cursor-pointer">
+                                                    <h4 className="font-medium text-sm">{service.name}</h4>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                      {service.duration} min • ${service.price}
+                                                    </p>
+                                                    {service.description && (
+                                                      <p className="text-xs text-muted-foreground mt-2">{service.description}</p>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <div className="text-center py-8">
+                                                <p className="text-sm text-muted-foreground">No services available in this category</p>
+                                              </div>
+                                            )
+                                          ) : (
+                                            <div className="flex items-center justify-center py-8">
+                                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                              <span className="text-sm">Loading services...</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </TabsContent>
+                                    ))}
+                                  </Tabs>
+                                ) : (
+                                  <div className="text-center py-8">
+                                    <p className="text-sm text-muted-foreground">No service categories available</p>
+                                  </div>
+                                )}
                               </div>
                             </DialogContent>
                           </Dialog>
