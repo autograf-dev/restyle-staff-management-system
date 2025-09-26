@@ -486,10 +486,9 @@ function CheckoutContent() {
     }
     setProcessingPayment(true)
     try {
-      // 1) Persist to Supabase first
-      const addedTotal = getAdditionalServicesTotal()
-      const subtotal = paymentSession.pricing.subtotal + addedTotal
-      const gst = subtotal * 0.05  // Recalculate GST on the correct subtotal (5% GST)
+      // 1) Persist to Supabase first - Use consistent subtotal calculation
+      const subtotal = getCurrentSubtotal()  // Use same calculation as tip and UI
+      const gst = getCurrentGST()           // Use same GST calculation as UI
       const tip = getEffectiveTipAmount()
       const totalPaid = subtotal + gst + tip
 
@@ -1248,7 +1247,49 @@ function CheckoutContent() {
                     </Card>
                   )}
 
-
+                  {/* Staff Tip Distribution Card */}
+                  {paymentSession && getEffectiveTipAmount() > 0 && (
+                    <Card className="rounded-2xl border-neutral-200 shadow-none">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                          <Users className="h-5 w-5 text-[#7b1d1d]" />
+                          Staff Tip Distribution
+                        </CardTitle>
+                        <CardDescription className="text-[13px]">
+                          How the {formatCurrency(getEffectiveTipAmount(), paymentSession.pricing.currency)} tip is distributed among staff
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-hidden rounded-xl border border-neutral-200">
+                          <div className="divide-y">
+                            {getStaffTipDistribution().map((staff, index) => (
+                              <div key={index} className="flex items-center justify-between px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#7b1d1d] to-[#a02929] flex items-center justify-center">
+                                    <span className="text-white text-sm font-semibold">
+                                      {staff.staffName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <div className="text-[14px] font-medium text-neutral-900">{staff.staffName}</div>
+                                    <div className="text-[12px] text-neutral-500">
+                                      {formatCurrency(staff.totalServicePrice, paymentSession.pricing.currency)} services • {staff.sharePercentage.toFixed(1)}%
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-[14px] font-semibold text-green-600">
+                                    {formatCurrency(staff.tipShare, paymentSession.pricing.currency)}
+                                  </div>
+                                  <div className="text-[12px] text-neutral-500">tip share</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* Bottom Section: Payment Method + Tip Selection in Two Columns */}
                   <div className="grid gap-6 md:grid-cols-2">

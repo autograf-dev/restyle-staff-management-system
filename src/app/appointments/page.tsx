@@ -1644,8 +1644,8 @@ function BookingsPageInner() {
             {/* Filters and Search */}
             <Card>
               <CardHeader>
-                <CardTitle>Filter Bookings</CardTitle>
-                <CardDescription>Filter and search through all bookings</CardDescription>
+                <CardTitle>Filter Appointments</CardTitle>
+                <CardDescription>Filter and search through all appointments</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -1677,9 +1677,9 @@ function BookingsPageInner() {
             {/* Appointments Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Bookings ({filteredData.length})</CardTitle>
+                <CardTitle>Appointments ({filteredData.length})</CardTitle>
                 <CardDescription>
-                  Manage and view all salon bookings
+                  Manage and view all salon appointments
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1719,7 +1719,7 @@ function BookingsPageInner() {
                         ) : (
                           <TableRow>
                             <TableCell colSpan={columns.length} className="h-24 text-center">
-                              No bookings found.
+                              No appointments found.
                             </TableCell>
                           </TableRow>
                         )}
@@ -1736,7 +1736,7 @@ function BookingsPageInner() {
             <ConfirmContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <ConfirmHeader>
                 <ConfirmTitle>
-                  {selected?.serviceName || selected?.title || 'Booking Details'}
+                  {selected?.serviceName || selected?.title || 'Appointment Details'}
                 </ConfirmTitle>
                 <div className="text-sm text-muted-foreground">
                   Appointment ID: {selected?.id}
