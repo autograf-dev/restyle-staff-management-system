@@ -87,7 +87,7 @@ function CheckoutSuccessContent() {
           customerPhone: (t.customerPhone || null),
           customerFirstName: (cachedJson.meta && (cachedJson.meta.customerFirstName || cachedJson.meta.customerName)) || null,
         }
-        const mappedItems = (cachedJson.items || []).map((i: any) => ({
+        const mappedItems = (cachedJson.items || []).map((i: { id: string; serviceId?: string; serviceName?: string; price?: number; staffName?: string; staffTipSplit?: number; staffTipCollected?: number }) => ({
           id: i.id,
           serviceId: i.serviceId ?? null,
           serviceName: i.serviceName ?? null,
@@ -130,7 +130,7 @@ function CheckoutSuccessContent() {
         customerPhone: latest['Customer/Phone'] || null,
       }
       setTx(mappedLatest)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Error loading transaction:', e)
       setError('Failed to load transaction')
       toast.error('Could not load transaction')

@@ -257,22 +257,22 @@ export default function PaymentDetailPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
                     {(data.items || []).map((it: Record<string, unknown>) => (
-                      <div key={it.id} className="flex items-center justify-between rounded-xl border border-neutral-200 p-3">
+                      <div key={String(it.id)} className="flex items-center justify-between rounded-xl border border-neutral-200 p-3">
                         <div className="min-w-0">
-                          <div className="font-medium text-neutral-900 truncate">{it.serviceName || 'Service'}</div>
+                          <div className="font-medium text-neutral-900 truncate">{String(it.serviceName) || 'Service'}</div>
                           <div className="mt-1 flex items-center gap-2 text-xs text-neutral-600">
                             <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700 border border-neutral-200">
-                              {it.staffName || data.staff || 'Staff'}
+                              {String(it.staffName) || data.staff || 'Staff'}
                             </span>
-                            {it.serviceId && (
-                              <span className="text-[11px] text-neutral-400">ID: {it.serviceId}</span>
+                            {it.serviceId != null && it.serviceId !== '' && (
+                              <span className="text-[11px] text-neutral-400">ID: {String(it.serviceId)}</span>
                             )}
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-semibold text-neutral-900">{formatCurrency(it.price)}</div>
-                          {it.staffTipSplit && (
-                            <div className="text-xs text-green-600">Tip: {formatCurrency(it.staffTipSplit)}</div>
+                          <div className="font-semibold text-neutral-900">{formatCurrency(Number(it.price))}</div>
+                          {it.staffTipSplit != null && it.staffTipSplit !== 0 && (
+                            <div className="text-xs text-green-600">Tip: {formatCurrency(Number(it.staffTipSplit))}</div>
                           )}
                         </div>
                       </div>

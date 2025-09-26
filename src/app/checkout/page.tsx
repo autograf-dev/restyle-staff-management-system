@@ -232,7 +232,7 @@ function CheckoutContent() {
       console.log('Staff API response:', result)
       
       if (result.ok && result.data) {
-        const staff = result.data.map((barber: any) => ({
+        const staff = result.data.map((barber: { ghl_id: string; 'Barber/Name': string }) => ({
           ghl_id: barber['ghl_id'],
           name: barber['Barber/Name']
         }))
@@ -441,7 +441,7 @@ function CheckoutContent() {
       const data = await response.json()
       
       // Transform the services data to match our interface
-      const transformedServices = (data.services || []).map((service: any) => {
+      const transformedServices = (data.services || []).map((service: { id: string; name: string; description?: string; slotDuration?: number; teamMembers?: Array<{ userId: string; priority: number; selected: boolean }> }) => {
         const price = extractPriceFromDescription(service.description || '')
         console.log(`Service: ${service.name}, Price: ${price}, Duration: ${service.slotDuration}`)
         return {
@@ -492,7 +492,7 @@ function CheckoutContent() {
       const baseItems = paymentSession.appointments.map((a) => ({
         id: crypto.randomUUID(),
         // Prefer provided serviceId; fallback to appointment/calendar id from URL for default item
-        serviceId: (a as any).serviceId ?? (a as any).id ?? appointmentDetails?.calendar_id ?? calendarId ?? null,
+        serviceId: (a as { serviceId?: string; id?: string }).serviceId ?? (a as { serviceId?: string; id?: string }).id ?? appointmentDetails?.calendar_id ?? calendarId ?? null,
         serviceName: a.serviceName,
         price: a.servicePrice,
         staffName: a.staffName,
@@ -508,7 +508,7 @@ function CheckoutContent() {
 
       const distribution = getStaffTipDistribution() // per-staff tip shares
       const itemsWithTip = items.map((it) => {
-        const share = distribution.find((d: any) => d.staffName === it.staffName)
+        const share = distribution.find((d: { staffName: string; sharePercentage: number; tipShare: number }) => d.staffName === it.staffName)
         return {
           ...it,
           staffTipSplit: share ? Number(share.sharePercentage.toFixed(2)) : null,
@@ -622,7 +622,7 @@ function CheckoutContent() {
       acc[service.staffId].totalServicePrice += service.servicePrice
       acc[service.staffId].services.push(service)
       return acc
-    }, {} as Record<string, { staffId: string; staffName: string; totalServicePrice: number; services: any[] }>)
+    }, {} as Record<string, { staffId: string; staffName: string; totalServicePrice: number; services: Array<{ staffId: string; staffName: string; servicePrice: number }> }>)
     
     const totalServicePrice = Object.values(staffTotals).reduce((sum, staff) => sum + staff.totalServicePrice, 0)
     const tipAmount = getEffectiveTipAmount()
