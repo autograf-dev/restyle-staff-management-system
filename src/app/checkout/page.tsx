@@ -48,7 +48,7 @@ interface PricingBreakdown {
   tipAmount: number
   taxes: {
     gst: { rate: number; amount: number }
-    pst: { rate: number; amount: number }
+    pst?: { rate: number; amount: number }
     totalTax: number
   }
   totalAmount: number
@@ -82,7 +82,7 @@ function CheckoutContent() {
   // URL Parameters
   const appointmentId = searchParams?.get('appointmentId')
   const calendarId = searchParams?.get('calendarId') 
-  const staffId = searchParams?.get('staffId')
+  const staffIdParam = searchParams?.get('staffId')
   
   // State
   const [appointmentDetails, setAppointmentDetails] = useState<AppointmentDetails | null>(null)
@@ -90,7 +90,7 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true)
   const [processingPayment, setProcessingPayment] = useState(false)
   
-  // Form state (email now auto-filled from contact; kept in state for checkout requirement)
+  // Form state (email auto-filled from contact so checkout can proceed)
   const [customerInfo, setCustomerInfo] = useState({
     email: '',
     name: '',
@@ -110,49 +110,41 @@ function CheckoutContent() {
 
     try {
       const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${appointmentId}`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch appointment details')
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch appointment details')
       const data = await response.json()
-      
       if (data.appointment) {
         const apt = data.appointment
-        
-        // Fetch contact details
+        // Contact details
         let customerName = 'Unknown Customer'
         let customerPhone = ''
         let customerEmail = ''
-        
         if (apt.contactId) {
           try {
             const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${apt.contactId}`)
             const contactData = await contactRes.json()
-            if (contactData.contact) {
-              customerName = `${contactData.contact.firstName || ''} ${contactData.contact.lastName || ''}`.trim()
-              customerPhone = contactData.contact.phone || ''
-              customerEmail = contactData.contact.email || contactData.contact.email_lower || contactData.contact.emailAddress || ''
+            const c = contactData.contact || contactData || {}
+            if (c) {
+              customerName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || customerName
+              customerPhone = c.phone || c.phone_e164 || customerPhone
+              customerEmail = c.email || c.email_lower || c.emailAddress || customerEmail
             }
           } catch (error) {
             console.warn('Failed to fetch contact details:', error)
           }
         }
-
-        // Fetch staff details (Assigned Staff)
+        // Staff details — use staffId param fallback
         let staffName = 'Staff Member'
-        if (apt.assignedUserId) {
+        const assignedId = staffIdParam || apt.assignedUserId || ''
+        if (assignedId) {
           try {
-            const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${apt.assignedUserId}`)
+            const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${assignedId}`)
             const staffData = await staffRes.json()
-            if (staffData.name) {
-              staffName = staffData.name
-            }
+            const sname = staffData.name || staffData.user?.name || staffData.staff?.name
+            if (sname) staffName = sname
           } catch (error) {
             console.warn('Failed to fetch staff details:', error)
           }
         }
-
         const details: AppointmentDetails = {
           id: appointmentId,
           serviceName: apt.title || 'Service',
@@ -163,19 +155,14 @@ function CheckoutContent() {
           staffName,
           address: apt.address,
           calendar_id: calendarId || apt.calendarId || '',
-          assigned_user_id: staffId || apt.assignedUserId || ''
+          assigned_user_id: assignedId
         }
-
-        // Calculate duration
         if (apt.startTime && apt.endTime) {
           const start = new Date(apt.startTime)
           const end = new Date(apt.endTime)
           details.duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60))
         }
-
         setAppointmentDetails(details)
-        
-        // Seed customer info (so checkout can proceed without a separate form)
         setCustomerInfo(prev => ({
           ...prev,
           name: customerName !== 'Unknown Customer' ? customerName : prev.name,
@@ -190,16 +177,13 @@ function CheckoutContent() {
     }
   }
 
-  // Initialize payment session
+  // Initialize / refresh pricing (no dependency on email; backend can price without it)
   const initializePayment = async () => {
     if (!appointmentDetails) return
-
     try {
       const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/initializePayment', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           appointmentData: [{
             calendarId: appointmentDetails.calendar_id,
@@ -207,22 +191,17 @@ function CheckoutContent() {
             appointmentId: appointmentDetails.id
           }],
           customerInfo: {
-            email: customerInfo.email,
+            email: customerInfo.email || '',
             name: customerInfo.name || appointmentDetails.customerName,
             phone: customerInfo.phone || appointmentDetails.customerPhone || ''
           },
           tipPercentage: useCustomTip ? 0 : tipPercentage,
           customTipAmount: useCustomTip ? parseFloat(customTipAmount) || 0 : undefined,
-          locationId: "7LYI93XFo8j4nZfswlaz" // Default location ID
+          locationId: "7LYI93XFo8j4nZfswlaz"
         })
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to initialize payment')
-      }
-
+      if (!response.ok) throw new Error('Failed to initialize payment')
       const result = await response.json()
-      
       if (result.success && result.paymentSession) {
         setPaymentSession(result.paymentSession)
       } else {
@@ -234,21 +213,17 @@ function CheckoutContent() {
     }
   }
 
-  // Create checkout session and redirect to payment
+  // Create checkout session and redirect
   const proceedToCheckout = async () => {
     if (!paymentSession || !customerInfo.email) {
       toast.error('Please complete all required fields')
       return
     }
-
     setProcessingPayment(true)
-    
     try {
       const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/createPaymentSession', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           paymentSessionData: paymentSession,
           successUrl: `${window.location.origin}/checkout/success`,
@@ -256,15 +231,9 @@ function CheckoutContent() {
           paymentMethods: ['card']
         })
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to create checkout session')
-      }
-
+      if (!response.ok) throw new Error('Failed to create checkout session')
       const result = await response.json()
-      
       if (result.success && result.urls?.checkoutUrl) {
-        // Redirect to LeadConnector checkout
         window.location.href = result.urls.checkoutUrl
       } else {
         throw new Error(result.error || 'Checkout creation failed')
@@ -277,63 +246,28 @@ function CheckoutContent() {
     }
   }
 
-  // Format currency
-  const formatCurrency = (amount: number, currency = 'CAD') => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: currency.replace('CA$', 'CAD').replace('US$', 'USD')
-    }).format(amount)
-  }
-
-  // Format time
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    })
-  }
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
-
-  // Format duration
+  // Formatters
+  const formatCurrency = (amount: number, currency = 'CAD') => new Intl.NumberFormat('en-CA', { style: 'currency', currency: currency.replace('CA$', 'CAD').replace('US$', 'USD') }).format(amount || 0)
+  const formatTime = (dateString: string) => new Date(dateString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const formatDuration = (minutes?: number) => {
     if (!minutes) return 'Not specified'
     const hours = Math.floor(minutes / 60)
     const mins = minutes % 60
-    if (hours > 0) {
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-    }
-    return `${mins} mins`
+    return hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins} mins`
   }
 
-  // Update pricing when tip changes
-  useEffect(() => {
-    if (appointmentDetails && (customerInfo.name || customerInfo.email)) {
-      initializePayment()
-    }
+  // Effects
+  useEffect(() => { // initial fetch
+    const run = async () => { setLoading(true); await fetchAppointmentDetails(); setLoading(false) }
+    run()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipPercentage, customTipAmount, useCustomTip, appointmentDetails, customerInfo.email])
+  }, [appointmentId, calendarId, staffIdParam])
 
-  // Fetch data on mount
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      await fetchAppointmentDetails()
-      setLoading(false)
-    }
-    
-    fetchData()
+  useEffect(() => { // price whenever dependencies change
+    if (appointmentDetails) { void initializePayment() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointmentId, calendarId, staffId])
+  }, [appointmentDetails, tipPercentage, customTipAmount, useCustomTip])
 
   if (!appointmentId || !calendarId) {
     return (
@@ -367,7 +301,7 @@ function CheckoutContent() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          {/* Header with slimmer chrome */}
+          {/* Header */}
           <header className="flex h-14 items-center border-b bg-white/60 backdrop-blur px-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
@@ -386,13 +320,13 @@ function CheckoutContent() {
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
-            {/* HERO CARD — now contains all appointment & customer info */}
+            {/* HERO CARD — all details consolidated */}
             {appointmentDetails && (
               <div className="mx-auto w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white px-6 py-5">
                 <p className="text-[13px] font-medium text-neutral-500">Transaction In Progress</p>
                 <h2 className="mt-1 text-[28px] font-semibold leading-tight text-neutral-900">{appointmentDetails.serviceName}</h2>
                 <p className="mt-1 text-[14px] text-neutral-600">with {appointmentDetails.staffName}</p>
-                <div className="mt-3 flex items-center gap-3 text-[14px] text-neutral-700">
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-[14px] text-neutral-700">
                   <CalendarIcon className="h-4 w-4" />
                   <span className="font-medium">{startLabel}{endLabel ? ` - ${endLabel}` : ''}</span>
                   <span className="text-neutral-400">•</span>
@@ -441,7 +375,7 @@ function CheckoutContent() {
               </div>
             ) : (
               <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
-                {/* RIGHT COLUMN ONLY — Tip, Pricing, Distribution, Complete */}
+                {/* Right column stack: Tip, Pricing, Distribution, Complete */}
                 <div className="space-y-6">
                   <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardHeader className="pb-3">
@@ -514,6 +448,7 @@ function CheckoutContent() {
                         <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {/* Service Items */}
                         <div className="overflow-hidden rounded-xl border border-neutral-200">
                           <div className="divide-y">
                             {paymentSession.appointments.map((apt, index) => (
@@ -528,6 +463,7 @@ function CheckoutContent() {
                           </div>
                         </div>
 
+                        {/* Totals */}
                         <div className="rounded-xl border border-neutral-200 p-4">
                           <Row label="Subtotal" value={formatCurrency(paymentSession.pricing.subtotal, paymentSession.pricing.currency)} />
                           {paymentSession.pricing.tipAmount > 0 && (
@@ -535,7 +471,10 @@ function CheckoutContent() {
                           )}
                           <div className="h-px my-2 bg-neutral-200" />
                           <Row small label={`GST (${paymentSession.pricing.taxes.gst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.gst.amount, paymentSession.pricing.currency)} />
-                          <Row small label={`PST (${paymentSession.pricing.taxes.pst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)} />
+                          {/* Hide PST row entirely if amount is 0 or missing */}
+                          {paymentSession.pricing.taxes.pst && paymentSession.pricing.taxes.pst.amount > 0 ? (
+                            <Row small label={`PST (${paymentSession.pricing.taxes.pst.rate}%)`} value={formatCurrency(paymentSession.pricing.taxes.pst.amount, paymentSession.pricing.currency)} />
+                          ) : null}
                           <div className="h-px my-2 bg-neutral-200" />
                           <Row strong label="Total Due" value={formatCurrency(paymentSession.pricing.totalAmount, paymentSession.pricing.currency)} />
                         </div>
