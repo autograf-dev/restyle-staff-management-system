@@ -2,12 +2,16 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Scissors } from "lucide-react"
+import Image from "next/image"
 import { useUser } from "./user-context"
+
+const LogoComponent = () => (
+  <Image src="/logo.png" alt="Restyle" width={120} height={40} className="h-6 w-auto" />
+)
 
 type Team = {
   name: string
-  logo: React.ElementType
+  logo: React.ComponentType
   plan: string
   prefix: string
 }
@@ -25,9 +29,9 @@ const TeamContext = createContext<TeamContextType | undefined>(undefined)
 
 const teams: Team[] = [
   {
-    name: "Restyle Staff Management",
-    logo: Scissors,
-    plan: "Main",
+    name: "Restyle",
+    logo: LogoComponent,
+    plan: "",
     prefix: ""
   }
 ]

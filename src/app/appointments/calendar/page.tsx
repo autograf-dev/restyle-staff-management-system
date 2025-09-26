@@ -582,12 +582,12 @@ const StaffOverviewView = ({
     </div>
   </div>
 )}
-    <div className="bg-background rounded-lg border shadow-sm overflow-hidden w-full">
+    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full">
       
       {/* Header - Sticky time column + scrollable staff columns */}
-      <div className="sticky top-0 z-20 bg-background border-b flex w-full items-center">
+      <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
         {/* Sticky Time Header */}
-        <div className="w-[120px] p-4 border-r font-semibold text-sm bg-muted/50 flex items-center justify-center flex-shrink-0">
+        <div className="w-[120px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-[#601625]/10 flex items-center justify-center flex-shrink-0 text-[#601625]">
           
         </div>
         
@@ -603,12 +603,12 @@ const StaffOverviewView = ({
                 .slice(0,4) // show first 4
                 .map((a) => new Date(a.startTime!))
               return (
-                <div key={staffMember.ghl_id} className="w-[220px] p-4 border-r last:border-r-0 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
+                <div key={staffMember.ghl_id} className="w-[220px] p-4 border-r last:border-r-0 border-[#601625]/20 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
                   <div className="text-center">
-                    <div className="font-medium text-sm truncate mb-1" title={staffMember.name}>
+                    <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
                       {staffMember.name}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-[#751a29]/70">
                       {appts.length} appointments
                     </div>
                   </div>
@@ -1062,14 +1062,18 @@ export default function CalendarPage() {
     const controller = new AbortController()
     
     try {
-      // Fetch service details to get team members (staff assigned to this service)
-      const serviceRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${bookingToReschedule.groupId || 'default'}`, { signal: controller.signal })
+      // Use the same API as checkout to get service details with team members
+      const serviceRes = await fetch(`/api/services?groupId=${bookingToReschedule.groupId || 'default'}`, { signal: controller.signal })
       const serviceData = await serviceRes.json()
       
-      const serviceObj = (serviceData.calendars || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
+      // Find the specific service by matching calendar_id with service id
+      const serviceObj = (serviceData.services || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
       const teamMembers = serviceObj?.teamMembers || []
 
-      // Only show staff assigned to this specific service (like in services/checkout tab)
+      console.log('Service found:', serviceObj?.name)
+      console.log('Team members:', teamMembers)
+
+      // Start with "Any available staff" option
       const items = [{
         label: 'Any available staff',
         value: 'any',
@@ -1077,28 +1081,32 @@ export default function CalendarPage() {
         icon: 'user'
       }]
 
-      // Fetch individual staff details for each team member assigned to this service
-      const staffPromises = teamMembers.map(async (member: { userId: string; name: string; email?: string }) => {
-        try {
-          const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`, { signal: controller.signal })
-          const staffData = await staffRes.json()
-          return {
-            label: staffData.name,
-            value: member.userId,
-            originalStaffId: staffData.id,
-            icon: 'user'
-          }
-        } catch {
-          console.warn('Failed to fetch staff details for:', member.userId)
-          return null
-        }
+      // Fetch staff data to get names for team members
+      const staffDataRes = await fetch('/api/barber-hours', { signal: controller.signal })
+      const staffDataJson = await staffDataRes.json()
+      const allStaffData = staffDataJson.ok ? (staffDataJson.data || []) : []
+
+      // Create staff map for quick lookup
+      const staffMap: Record<string, string> = {}
+      allStaffData.forEach((staff: Record<string, string>) => {
+        const id = staff['ghl_id']
+        const name = staff['Barber/Name']
+        if (id) staffMap[id] = name || id
       })
 
-      const staffResults = await Promise.all(staffPromises)
-      const validStaff = staffResults.filter(Boolean)
+      // Add staff members assigned to this service (like checkout "Available Staff" tab)
+      const assignedStaff = teamMembers.map((member: { userId: string; priority?: number; selected?: boolean }) => {
+        const staffName = staffMap[member.userId] || `Staff ${member.userId}`
+        return {
+          label: staffName,
+          value: member.userId,
+          icon: 'user'
+        }
+      }).filter((staff: { label: string; value: string; icon: string }) => staff.label !== `Staff ${staff.value}`) // Filter out staff without names
+
+      const allStaffOptions = [...items, ...assignedStaff]
       
-      // Only include staff assigned to this service (similar to checkout "Available Staff" tab)
-      const allStaffOptions = [...items, ...validStaff]
+      console.log('Final staff options:', allStaffOptions)
       
       if (rescheduleOpen) {
         setStaffOptions(allStaffOptions)
@@ -1627,22 +1635,6 @@ export default function CalendarPage() {
                         </div>
                       ) : (
                         <>
-                          {(() => {
-                            const dayLeaves = getLeavesForDate(currentDate)
-                            const dayBreaks = getBreaksForDate(currentDate)
-                            if (dayLeaves.length === 0 && dayBreaks.length === 0) return null
-                            return (
-                              <div className="mb-3 text-xs">
-                                {dayLeaves.length > 0 && (
-                                  <div className="text-orange-700">Leaves: {dayLeaves.map(l => `${staffMap[l.ghl_id] || l.ghl_id} (${l['Event/Name']})`).join(', ')}</div>
-                                )}
-                                {dayBreaks.length > 0 && (
-                                  <div className="text-gray-600">Breaks: {dayBreaks.map(b => `${staffMap[b.ghl_id] || b.ghl_id} (${b['Block/Name']})`).join(', ')}</div>
-                                )}
-                              </div>
-                            )
-                          })()}
-                          
                           {/* Staff View Only */}
                           {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
                             <StaffOverviewView 
