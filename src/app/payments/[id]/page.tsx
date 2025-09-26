@@ -11,7 +11,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { CreditCard, Save, Trash2 } from "lucide-react"
+import { 
+  CreditCard, 
+  Save, 
+  Trash2, 
+  ArrowLeft, 
+  Receipt, 
+  Calendar as CalendarIcon, 
+  User as UserIcon, 
+  Phone,
+  DollarSign,
+  CheckCircle
+} from "lucide-react"
 
 export default function PaymentDetailPage() {
   const params = useParams()
@@ -20,6 +31,8 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<any | null>(null)
+
+  const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
 
   useEffect(() => {
     const load = async () => {

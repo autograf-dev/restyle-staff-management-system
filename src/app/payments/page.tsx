@@ -238,72 +238,122 @@ export default function PaymentsPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm">
+                    <div className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm bg-white">
                       {/* Desktop Table Header */}
-                      <div className="hidden lg:grid grid-cols-12 bg-gradient-to-r from-neutral-50 to-neutral-100 px-6 py-4 text-[12px] font-semibold text-neutral-700 uppercase tracking-wide">
-                        <div className="col-span-3">Service & ID</div>
-                        <div className="col-span-2">Staff Name</div>
-                        <div className="col-span-2">Customer</div>
-                        <div className="col-span-2">Transaction Tips</div>
-                        <div className="col-span-2">Total & Method</div>
-                        <div className="col-span-1 text-right">Actions</div>
+                      <div className="hidden lg:grid grid-cols-12 bg-gradient-to-r from-neutral-50 via-neutral-100 to-neutral-50 px-6 py-5 text-[11px] font-bold text-neutral-800 uppercase tracking-wider border-b border-neutral-200">
+                        <div className="col-span-3 flex items-center">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            Service & ID
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex items-center">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                            Staff Name
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex items-center">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                            Customer
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex items-center">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                            Transaction Tips
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex items-center">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                            Total & Method
+                          </div>
+                        </div>
+                        <div className="col-span-1 text-right flex items-center justify-end">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                            Actions
+                          </div>
+                        </div>
                       </div>
                       <div className="divide-y divide-neutral-100">
-                        {filtered.map((r) => (
-                          <div key={r.id} className="hidden lg:grid grid-cols-12 items-center px-6 py-4 hover:bg-neutral-50/50 transition-colors">
+                        {filtered.map((r, index) => (
+                          <div key={r.id} className={`hidden lg:grid grid-cols-12 items-center px-6 py-5 hover:bg-gradient-to-r hover:from-neutral-50/80 hover:to-white transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/30'}`}>
                             <div className="col-span-3 min-w-0">
-                              <div className="truncate text-[14px] font-semibold text-neutral-900">{r.services || '—'}</div>
-                              <div className="mt-1 text-[11px] text-neutral-500 font-mono bg-neutral-100 px-2 py-0.5 rounded-md inline-block">
-                                {r.serviceIds || r.id}
+                              <div className="flex items-center gap-3">
+                                <div className="w-1 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded-full"></div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-[15px] font-semibold text-neutral-900 leading-tight">{r.services || '—'}</div>
+                                  <div className="mt-1.5 text-[10px] text-neutral-500 font-mono bg-gradient-to-r from-neutral-100 to-neutral-200 px-2.5 py-1 rounded-lg inline-block border border-neutral-200">
+                                    {r.serviceIds || r.id}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                             <div className="col-span-2">
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1.5">
                                 {r.items && r.items.length > 0 ? (
                                   r.items.map((item, idx) => (
-                                    <span key={idx} className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-3 py-1 text-[12px] font-medium text-neutral-700 shadow-sm">
+                                    <span key={idx} className="inline-flex items-center rounded-full border border-green-200 bg-gradient-to-r from-green-50 to-green-100 px-3 py-1.5 text-[12px] font-semibold text-green-800 shadow-sm">
+                                      <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
                                       {item.staffName || '—'}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-3 py-1 text-[12px] font-medium text-neutral-700 shadow-sm">
+                                  <span className="inline-flex items-center rounded-full border border-green-200 bg-gradient-to-r from-green-50 to-green-100 px-3 py-1.5 text-[12px] font-semibold text-green-800 shadow-sm">
+                                    <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
                                     {r.staff || '—'}
                                   </span>
                                 )}
                               </div>
                             </div>
                             <div className="col-span-2 min-w-0">
-                              <div className="text-[14px] font-medium text-neutral-900 truncate">{r.customerPhone || '—'}</div>
-                              <div className="text-[11px] text-neutral-500 truncate">{r.customerLookup || ''}</div>
-                            </div>
-                            <div className="col-span-2">
-                              <div className="flex flex-col gap-1">
-                                <div className="text-[14px] font-bold text-green-600">{formatCurrency(r.tip)}</div>
-                                {r.items && r.items.length > 0 && (
-                                  <div className="text-[11px] text-neutral-500">
-                                    {r.items.map((item, idx) => (
-                                      <div key={idx} className="flex justify-between">
-                                        <span>{item.staffName}:</span>
-                                        <span className="font-medium">{formatCurrency(item.staffTipSplit)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                              <div className="flex items-center gap-3">
+                                <div className="w-1 h-8 bg-gradient-to-b from-purple-400 to-purple-600 rounded-full"></div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.customerPhone || '—'}</div>
+                                  <div className="text-[11px] text-neutral-500 truncate font-mono">{r.customerLookup || ''}</div>
+                                </div>
                               </div>
                             </div>
                             <div className="col-span-2">
-                              <div className="text-[16px] font-bold text-neutral-900">{formatCurrency(r.totalPaid)}</div>
-                              <div className="text-[12px] text-neutral-500 capitalize">{r.method || '—'}</div>
-                              <div className="text-[11px] text-neutral-400">{formatDate(r.paymentDate)}</div>
+                              <div className="flex items-center gap-3">
+                                <div className="w-1 h-8 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full"></div>
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-[16px] font-bold text-green-600">{formatCurrency(r.tip)}</div>
+                                  {r.items && r.items.length > 0 && (
+                                    <div className="text-[10px] text-neutral-500 space-y-0.5">
+                                      {r.items.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between items-center">
+                                          <span className="truncate">{item.staffName}:</span>
+                                          <span className="font-semibold text-green-600 ml-2">{formatCurrency(item.staffTipSplit)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-1 h-8 bg-gradient-to-b from-indigo-400 to-indigo-600 rounded-full"></div>
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-[18px] font-bold text-neutral-900">{formatCurrency(r.totalPaid)}</div>
+                                  <div className="text-[12px] text-neutral-600 capitalize font-medium">{r.method || '—'}</div>
+                                  <div className="text-[10px] text-neutral-400 font-mono">{formatDate(r.paymentDate)}</div>
+                                </div>
+                              </div>
                             </div>
                             <div className="col-span-1 flex justify-end gap-2">
-                              <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-9 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium hover:bg-neutral-50 hover:border-neutral-300 transition-colors">
+                              <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-9 items-center rounded-xl border border-neutral-200 bg-white px-3 text-[12px] font-semibold hover:bg-gradient-to-r hover:from-blue-50 hover:to-blue-100 hover:border-blue-300 hover:text-blue-700 transition-all duration-200 shadow-sm">
                                 <Eye className="h-4 w-4 mr-1.5" /> View
                               </Link>
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-9 rounded-lg px-3 text-[12px] font-medium hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors" 
+                                className="h-9 rounded-xl px-3 text-[12px] font-semibold hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:text-red-700 hover:border-red-300 transition-all duration-200 shadow-sm" 
                                 onClick={() => handleDeleteClick(r)}
                               >
                                 <Trash2 className="h-4 w-4 mr-1.5" /> Delete
