@@ -31,12 +31,10 @@ interface TransactionData {
   tax: number | null
   tip: number | null
   totalPaid: number | null
-  services: string | null
-  serviceIds: string | null
   bookingId: string | null
-  staff: string | null
   customerPhone: string | null
   customerLookup: string | null
+  // Remove concatenated fields - use items array for services and staff
   items: Array<{
     id: string
     paymentId: string
@@ -85,7 +83,8 @@ export default function PaymentDetailPage() {
     if (!data) return
     setSaving(true)
     try {
-      const payload = { method: data.method, staff: data.staff, services: data.services }
+      // Only save basic transaction fields - service/staff data is in Transaction Items
+      const payload = { method: data.method }
       const res = await fetch(`/api/transactions/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || json?.ok === false) throw new Error(json.error || 'Save failed')
@@ -262,7 +261,7 @@ export default function PaymentDetailPage() {
                           <div className="font-medium text-neutral-900 truncate">{String(it.serviceName) || 'Service'}</div>
                           <div className="mt-1 flex items-center gap-2 text-xs text-neutral-600">
                             <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700 border border-neutral-200">
-                              {String(it.staffName) || data.staff || 'Staff'}
+                              {String(it.staffName) || 'Staff'}
                             </span>
                             {it.serviceId != null && it.serviceId !== '' && (
                               <span className="text-[11px] text-neutral-400">ID: {String(it.serviceId)}</span>
@@ -342,14 +341,7 @@ export default function PaymentDetailPage() {
                       <div className="text-sm text-muted-foreground mb-1">Payment Method</div>
                       <Input value={data.method || ''} onChange={(e) => setData({ ...data, method: e.target.value })} className="rounded-lg" />
                     </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-1">Staff</div>
-                      <Input value={data.staff || ''} onChange={(e) => setData({ ...data, staff: e.target.value })} className="rounded-lg" />
-                    </div>
-                    <div className="col-span-2">
-                      <div className="text-sm text-muted-foreground mb-1">Services</div>
-                      <Input value={data.services || ''} onChange={(e) => setData({ ...data, services: e.target.value })} className="rounded-lg" />
-                    </div>
+                    {/* Staff and Services are now displayed from Transaction Items above */}
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="outline" className="border-red-200 hover:bg-red-50 hover:text-red-600" onClick={del}>

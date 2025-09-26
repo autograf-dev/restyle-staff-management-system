@@ -24,7 +24,8 @@ import {
   ArrowLeft,
   ArrowRight,
   RefreshCcw,
-  DollarSign
+  DollarSign,
+  CheckCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, type User } from "@/contexts/user-context"
@@ -67,6 +68,7 @@ type Appointment = {
   assignedStaffLastName?: string
   contactName?: string
   contactPhone?: string
+  payment_status?: 'pending' | 'paid' | 'failed'
 }
 
 type CalendarView = 'day' | 'month' | 'year'
@@ -136,6 +138,31 @@ function useAppointments() {
               }
             } catch {
               console.warn(`Failed to fetch details for booking ${booking.id}`)
+            }
+
+            // Check payment status by looking up transactions with proper paid status
+            try {
+              const transactionRes = await fetch(`/api/transactions?appointmentId=${booking.id}&limit=1`)
+              if (transactionRes.ok) {
+                const transactionData = await transactionRes.json()
+                if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
+                  const transaction = transactionData.data[0]
+                  // Check if transaction has paid status
+                  if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true) {
+                    details.payment_status = 'paid'
+                  } else {
+                    details.payment_status = 'pending'
+                  }
+                } else {
+                  // No transaction found - still pending payment
+                  details.payment_status = 'pending'
+                }
+              } else {
+                details.payment_status = 'pending'
+              }
+            } catch (error) {
+              console.warn(`Failed to check payment status for booking ${booking.id}:`, error)
+              details.payment_status = 'pending'
             }
 
             // Contact and staff detail fetches are skipped here to improve performance.
@@ -759,15 +786,23 @@ const StaffOverviewView = ({
                             {appointment.startTime && formatTime(appointment.startTime)}
                             {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
                           </div>
-                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
-                            appointment.appointment_status === 'confirmed' 
-                              ? 'bg-green-100 text-green-700' 
-                              : appointment.appointment_status === 'cancelled'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {appointment.appointment_status}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {appointment.payment_status === 'paid' && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                                <CheckCircle className="h-2.5 w-2.5" />
+                                PAID
+                              </span>
+                            )}
+                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
+                              appointment.appointment_status === 'confirmed' 
+                                ? 'bg-green-100 text-green-700' 
+                                : appointment.appointment_status === 'cancelled'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {appointment.appointment_status}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )
@@ -1458,7 +1493,7 @@ export default function CalendarPage() {
                   </div>
                   
                   {/* Payment Section */}
-                  {selectedAppointment.appointment_status === 'confirmed' && (
+                  {selectedAppointment.appointment_status === 'confirmed' && selectedAppointment.payment_status !== 'paid' && (
                     <div className="p-4 border-2 border-primary/20 bg-primary/5 rounded-lg">
                       <div className="text-center space-y-3">
                         <div className="flex items-center justify-center gap-2 text-primary">
@@ -1477,6 +1512,24 @@ export default function CalendarPage() {
                           <DollarSign className="h-4 w-4 mr-2" />
                           Complete Checkout
                         </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Paid Status Section */}
+                  {selectedAppointment.payment_status === 'paid' && (
+                    <div className="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+                      <div className="text-center space-y-3">
+                        <div className="flex items-center justify-center gap-2 text-green-700">
+                          <CheckCircle className="h-5 w-5" />
+                          <span className="font-semibold">Payment Completed</span>
+                        </div>
+                        <p className="text-sm text-green-600">
+                          This appointment has been paid for and is confirmed
+                        </p>
+                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                          PAID
+                        </Badge>
                       </div>
                     </div>
                   )}

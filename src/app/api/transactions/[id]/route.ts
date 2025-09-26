@@ -14,13 +14,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         "Payment/Date",
         "Payment/Method",
         "Payment/Subtotal",
+        "Payment/Status",
         "Transaction/Tax",
         "Transaction/Tip",
         "Transaction/Total Paid",
-        "Service/Joined List",
-        "Service/Acuity IDs",
+        "Transaction/Paid",
         "Booking/ID",
-        "Payment/Staff",
         "Customer/Phone",
         "Customer/Lookup"
       `)
@@ -61,12 +60,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       tax: tx['Transaction/Tax'],
       tip: tx['Transaction/Tip'],
       totalPaid: tx['Transaction/Total Paid'],
-      services: tx['Service/Joined List'],
-      serviceIds: tx['Service/Acuity IDs'],
+      // Add payment status fields
+      status: tx['Payment/Status'],
+      paymentStatus: tx['Payment/Status'],
+      paid: tx['Transaction/Paid'],
       bookingId: tx['Booking/ID'],
-      staff: tx['Payment/Staff'],
       customerPhone: tx['Customer/Phone'],
       customerLookup: tx['Customer/Lookup'],
+      // Services and staff info comes from items array - no more concatenated fields
       items: (items || []).map((r: Record<string, unknown>) => ({
         id: r['🔒 Row ID'],
         paymentId: r['Payment/ID'],
@@ -92,12 +93,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
     const update: Record<string, unknown> = {}
     if (body.method !== undefined) update['Payment/Method'] = body.method
-    if (body.staff !== undefined) update['Payment/Staff'] = body.staff
+    // Remove staff field - use Transaction Items for individual staff assignments
     if (body.totalPaid !== undefined) update['Transaction/Total Paid'] = body.totalPaid
     if (body.subtotal !== undefined) update['Payment/Subtotal'] = body.subtotal
     if (body.tax !== undefined) update['Transaction/Tax'] = body.tax
     if (body.tip !== undefined) update['Transaction/Tip'] = body.tip
-    if (body.services !== undefined) update['Service/Joined List'] = body.services
+    // Remove services field - use Transaction Items for individual service updates
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ ok: false, error: 'No fields to update' }, { status: 400 })

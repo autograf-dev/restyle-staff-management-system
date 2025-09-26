@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 })
     }
 
-    // Insert into "Transactions"
+    // Insert into "Transactions" - Remove concatenated service/staff fields, use only Transaction Items
     const txRow = {
       "🔒 Row ID": transaction.id,
       "Booking/ID": transaction.bookingId ?? null,
@@ -33,16 +33,16 @@ export async function POST(req: Request) {
       "Payment/Date": transaction.paymentDate ?? null,
       "Payment/Method": transaction.method ?? null,
       "Payment/Sort": transaction.paymentSort ?? null,
-      "Payment/Staff": transaction.paymentStaff ?? null,
+      // Remove "Payment/Staff" - use Transaction Items for individual staff assignments
       "Payment/Subtotal": transaction.subtotal ?? null,
       "Payment/Status": transaction.status ?? "Paid",
       "Transaction/Services": transaction.transactionServices ?? transaction.subtotal ?? null,
       "Transaction/Services Total": transaction.transactionServicesTotal ?? transaction.subtotal ?? null,
       "Transaction/Tax": transaction.tax ?? null,
       "Transaction/Total Paid": transaction.totalPaid ?? null,
-      "Service/Joined List": transaction.serviceNamesJoined ?? null,
-      // Store concatenated service IDs for the transaction (from payload)
-      "Service/Acuity IDs": transaction.serviceAcuityIds ?? null,
+      // Remove concatenated fields - use Transaction Items for individual services
+      // "Service/Joined List": null,  // Don't store concatenated service names
+      // "Service/Acuity IDs": null,   // Don't store concatenated service IDs
       "DNU Service/Name": null,
       "DNU Service/Subtotal": null,
       "DNU Service/Total": null,
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       "DNU Transaction/Tax": null,
       "DNU Transaction/Tip": null,
       "Transaction/Services New": null,
-      "Transaction/Paid": "Yes",
+      "Transaction/Paid": transaction.transactionPaid ?? "Yes",
       "Transaction/Reward": null,
     }
 
@@ -125,11 +125,19 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get('limit') || 50)
+    const appointmentId = searchParams.get('appointmentId')
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('Transactions')
       .select('*')
       .limit(limit)
+    
+    // Filter by appointment ID if provided
+    if (appointmentId) {
+      query = query.eq('"Booking/ID"', appointmentId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Supabase error:', error)
@@ -188,10 +196,11 @@ export async function GET(req: Request) {
       tax: row['Transaction/Tax'],
       tip: row['Transaction/Tip'],
       totalPaid: row['Transaction/Total Paid'],
-      services: row['Service/Joined List'],
-      serviceIds: row['Service/Acuity IDs'],
+      // Add payment status fields from Supabase
+      status: row['Payment/Status'],
+      paymentStatus: row['Payment/Status'], 
+      paid: row['Transaction/Paid'],
       bookingId: row['Booking/ID'],
-      staff: row['Payment/Staff'],
       customerPhone: row['Customer/Phone'],
       customerLookup: row['Customer/Lookup'],
       items: itemsByTransaction[String(row['🔒 Row ID'] || '')] || [],
