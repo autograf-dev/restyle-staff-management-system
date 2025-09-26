@@ -1029,7 +1029,7 @@ export default function CalendarPage() {
   // Cancel appointment function
   const handleCancelAppointment = async (appointment: Appointment) => {
     if (isWithinTwoHours(appointment.startTime)) {
-      toast.error("Cannot cancel - booking starts within 2 hours")
+      toast.error("Cannot cancel - appointment starts within 2 hours")
       return
     }
     setBookingToCancel(appointment)
@@ -1070,7 +1070,7 @@ export default function CalendarPage() {
   // Reschedule appointment function
   const handleRescheduleAppointment = async (appointment: Appointment) => {
     if (isWithinTwoHours(appointment.startTime)) {
-      toast.error("Cannot reschedule - booking starts within 2 hours")
+      toast.error("Cannot reschedule - appointment starts within 2 hours")
       return
     }
     

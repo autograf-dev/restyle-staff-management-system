@@ -295,7 +295,7 @@ function useBookings() {
       } else {
         console.error("Failed to fetch bookings:", error)
         if (isMounted.current) {
-          toast.error("Failed to load bookings")
+          toast.error("Failed to load appointments")
         }
       }
     } finally {
@@ -574,7 +574,7 @@ function BookingsPageInner() {
   // Cancel booking function
   const handleCancelBooking = async (booking: Booking) => {
     if (isWithinTwoHours(booking.startTime)) {
-      toast.error("Cannot cancel - booking starts within 2 hours")
+      toast.error("Cannot cancel - appointment starts within 2 hours")
       return
     }
     setBookingToCancel(booking)
@@ -599,7 +599,7 @@ function BookingsPageInner() {
       
       // Refresh appointments
       await fetchBookings()
-      toast.success("Booking cancelled successfully")
+      toast.success("Appointment cancelled successfully")
       setCancelConfirmOpen(false)
       setBookingToCancel(null)
     } catch (error) {
@@ -632,7 +632,7 @@ function BookingsPageInner() {
       
       // Refresh appointments
       await fetchBookings()
-      toast.success("Booking deleted successfully")
+      toast.success("Appointment deleted successfully")
       setDeleteConfirmOpen(false)
       setBookingToDelete(null)
       
@@ -652,7 +652,7 @@ function BookingsPageInner() {
   // Reschedule functions
   const handleRescheduleBooking = async (booking: Booking) => {
     if (isWithinTwoHours(booking.startTime)) {
-      toast.error("Cannot reschedule - booking starts within 2 hours")
+      toast.error("Cannot reschedule - appointment starts within 2 hours")
       return
     }
     
@@ -908,7 +908,7 @@ function BookingsPageInner() {
         const data = await response.json()
         
         if (data.message && data.message.includes('successfully')) {
-          toast.success("Booking rescheduled successfully")
+          toast.success("Appointment rescheduled successfully")
           setRescheduleOpen(false)
           resetRescheduleForm()
           // Clear any view param to avoid reopening a dialog on reload
@@ -1331,7 +1331,7 @@ function BookingsPageInner() {
         throw new Error(bookData.error || 'Booking failed')
       }
 
-      toast.success("Booking created successfully!")
+      toast.success("Appointment created successfully!")
       // Close dialog and clear URL param (?view=new)
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
@@ -1441,7 +1441,7 @@ function BookingsPageInner() {
                   variant="outline"
                   size="sm"
                   disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot reschedule - booking starts within 2 hours" : "Reschedule booking"}
+                  title={withinTwoHours ? "Cannot reschedule - appointment starts within 2 hours" : "Reschedule appointment"}
                   onClick={() => handleRescheduleBooking(appointment)}
                   className="h-6 px-2 text-xs"
                 >
@@ -1451,7 +1451,7 @@ function BookingsPageInner() {
                   variant="outline"
                   size="sm"
                   disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot cancel - booking starts within 2 hours" : "Cancel booking"}
+                  title={withinTwoHours ? "Cannot cancel - appointment starts within 2 hours" : "Cancel appointment"}
                   onClick={() => handleCancelBooking(appointment)}
                   className="h-6 px-2 text-xs"
                 >
@@ -1570,7 +1570,7 @@ function BookingsPageInner() {
               <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Bookings</h1>
+              <h1 className="text-xl font-semibold">Appointments</h1>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => fetchBookings(true)} title="Refresh (bypass cache)">
@@ -1578,7 +1578,7 @@ function BookingsPageInner() {
                 </Button>
                 <Button onClick={() => setNewAppointmentOpen(true)} className="bg-primary text-primary-foreground">
                   <Calendar className="h-4 w-4 mr-2" />
-                  Add Booking
+                  Add Appointment
                 </Button>
               </div>
             </div>
@@ -1888,7 +1888,7 @@ function BookingsPageInner() {
                   onClick={confirmCancelBooking}
                   disabled={cancelLoading}
                 >
-                  {cancelLoading ? "Cancelling..." : "Cancel Booking"}
+                  {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
                 </Button>
               </div>
             </ConfirmContent>
