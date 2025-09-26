@@ -90,7 +90,7 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true)
   const [processingPayment, setProcessingPayment] = useState(false)
   
-  // Form state
+  // Form state (email now auto-filled from contact; kept in state for checkout requirement)
   const [customerInfo, setCustomerInfo] = useState({
     email: '',
     name: '',
@@ -123,6 +123,7 @@ function CheckoutContent() {
         // Fetch contact details
         let customerName = 'Unknown Customer'
         let customerPhone = ''
+        let customerEmail = ''
         
         if (apt.contactId) {
           try {
@@ -131,13 +132,14 @@ function CheckoutContent() {
             if (contactData.contact) {
               customerName = `${contactData.contact.firstName || ''} ${contactData.contact.lastName || ''}`.trim()
               customerPhone = contactData.contact.phone || ''
+              customerEmail = contactData.contact.email || contactData.contact.email_lower || contactData.contact.emailAddress || ''
             }
           } catch (error) {
             console.warn('Failed to fetch contact details:', error)
           }
         }
 
-        // Fetch staff details
+        // Fetch staff details (Assigned Staff)
         let staffName = 'Staff Member'
         if (apt.assignedUserId) {
           try {
@@ -173,14 +175,13 @@ function CheckoutContent() {
 
         setAppointmentDetails(details)
         
-        // Set customer info if available
-        if (customerName && customerName !== 'Unknown Customer') {
-          setCustomerInfo(prev => ({
-            ...prev,
-            name: customerName,
-            phone: customerPhone
-          }))
-        }
+        // Seed customer info (so checkout can proceed without a separate form)
+        setCustomerInfo(prev => ({
+          ...prev,
+          name: customerName !== 'Unknown Customer' ? customerName : prev.name,
+          phone: customerPhone || prev.phone,
+          email: customerEmail || prev.email,
+        }))
       }
     } catch (error) {
       console.error('Error fetching appointment details:', error)
@@ -316,11 +317,11 @@ function CheckoutContent() {
 
   // Update pricing when tip changes
   useEffect(() => {
-    if (appointmentDetails && customerInfo.name) {
+    if (appointmentDetails && (customerInfo.name || customerInfo.email)) {
       initializePayment()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipPercentage, customTipAmount, useCustomTip, appointmentDetails, customerInfo])
+  }, [tipPercentage, customTipAmount, useCustomTip, appointmentDetails, customerInfo.email])
 
   // Fetch data on mount
   useEffect(() => {
@@ -358,6 +359,7 @@ function CheckoutContent() {
   }
 
   const startLabel = appointmentDetails?.startTime ? formatTime(appointmentDetails.startTime) : ''
+  const endLabel = appointmentDetails?.endTime ? formatTime(appointmentDetails.endTime) : ''
   const dateLabel = appointmentDetails?.startTime ? formatDate(appointmentDetails.startTime) : ''
 
   return (
@@ -384,7 +386,7 @@ function CheckoutContent() {
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
-            {/* HERO CARD — matches screenshot hierarchy */}
+            {/* HERO CARD — now contains all appointment & customer info */}
             {appointmentDetails && (
               <div className="mx-auto w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white px-6 py-5">
                 <p className="text-[13px] font-medium text-neutral-500">Transaction In Progress</p>
@@ -392,24 +394,30 @@ function CheckoutContent() {
                 <p className="mt-1 text-[14px] text-neutral-600">with {appointmentDetails.staffName}</p>
                 <div className="mt-3 flex items-center gap-3 text-[14px] text-neutral-700">
                   <CalendarIcon className="h-4 w-4" />
-                  <span className="font-medium">{startLabel}</span>
+                  <span className="font-medium">{startLabel}{endLabel ? ` - ${endLabel}` : ''}</span>
                   <span className="text-neutral-400">•</span>
                   <span>{dateLabel}</span>
+                  {appointmentDetails.duration ? (
+                    <>
+                      <span className="text-neutral-400">•</span>
+                      <span>Duration: {formatDuration(appointmentDetails.duration)}</span>
+                    </>
+                  ) : null}
                 </div>
 
-                {/* Customer pill */}
+                {/* Customer + quick actions */}
                 <div className="mt-5 rounded-xl border border-neutral-200 p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <Users className="h-4 w-4 text-neutral-400" />
                       <div>
                         <div className="text-[14px] font-semibold uppercase tracking-wide">{appointmentDetails.customerName}</div>
-                        {appointmentDetails.customerPhone && (
-                          <div className="mt-0.5 flex items-center gap-2 text-[12px] text-neutral-600">
-                            <Phone className="h-3.5 w-3.5" />
-                            {appointmentDetails.customerPhone}
-                          </div>
-                        )}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-neutral-600">
+                          {customerInfo.email && <span>{customerInfo.email}</span>}
+                          {appointmentDetails.customerPhone && (
+                            <span className="inline-flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{appointmentDetails.customerPhone}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -422,8 +430,7 @@ function CheckoutContent() {
             )}
 
             {loading ? (
-              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
-                <Skeleton className="h-96 rounded-2xl" />
+              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
                 <Skeleton className="h-96 rounded-2xl" />
               </div>
             ) : !appointmentDetails ? (
@@ -433,121 +440,8 @@ function CheckoutContent() {
                 <p className="text-muted-foreground">Could not load appointment details</p>
               </div>
             ) : (
-              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-2">
-                {/* Left Column - Appointment & Customer */}
-                <div className="space-y-6">
-                  <Card className="rounded-2xl border-neutral-200 shadow-none">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <CalendarIcon className="h-5 w-5 text-[#7b1d1d]" />
-                        Appointment Details
-                      </CardTitle>
-                      <CardDescription className="text-[13px]">Service and timing information</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-full bg-neutral-100">
-                            <Receipt className="h-4 w-4 text-neutral-700" />
-                          </div>
-                          <div>
-                            <div className="text-[14px] font-medium text-neutral-900">{appointmentDetails.serviceName}</div>
-                            <div className="text-[12px] text-neutral-500">Service</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-full bg-neutral-100">
-                            <Clock className="h-4 w-4 text-neutral-700" />
-                          </div>
-                          <div>
-                            <div className="text-[14px] font-medium text-neutral-900">
-                              {appointmentDetails.startTime && formatTime(appointmentDetails.startTime)}
-                              {appointmentDetails.endTime && ` - ${formatTime(appointmentDetails.endTime)}`}
-                            </div>
-                            <div className="text-[12px] text-neutral-500">
-                              {appointmentDetails.startTime && formatDate(appointmentDetails.startTime)}
-                            </div>
-                            <div className="text-[12px] text-neutral-500">Duration: {formatDuration(appointmentDetails.duration)}</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-full bg-neutral-100">
-                            <UserIcon className="h-4 w-4 text-neutral-700" />
-                          </div>
-                          <div>
-                            <div className="text-[14px] font-medium text-neutral-900">{appointmentDetails.staffName}</div>
-                            <div className="text-[12px] text-neutral-500">Assigned Staff</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-full bg-neutral-100">
-                            <UserIcon className="h-4 w-4 text-neutral-700" />
-                          </div>
-                          <div>
-                            <div className="text-[14px] font-medium text-neutral-900">{appointmentDetails.customerName}</div>
-                            <div className="text-[12px] text-neutral-500">{appointmentDetails.customerPhone || 'Customer'}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-2xl border-neutral-200 shadow-none">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <UserIcon className="h-5 w-5 text-[#7b1d1d]" />
-                        Customer Information
-                      </CardTitle>
-                      <CardDescription className="text-[13px]">Contact details for receipt and confirmation</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="customer-name" className="text-[13px]">Full Name *</Label>
-                          <Input
-                            id="customer-name"
-                            type="text"
-                            value={customerInfo.name}
-                            onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-                            placeholder="Enter customer name"
-                            required
-                            className="rounded-xl"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="customer-email" className="text-[13px]">Email Address *</Label>
-                          <Input
-                            id="customer-email"
-                            type="email"
-                            value={customerInfo.email}
-                            onChange={(e) => setCustomerInfo(prev => ({ ...prev, email: e.target.value }))}
-                            placeholder="customer@example.com"
-                            required
-                            className="rounded-xl"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="customer-phone" className="text-[13px]">Phone Number</Label>
-                          <Input
-                            id="customer-phone"
-                            type="tel"
-                            value={customerInfo.phone}
-                            onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
-                            placeholder="+1 (555) 123-4567"
-                            className="rounded-xl"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Right Column - Tip, Pricing, Checkout */}
+              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
+                {/* RIGHT COLUMN ONLY — Tip, Pricing, Distribution, Complete */}
                 <div className="space-y-6">
                   <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardHeader className="pb-3">
