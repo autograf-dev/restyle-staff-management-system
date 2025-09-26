@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import NextImage from "next/image"
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -23,9 +24,9 @@ export function TeamSwitcher() {
           className="hover:bg-transparent cursor-default"
         >
           <div className="flex items-center justify-center w-full">
-            <Image 
-              src="/logo.png" 
-              alt="Restyle" 
+            <NextImage
+              src="/logo.png"
+              alt="Restyle"
               width={160}
               height={53}
               className="h-10 w-auto"

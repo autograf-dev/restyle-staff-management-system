@@ -2,11 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import Image from "next/image"
+import NextImage from "next/image"
 import { useUser } from "./user-context"
 
 const LogoComponent = () => (
-  <Image src="/logo.png" alt="Restyle" width={120} height={40} className="h-6 w-auto" />
+  <NextImage src="/logo.png" alt="Restyle" width={120} height={40} className="h-6 w-auto" />
 )
 
 type Team = {
