@@ -5,7 +5,7 @@ import { RoleGuard } from "@/components/role-guard"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
@@ -25,7 +25,8 @@ import {
   ArrowRight,
   RefreshCcw,
   DollarSign,
-  CheckCircle
+  CheckCircle,
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, type User } from "@/contexts/user-context"
@@ -765,12 +766,20 @@ const StaffOverviewView = ({
                     return (
                       <div
                         key={appointment.id}
-                        className="absolute rounded-md px-3 py-2 cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 border-l-primary bg-primary/10 hover:bg-primary/20 backdrop-blur-sm"
+                        className={`absolute rounded-md px-3 py-2 cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 backdrop-blur-sm ${
+                          appointment.appointment_status === 'cancelled'
+                            ? 'border-l-gray-300 bg-gray-100/60 hover:bg-gray-200/80 opacity-60 cursor-default'
+                            : 'border-l-primary bg-primary/10 hover:bg-primary/20'
+                        }`}
                         style={style}
-                        onClick={() => onAppointmentClick(appointment)}
-                        title={`${appointment.serviceName} - ${appointment.contactName}`}
+                        onClick={() => appointment.appointment_status !== 'cancelled' && onAppointmentClick(appointment)}
+                        title={`${appointment.serviceName} - ${appointment.contactName}${appointment.appointment_status === 'cancelled' ? ' (Cancelled)' : ''}`}
                       >
-                        <div className="text-sm font-medium text-primary truncate">
+                        <div className={`text-sm font-medium truncate ${
+                          appointment.appointment_status === 'cancelled' 
+                            ? 'text-gray-500 line-through' 
+                            : 'text-primary'
+                        }`}>
                           {appointment.serviceName}
                         </div>
                         {staffName && (
@@ -1053,13 +1062,14 @@ export default function CalendarPage() {
     const controller = new AbortController()
     
     try {
-      // Fetch service details to get team members
+      // Fetch service details to get team members (staff assigned to this service)
       const serviceRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${bookingToReschedule.groupId || 'default'}`, { signal: controller.signal })
       const serviceData = await serviceRes.json()
       
       const serviceObj = (serviceData.calendars || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
       const teamMembers = serviceObj?.teamMembers || []
 
+      // Only show staff assigned to this specific service (like in services/checkout tab)
       const items = [{
         label: 'Any available staff',
         value: 'any',
@@ -1067,7 +1077,7 @@ export default function CalendarPage() {
         icon: 'user'
       }]
 
-      // Fetch individual staff details for each team member
+      // Fetch individual staff details for each team member assigned to this service
       const staffPromises = teamMembers.map(async (member: { userId: string; name: string; email?: string }) => {
         try {
           const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`, { signal: controller.signal })
@@ -1075,9 +1085,11 @@ export default function CalendarPage() {
           return {
             label: staffData.name,
             value: member.userId,
+            originalStaffId: staffData.id,
             icon: 'user'
           }
         } catch {
+          console.warn('Failed to fetch staff details for:', member.userId)
           return null
         }
       })
@@ -1085,6 +1097,7 @@ export default function CalendarPage() {
       const staffResults = await Promise.all(staffPromises)
       const validStaff = staffResults.filter(Boolean)
       
+      // Only include staff assigned to this service (similar to checkout "Available Staff" tab)
       const allStaffOptions = [...items, ...validStaff]
       
       if (rescheduleOpen) {
@@ -1092,6 +1105,7 @@ export default function CalendarPage() {
       }
     } catch (error) {
       if (!controller.signal.aborted && rescheduleOpen) {
+        console.error('Error fetching staff options:', error)
         setStaffOptions([{
           label: 'Any available staff',
           value: 'any',
@@ -1511,7 +1525,7 @@ export default function CalendarPage() {
             </div>
           </header>
 
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <div className="flex flex-1 flex-col gap-4 p-4 pt-0 h-full overflow-hidden">
             {/* Calendar Controls */}
             <Card>
               <CardHeader className="pb-4">
@@ -1603,22 +1617,8 @@ export default function CalendarPage() {
               <>
                 {/* Day View */}
                 {view === 'day' && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CalendarIcon className="h-5 w-5" />
-                        {formatDate(currentDate)}
-                        <Badge variant="outline" className="ml-2">
-                          {user?.role === 'barber' ? 'My Schedule' : 'Staff View'}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        {dayAppointments.length} appointments scheduled
-                        {user?.role === 'barber' && ' - My Schedule'}
-                        {(user?.role === 'admin' || user?.role === 'manager') && ' - Admin View: All Staff'}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                  <Card className="flex-1">
+                    <CardContent className="p-6 h-full">
                       {isSalonDayOff(currentDate) ? (
                         <div className="text-center py-12 text-red-600">
                           <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -1915,22 +1915,33 @@ export default function CalendarPage() {
                   
                   {/* Action Buttons */}
                   <div className="flex gap-3 pt-2">
-                    <Button 
-                      variant="outline"
-                      className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium"
-                      onClick={() => handleRescheduleAppointment(selectedAppointment)}
-                    >
-                      <RefreshCcw className="h-4 w-4 mr-2" />
-                      Reschedule
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium"
-                      onClick={() => handleCancelAppointment(selectedAppointment)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
+                    {selectedAppointment.appointment_status === 'cancelled' ? (
+                      <div className="flex-1 text-center py-3 text-sm text-gray-500 bg-gray-100 rounded-xl">
+                        <X className="h-4 w-4 mx-auto mb-1" />
+                        This appointment has been cancelled
+                      </div>
+                    ) : (
+                      <>
+                        <Button 
+                          variant="outline"
+                          className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium"
+                          onClick={() => handleRescheduleAppointment(selectedAppointment)}
+                          disabled={selectedAppointment.appointment_status === 'cancelled' || cancelLoading}
+                        >
+                          <RefreshCcw className="h-4 w-4 mr-2" />
+                          Reschedule
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium"
+                          onClick={() => handleCancelAppointment(selectedAppointment)}
+                          disabled={selectedAppointment.appointment_status === 'cancelled' || cancelLoading}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {cancelLoading ? "Cancelling..." : "Cancel"}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -2114,11 +2125,16 @@ export default function CalendarPage() {
                         <span className="font-medium">Staff:</span> {staffOptions.find(s => s.value === selectedStaff)?.label}
                       </div>
                       <div>
-                        <span className="font-medium">Date:</span> {new Date(selectedDate).toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
+                        <span className="font-medium">Date:</span> {(() => {
+                          // Parse date safely to avoid timezone issues
+                          const [year, month, day] = selectedDate.split('-').map(Number)
+                          const date = new Date(year, month - 1, day)
+                          return date.toLocaleDateString('en-US', { 
+                            weekday: 'long', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })
+                        })()}
                       </div>
                       <div>
                         <span className="font-medium">Time:</span> {selectedTime}
