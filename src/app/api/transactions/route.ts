@@ -134,7 +134,14 @@ export async function GET(req: Request) {
     
     // Filter by appointment ID if provided
     if (appointmentId) {
-      query = query.eq('"Booking/ID"', appointmentId)
+      // Handle comma-separated appointment IDs in Booking/ID field
+      // This matches: exact match, starts with appointmentId+comma, ends with comma+appointmentId, or contains comma+appointmentId+comma
+      query = query.or([
+        `"Booking/ID".eq.${appointmentId}`,                    // Exact match: "12345"
+        `"Booking/ID".like.${appointmentId},%`,                // Starts with: "12345,67890"  
+        `"Booking/ID".like.%,${appointmentId}`,                // Ends with: "67890,12345"
+        `"Booking/ID".like.%,${appointmentId},%`               // Contains: "67890,12345,11111"
+      ].join(','))
     }
 
     const { data, error } = await query

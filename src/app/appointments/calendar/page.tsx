@@ -973,6 +973,14 @@ export default function CalendarPage() {
     return start.getTime() <= now.getTime() + 2 * 60 * 60 * 1000
   }
 
+  // Helper function to check if appointment has ended
+  const isAppointmentEnded = (endTimeString?: string) => {
+    if (!endTimeString) return false
+    const end = new Date(endTimeString)
+    const now = new Date()
+    return now.getTime() > end.getTime()
+  }
+
   // Helper functions for reschedule
   const getTimeZoneOffsetInMs = (timeZone: string, utcDate: Date) => {
     const dtf = new Intl.DateTimeFormat('en-US', {
@@ -1032,6 +1040,10 @@ export default function CalendarPage() {
       toast.error("Cannot cancel - appointment starts within 2 hours")
       return
     }
+    if (isAppointmentEnded(appointment.endTime)) {
+      toast.error("Cannot cancel - appointment has already ended")
+      return
+    }
     setBookingToCancel(appointment)
     setCancelConfirmOpen(true)
   }
@@ -1071,6 +1083,10 @@ export default function CalendarPage() {
   const handleRescheduleAppointment = async (appointment: Appointment) => {
     if (isWithinTwoHours(appointment.startTime)) {
       toast.error("Cannot reschedule - appointment starts within 2 hours")
+      return
+    }
+    if (isAppointmentEnded(appointment.endTime)) {
+      toast.error("Cannot reschedule - appointment has already ended")
       return
     }
     
@@ -1943,21 +1959,34 @@ export default function CalendarPage() {
                       <>
                         <Button 
                           variant="outline"
-                          className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium"
+                          className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => handleRescheduleAppointment(selectedAppointment)}
-                          disabled={selectedAppointment.appointment_status === 'cancelled' || cancelLoading}
+                          disabled={
+                            selectedAppointment.appointment_status === 'cancelled' || 
+                            cancelLoading || 
+                            isWithinTwoHours(selectedAppointment.startTime) ||
+                            isAppointmentEnded(selectedAppointment.endTime)
+                          }
                         >
                           <RefreshCcw className="h-4 w-4 mr-2" />
-                          Reschedule
+                          {isAppointmentEnded(selectedAppointment.endTime) ? "Ended" : 
+                           isWithinTwoHours(selectedAppointment.startTime) ? "Too Late" : "Reschedule"}
                         </Button>
                         <Button 
                           variant="outline"
-                          className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium"
+                          className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => handleCancelAppointment(selectedAppointment)}
-                          disabled={selectedAppointment.appointment_status === 'cancelled' || cancelLoading}
+                          disabled={
+                            selectedAppointment.appointment_status === 'cancelled' || 
+                            cancelLoading || 
+                            isWithinTwoHours(selectedAppointment.startTime) ||
+                            isAppointmentEnded(selectedAppointment.endTime)
+                          }
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
-                          {cancelLoading ? "Cancelling..." : "Cancel"}
+                          {cancelLoading ? "Cancelling..." : 
+                           isAppointmentEnded(selectedAppointment.endTime) ? "Ended" :
+                           isWithinTwoHours(selectedAppointment.startTime) ? "Too Late" : "Cancel"}
                         </Button>
                       </>
                     )}
