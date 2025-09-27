@@ -8,7 +8,7 @@ export async function GET() {
     // Test database connection
     const { data: transactions, error } = await supabaseAdmin
       .from('Transactions')
-      .select('id, amount, created_at')
+      .select('"🔒 Row ID", "Transaction/Total Paid", "Payment/Date"')
       .limit(5)
 
     if (error) {
@@ -55,8 +55,8 @@ export async function POST(request: Request) {
     // First check if transaction exists
     const { data: existingTransaction, error: checkError } = await supabaseAdmin
       .from('Transactions')
-      .select('id')
-      .eq('id', transactionId)
+      .select('"🔒 Row ID"')
+      .eq('"🔒 Row ID"', transactionId)
       .single()
 
     if (checkError || !existingTransaction) {
@@ -70,8 +70,8 @@ export async function POST(request: Request) {
     // Check transaction items
     const { data: items, error: itemsError } = await supabaseAdmin
       .from('Transaction Items')
-      .select('id')
-      .eq('transaction_id', transactionId)
+      .select('"🔒 Row ID"')
+      .eq('"Payment/ID"', transactionId)
 
     if (itemsError) {
       return NextResponse.json({ 

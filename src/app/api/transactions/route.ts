@@ -251,8 +251,8 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
     console.log('Checking if transaction exists...')
     const { data: existingTransaction, error: checkError } = await supabaseAdmin
       .from('Transactions')
-      .select('id')
-      .eq('id', id)
+      .select('"🔒 Row ID"')
+      .eq('"🔒 Row ID"', id)
       .single()
 
     if (checkError) {
@@ -266,11 +266,11 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
     console.log('Transaction exists:', existingTransaction)
 
     console.log('Deleting transaction items first...')
-    // First delete transaction items
+    // First delete transaction items - they reference the transaction by "Payment/ID"
     const { data: deletedItems, error: itemsError } = await supabaseAdmin
       .from('Transaction Items')
       .delete()
-      .eq('transaction_id', id)
+      .eq('"Payment/ID"', id)
       .select()
 
     if (itemsError) {
@@ -288,7 +288,7 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
     const { data: deletedTransaction, error: transactionError } = await supabaseAdmin
       .from('Transactions')
       .delete()
-      .eq('id', id)
+      .eq('"🔒 Row ID"', id)
       .select()
 
     if (transactionError) {
