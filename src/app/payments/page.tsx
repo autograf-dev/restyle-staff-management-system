@@ -173,19 +173,31 @@ export default function PaymentsPage() {
   const onDelete = async () => {
     if (!selectedTransaction) return
     
+    console.log('Starting delete process for transaction:', selectedTransaction.id)
     const prev = rows
-    setRows(p => p.filter(r => r.id !== selectedTransaction.id))
+    
+    // Don't remove from UI immediately to see if delete actually works
     setDeleteDialogOpen(false)
     
     try {
+      console.log('Sending DELETE request to:', `/api/transactions?id=${encodeURIComponent(selectedTransaction.id)}`)
       const res = await fetch(`/api/transactions?id=${encodeURIComponent(selectedTransaction.id)}`, { method: 'DELETE' })
+      console.log('Delete response status:', res.status)
       const json = await res.json().catch(() => ({}))
-      if (!res.ok || json?.ok === false) throw new Error(json.error || 'Delete failed')
+      console.log('Delete response data:', json)
+      
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json.error || `Delete failed with status ${res.status}`)
+      }
+      
+      // Only remove from UI after successful API call
+      setRows(p => p.filter(r => r.id !== selectedTransaction.id))
       toast.success('Transaction deleted successfully')
+      console.log('Transaction deleted successfully from database')
     } catch (e: unknown) {
       console.error('Error deleting transaction:', e)
-      setRows(prev)
-      toast.error('Could not delete transaction')
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error'
+      toast.error(`Could not delete transaction: ${errorMessage}`)
     } finally {
       setSelectedTransaction(null)
     }

@@ -216,51 +216,103 @@ export async function GET(req: Request) {
   }
 }
 
-export async function DELETE(req: Request) {
+export const DELETE = async (req: Request): Promise<NextResponse> => {
+  console.log('DELETE endpoint called at:', new Date().toISOString())
+  
+  // Environment validation with detailed logging
+  console.log('Environment check:')
+  console.log('- NEXT_PUBLIC_SUPABASE_URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+  console.log('- SUPABASE_SERVICE_ROLE_KEY exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+  
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('Missing required environment variables')
+    return NextResponse.json(
+      { ok: false, error: 'Server configuration error' },
+      { status: 500 }
+    )
+  }
+
   try {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Missing SUPABASE_SERVICE_ROLE_KEY for DELETE operation')
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+
+    console.log('Transaction ID to delete:', id)
+    console.log('Request URL:', req.url)
+
+    if (!id) {
+      console.log('No transaction ID provided')
       return NextResponse.json(
-        { ok: false, error: "Missing SUPABASE_SERVICE_ROLE_KEY on server" },
+        { ok: false, error: 'Transaction ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // First check if transaction exists
+    console.log('Checking if transaction exists...')
+    const { data: existingTransaction, error: checkError } = await supabaseAdmin
+      .from('Transactions')
+      .select('id')
+      .eq('id', id)
+      .single()
+
+    if (checkError) {
+      console.error('Error checking transaction existence:', checkError)
+      return NextResponse.json(
+        { ok: false, error: `Transaction not found: ${checkError.message}` },
+        { status: 404 }
+      )
+    }
+
+    console.log('Transaction exists:', existingTransaction)
+
+    console.log('Deleting transaction items first...')
+    // First delete transaction items
+    const { data: deletedItems, error: itemsError } = await supabaseAdmin
+      .from('Transaction Items')
+      .delete()
+      .eq('transaction_id', id)
+      .select()
+
+    if (itemsError) {
+      console.error('Error deleting transaction items:', itemsError)
+      return NextResponse.json(
+        { ok: false, error: `Failed to delete transaction items: ${itemsError.message}` },
         { status: 500 }
       )
     }
 
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
-    console.log('DELETE request received for ID:', id)
-    
-    if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 })
+    console.log('Transaction items deleted:', deletedItems)
 
-    // First, delete related Transaction Items
-    console.log('Deleting transaction items for payment ID:', id)
-    const { error: itemsError } = await supabaseAdmin
-      .from('Transaction Items')
-      .delete()
-      .eq('Payment/ID', id)
-
-    if (itemsError) {
-      console.error('Error deleting transaction items:', itemsError)
-      return NextResponse.json({ ok: false, error: `Failed to delete transaction items: ${itemsError.message}` }, { status: 400 })
-    }
-
+    console.log('Now deleting main transaction...')
     // Then delete the main transaction
-    console.log('Deleting main transaction with ID:', id)
-    const { error } = await supabaseAdmin
+    const { data: deletedTransaction, error: transactionError } = await supabaseAdmin
       .from('Transactions')
       .delete()
-      .eq('🔒 Row ID', id)
+      .eq('id', id)
+      .select()
 
-    if (error) {
-      console.error('Error deleting transaction:', error)
-      return NextResponse.json({ ok: false, error: error.message }, { status: 400 })
+    if (transactionError) {
+      console.error('Error deleting transaction:', transactionError)
+      return NextResponse.json(
+        { ok: false, error: `Failed to delete transaction: ${transactionError.message}` },
+        { status: 500 }
+      )
     }
-    
-    console.log('Transaction deleted successfully')
-    return NextResponse.json({ ok: true })
-  } catch (e: unknown) {
-    console.error('Error deleting transaction:', e)
-    return NextResponse.json({ ok: false, error: 'Failed to delete transaction' }, { status: 500 })
+
+    console.log('Transaction deleted successfully:', deletedTransaction)
+    return NextResponse.json({ 
+      ok: true, 
+      message: 'Transaction deleted successfully',
+      deletedItems: deletedItems?.length || 0,
+      deletedTransaction: deletedTransaction?.length || 0
+    })
+
+  } catch (error) {
+    console.error('Unexpected error in DELETE endpoint:', error)
+    return NextResponse.json(
+      { ok: false, error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 
