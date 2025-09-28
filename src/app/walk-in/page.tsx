@@ -17,14 +17,12 @@ import {
   DollarSign, 
   Clock, 
   User as UserIcon, 
-  Calendar as CalendarIcon,
   CreditCard,
   ArrowLeft,
   AlertCircle,
   Loader2,
   Receipt,
   Users,
-  Percent,
   Phone,
   Wallet,
   Plus,
@@ -36,8 +34,6 @@ import {
   Flame,
   Star,
   Gem,
-  CheckCircle2,
-  Edit3,
   X,
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
@@ -57,7 +53,7 @@ interface Customer {
 interface Staff {
   ghl_id: string
   name: string
-  email: string
+  email?: string
 }
 
 interface Service {
@@ -101,7 +97,6 @@ interface PricingBreakdown {
 
 export default function WalkInPage() {
   const router = useRouter()
-  const { user } = useUser()
   
   // State
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -113,16 +108,14 @@ export default function WalkInPage() {
     id: string
   }>>([])
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [staffMembers, setStaffMembers] = useState<Staff[]>([])
+  const [staffData, setStaffData] = useState<Array<{ ghl_id: string; name: string }>>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [groupServices, setGroupServices] = useState<GroupServices>({})
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   
   // Loading states
   const [loading, setLoading] = useState(true)
-  const [loadingCustomers, setLoadingCustomers] = useState(false)
-  const [loadingStaff, setLoadingStaff] = useState(false)
-  const [loadingServices, setLoadingServices] = useState(false)
+  const [loadingGroups, setLoadingGroups] = useState(false)
   const [processingCheckout, setProcessingCheckout] = useState(false)
   
   // Form state
@@ -130,6 +123,7 @@ export default function WalkInPage() {
   const [customTipAmount, setCustomTipAmount] = useState('')
   const [useCustomTip, setUseCustomTip] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
+  const [customerSearch, setCustomerSearch] = useState('')
 
   // Get icon for group
   const getGroupIcon = (groupName: string) => {
@@ -155,89 +149,87 @@ export default function WalkInPage() {
     return Crown
   }
 
-  // Fetch customers
+  // Fetch customers from the same endpoint as customer page
   const fetchCustomers = async () => {
     try {
-      setLoadingCustomers(true)
-      const response = await fetch('/api/getUsers?role=customer')
-      const result = await response.json()
+      const res = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=1')
+      if (!res.ok) throw new Error("Failed to fetch customers")
+      const json = await res.json()
       
-      if (result.ok && result.customers) {
-        setCustomers(result.customers)
-      } else {
-        toast.error('Failed to load customers')
-      }
+      const formattedCustomers = json.contacts?.map((contact: any) => ({
+        id: String(contact.id),
+        firstName: contact.firstName || '',
+        lastName: contact.lastName || '',
+        email: contact.email || '',
+        phone: contact.phone,
+        fullName: contact.contactName || `${contact.firstName || ''} ${contact.lastName || ''}`.trim()
+      })) || []
+      
+      setCustomers(formattedCustomers)
     } catch (error) {
       console.error('Error fetching customers:', error)
       toast.error('Error loading customers')
-    } finally {
-      setLoadingCustomers(false)
     }
   }
 
-  // Fetch staff members
-  const fetchStaff = async () => {
+  // Fetch staff data (same as checkout)
+  const fetchStaffData = async () => {
     try {
-      setLoadingStaff(true)
       const response = await fetch('/api/barber-hours')
+      if (!response.ok) throw new Error('Failed to fetch staff data')
       const result = await response.json()
       
-      if (result.ok) {
-        const staffData = result.data.map((staff: Record<string, unknown>) => ({
-          ghl_id: staff.ghl_id,
-          name: staff["Barber/Name"],
-          email: staff["Barber/Email"]
+      if (result.ok && result.data) {
+        const staff = result.data.map((barber: { ghl_id: string; 'Barber/Name': string }) => ({
+          ghl_id: barber['ghl_id'],
+          name: barber['Barber/Name']
         }))
-        setStaffMembers(staffData)
-      } else {
-        toast.error('Failed to load staff members')
+        setStaffData(staff)
       }
     } catch (error) {
-      console.error('Error fetching staff:', error)
-      toast.error('Error loading staff members')
-    } finally {
-      setLoadingStaff(false)
+      console.error('Error fetching staff data:', error)
+      toast.error('Error loading staff')
     }
   }
 
-  // Fetch services
-  const fetchServices = async () => {
+  // Fetch groups from Supabase (same as checkout)
+  const fetchGroups = async () => {
     try {
-      setLoadingServices(true)
+      setLoadingGroups(true)
+      const response = await fetch('/api/groups')
+      if (!response.ok) throw new Error('Failed to fetch groups')
+      const result = await response.json()
       
-      // First fetch groups
-      const groupsResponse = await fetch('/api/groups')
-      const groupsResult = await groupsResponse.json()
-      
-      if (groupsResult.success) {
-        setGroups(groupsResult.groups)
-        
-        // Fetch services for each group
-        const servicesData: GroupServices = {}
-        for (const group of groupsResult.groups) {
-          const servicesResponse = await fetch(`/api/services?groupId=${group.id}`)
-          const servicesResult = await servicesResponse.json()
-          
-          if (servicesResult.success) {
-            servicesData[group.id] = servicesResult.services.filter((service: Service) => 
-              service.price && service.price > 0
-            )
-          }
+      if (result.success) {
+        setGroups(result.groups)
+        if (result.groups.length > 0) {
+          setSelectedGroupId(result.groups[0].id)
         }
-        setGroupServices(servicesData)
-        
-        // Set first group as default
-        if (groupsResult.groups.length > 0) {
-          setSelectedGroupId(groupsResult.groups[0].id)
-        }
-      } else {
-        toast.error('Failed to load services')
       }
     } catch (error) {
-      console.error('Error fetching services:', error)
-      toast.error('Error loading services')
+      console.error('Error fetching groups:', error)
+      toast.error('Error loading service categories')
     } finally {
-      setLoadingServices(false)
+      setLoadingGroups(false)
+    }
+  }
+
+  // Fetch services for a group (same as checkout)
+  const fetchServicesForGroup = async (groupId: string) => {
+    try {
+      const response = await fetch(`/api/services?groupId=${groupId}`)
+      if (!response.ok) throw new Error('Failed to fetch services')
+      const result = await response.json()
+      
+      if (result.success) {
+        // Filter services with valid pricing
+        const validServices = result.services.filter((service: Service) => 
+          service.price && service.price > 0
+        )
+        setGroupServices(prev => ({ ...prev, [groupId]: validServices }))
+      }
+    } catch (error) {
+      console.error('Error fetching services for group:', error)
     }
   }
 
@@ -247,14 +239,30 @@ export default function WalkInPage() {
       setLoading(true)
       await Promise.all([
         fetchCustomers(),
-        fetchStaff(),
-        fetchServices()
+        fetchStaffData(),
+        fetchGroups()
       ])
       setLoading(false)
     }
     
     initializeData()
   }, [])
+
+  // Fetch services when groups are loaded
+  useEffect(() => {
+    if (groups.length > 0) {
+      void fetchAllServices()
+    }
+  }, [groups])
+
+  // Fetch all services for all groups
+  const fetchAllServices = async () => {
+    if (groups.length === 0) return
+    
+    // Fetch services for all groups in parallel
+    const promises = groups.map(group => fetchServicesForGroup(group.id))
+    await Promise.all(promises)
+  }
 
   // Add service to the list
   const addServiceToList = () => {
@@ -310,6 +318,13 @@ export default function WalkInPage() {
   }
 
   const pricing = calculatePricing()
+
+  // Filter customers based on search
+  const filteredCustomers = customers.filter(customer =>
+    customer.fullName.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    customer.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    (customer.phone && customer.phone.includes(customerSearch))
+  )
 
   // Handle checkout
   const handleCheckout = async () => {
@@ -464,7 +479,7 @@ export default function WalkInPage() {
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
-              <div className="mx-auto w-full max-w-6xl">
+              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
                 <Skeleton className="h-96 rounded-2xl" />
               </div>
             </div>
@@ -479,275 +494,238 @@ export default function WalkInPage() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          {/* Header */}
-          <header className="flex h-14 items-center border-b bg-white/60 backdrop-blur px-4">
+          <div className="flex h-16 shrink-0 items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
             <div className="flex items-center gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mx-2 h-4" />
-              <div className="flex items-center gap-2">
-                <UserIcon className="h-5 w-5 text-[#7b1d1d]" />
-                <h1 className="text-[15px] font-semibold tracking-tight">Walk-in</h1>
-              </div>
-            </div>
-            <div className="ml-auto">
-              <Button variant="outline" onClick={() => router.push('/calendar')} className="rounded-lg">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Calendar
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.back()}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
               </Button>
             </div>
-          </header>
+          </div>
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <div className="mx-auto w-full max-w-6xl">
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Walk-in Processing</h1>
+                <p className="text-gray-600">Process walk-in customers quickly and efficiently</p>
+              </div>
 
-          <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
-            {/* Selection Cards */}
-            <div className="mx-auto w-full max-w-6xl grid gap-4 md:grid-cols-3">
-              {/* Customer Selection */}
-              <Card className="rounded-2xl border border-neutral-200 bg-white">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Users className="h-5 w-5 text-[#601625]" />
-                    Customer
-                  </CardTitle>
-                  <CardDescription>Select a customer for this walk-in</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Select
-                    value={selectedCustomer?.id || ''}
-                    onValueChange={(value) => {
-                      const customer = customers.find(c => c.id === value)
-                      setSelectedCustomer(customer || null)
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose customer..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loadingCustomers ? (
-                        <SelectItem value="loading" disabled>Loading customers...</SelectItem>
-                      ) : customers.length > 0 ? (
-                        customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{customer.fullName}</span>
-                              <span className="text-xs text-muted-foreground">{customer.email}</span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="none" disabled>No customers found</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  
-                  {selectedCustomer && (
-                    <div className="mt-3 p-3 bg-[#601625]/5 rounded-lg border border-[#601625]/20">
-                      <div className="text-sm font-medium">{selectedCustomer.fullName}</div>
-                      <div className="text-xs text-muted-foreground">{selectedCustomer.email}</div>
-                      {selectedCustomer.phone && (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                          <Phone className="h-3 w-3" />
-                          {selectedCustomer.phone}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Staff Selection */}
-              <Card className="rounded-2xl border border-neutral-200 bg-white">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Scissors className="h-5 w-5 text-[#601625]" />
-                    Stylist
-                  </CardTitle>
-                  <CardDescription>Select a stylist for this service</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Select
-                    value={selectedStaff?.ghl_id || ''}
-                    onValueChange={(value) => {
-                      const staff = staffMembers.find(s => s.ghl_id === value)
-                      setSelectedStaff(staff || null)
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose stylist..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loadingStaff ? (
-                        <SelectItem value="loading" disabled>Loading staff...</SelectItem>
-                      ) : staffMembers.length > 0 ? (
-                        staffMembers.map((staff) => (
-                          <SelectItem key={staff.ghl_id} value={staff.ghl_id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{staff.name}</span>
-                              <span className="text-xs text-muted-foreground">{staff.email}</span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="none" disabled>No staff found</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  
-                  {selectedStaff && (
-                    <div className="mt-3 p-3 bg-[#601625]/5 rounded-lg border border-[#601625]/20">
-                      <div className="text-sm font-medium">{selectedStaff.name}</div>
-                      <div className="text-xs text-muted-foreground">{selectedStaff.email}</div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Service Selection */}
-              <Card className="rounded-2xl border border-neutral-200 bg-white">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-[#601625]" />
-                    Service
-                  </CardTitle>
-                  <CardDescription>Select a service to perform</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Group Selection */}
-                  <Select
-                    value={selectedGroupId}
-                    onValueChange={setSelectedGroupId}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose service category..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loadingServices ? (
-                        <SelectItem value="loading" disabled>Loading categories...</SelectItem>
-                      ) : groups.length > 0 ? (
-                        groups.map((group) => (
-                          <SelectItem key={group.id} value={group.id}>
-                            {group.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="none" disabled>No categories found</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-
-                  {/* Service Selection */}
-                  <Select
-                    value={selectedService?.id || ''}
-                    onValueChange={(value) => {
-                      const services = selectedGroupId ? groupServices[selectedGroupId] || [] : []
-                      const service = services.find(s => s.id === value)
-                      setSelectedService(service || null)
-                    }}
-                    disabled={!selectedGroupId}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose service..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectedGroupId && groupServices[selectedGroupId] ? (
-                        groupServices[selectedGroupId].length > 0 ? (
-                          groupServices[selectedGroupId].map((service) => (
-                            <SelectItem key={service.id} value={service.id}>
-                              <div className="flex flex-col">
-                                <span className="font-medium">{service.name}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  ${service.price} • {service.duration}min
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="none" disabled>No services in this category</SelectItem>
-                        )
-                      ) : (
-                        <SelectItem value="none" disabled>Select a category first</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  
-                  {selectedService && selectedStaff && (
-                    <div className="mt-3 space-y-2">
-                      <div className="p-3 bg-[#601625]/5 rounded-lg border border-[#601625]/20">
-                        <div className="text-sm font-medium">{selectedService.name}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          <span>${selectedService.price}</span>
-                          <span>•</span>
-                          <Clock className="h-3 w-3" />
-                          <span>{selectedService.duration} minutes</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Staff: {selectedStaff.name}
-                        </div>
-                      </div>
-                      <Button 
-                        size="sm" 
-                        onClick={addServiceToList}
-                        className="w-full bg-[#601625] hover:bg-[#751a29]"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add to Checkout
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Selected Services List */}
-            {selectedServices.length > 0 && (
-              <div className="mx-auto w-full max-w-6xl">
-                <Card className="rounded-2xl border border-neutral-200 bg-white">
-                  <CardHeader>
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <Receipt className="h-5 w-5 text-[#601625]" />
-                      Selected Services ({selectedServices.length})
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Customer Selection */}
+                <Card className="rounded-2xl border-neutral-200 shadow-none">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                      <Users className="h-5 w-5 text-[#7b1d1d]" />
+                      Select Customer
                     </CardTitle>
-                    <CardDescription>Services added to this walk-in checkout</CardDescription>
+                    <CardDescription className="text-[13px]">Choose existing customer</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    {selectedServices.map((serviceItem) => (
-                      <div key={serviceItem.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{serviceItem.service.name}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
-                            <span>${serviceItem.service.price}</span>
-                            <span>•</span>
-                            <Clock className="h-3 w-3" />
-                            <span>{serviceItem.service.duration}min</span>
-                            <span>•</span>
-                            <Scissors className="h-3 w-3" />
-                            <span>{serviceItem.staff.name}</span>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeService(serviceItem.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+                  <CardContent>
+                    {loading ? (
+                      <div className="space-y-3">
+                        {[...Array(3)].map((_, i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="relative">
+                          <Input
+                            placeholder="Search customers..."
+                            value={customerSearch}
+                            onChange={(e) => setCustomerSearch(e.target.value)}
+                            className="pl-4"
+                          />
+                        </div>
+                        
+                        <div className="max-h-60 overflow-y-auto space-y-2">
+                          {filteredCustomers.map((customer) => (
+                            <div
+                              key={customer.id}
+                              className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                selectedCustomer?.id === customer.id
+                                  ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                                  : 'border-neutral-200 hover:border-neutral-300'
+                              }`}
+                              onClick={() => setSelectedCustomer(customer)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="font-medium text-sm">{customer.fullName}</p>
+                                  <p className="text-xs text-gray-500">{customer.email}</p>
+                                  {customer.phone && (
+                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                      <Phone className="h-3 w-3" />
+                                      {customer.phone}
+                                    </p>
+                                  )}
+                                </div>
+                                {selectedCustomer?.id === customer.id && (
+                                  <div className="h-4 w-4 rounded-full bg-[#7b1d1d] flex items-center justify-center">
+                                    <div className="h-2 w-2 rounded-full bg-white" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              </div>
-            )}
 
-            {/* Pricing and Checkout Section */}
-            {selectedCustomer && selectedServices.length > 0 && pricing && (
-              <div className="mx-auto w-full max-w-6xl">
-                <div className="grid gap-6 md:grid-cols-1">
-                  {/* Pricing Card */}
-                  <Card className="rounded-2xl border border-neutral-200 bg-white">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-[#601625]" />
-                        Pricing & Payment
+                {/* Services Selection */}
+                <Card className="rounded-2xl border-neutral-200 shadow-none">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                      <Scissors className="h-5 w-5 text-[#7b1d1d]" />
+                      Add Services
+                    </CardTitle>
+                    <CardDescription className="text-[13px]">Select services and assign staff</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <div className="space-y-3">
+                        {[...Array(3)].map((_, i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Service Group Selection */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Service Category</Label>
+                          <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select service category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {groups.map((group) => (
+                                <SelectItem key={group.id} value={group.id}>
+                                  {group.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Service Selection */}
+                        {selectedGroupId && (
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Service</Label>
+                            <Select 
+                              value={selectedService?.id || ''} 
+                              onValueChange={(value) => {
+                                const service = groupServices[selectedGroupId]?.find(s => s.id === value)
+                                setSelectedService(service || null)
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select service" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(groupServices[selectedGroupId] || []).map((service) => (
+                                  <SelectItem key={service.id} value={service.id}>
+                                    <div className="flex items-center justify-between w-full">
+                                      <span>{service.name}</span>
+                                      <span className="ml-2 text-sm text-gray-500">${service.price}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Staff Selection */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Assigned Staff</Label>
+                          <Select 
+                            value={selectedStaff?.ghl_id || ''} 
+                            onValueChange={(value) => {
+                              const staff = staffData.find(s => s.ghl_id === value)
+                              setSelectedStaff(staff ? { ...staff, email: undefined } : null)
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select staff member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {staffData.map((staff) => (
+                                <SelectItem key={staff.ghl_id} value={staff.ghl_id}>
+                                  {staff.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Add Service Button */}
+                        <Button 
+                          onClick={addServiceToList}
+                          disabled={!selectedService || !selectedStaff}
+                          className="w-full bg-[#7b1d1d] hover:bg-[#601625]"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Service
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Selected Services */}
+                {selectedServices.length > 0 && (
+                  <Card className="rounded-2xl border-neutral-200 shadow-none lg:col-span-2">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-[#7b1d1d]" />
+                        Selected Services
                       </CardTitle>
+                      <CardDescription className="text-[13px]">Review and modify selected services</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {selectedServices.map((item, index) => (
+                          <div key={item.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-xl">
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-sm">{item.service.name}</h4>
+                                <p className="text-xs text-gray-500">
+                                  {item.staff?.name} • {item.service.duration} min • ${item.service.price}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeService(item.id)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pricing and Checkout Section */}
+                {selectedCustomer && selectedServices.length > 0 && pricing && (
+                  <Card className="rounded-2xl border-neutral-200 shadow-none lg:col-span-2">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
+                        Pricing Summary
+                      </CardTitle>
+                      <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       {/* Tip Selection */}
@@ -836,7 +814,7 @@ export default function WalkInPage() {
                       {/* Checkout Button */}
                       <Button 
                         size="lg" 
-                        className="w-full bg-[#601625] hover:bg-[#751a29]"
+                        className="w-full bg-[#7b1d1d] hover:bg-[#601625]"
                         onClick={handleCheckout}
                         disabled={processingCheckout}
                       >
@@ -854,9 +832,9 @@ export default function WalkInPage() {
                       </Button>
                     </CardContent>
                   </Card>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </SidebarInset>
       </SidebarProvider>
