@@ -59,6 +59,23 @@ interface ContactResponse {
   contactName?: string
 }
 
+interface ServiceResponse {
+  id: string
+  name?: string
+  title?: string
+  description?: string
+  category?: string
+  servicePrice?: number
+  price?: number
+  durationMinutes?: number
+  duration?: number
+  teamMembers?: Array<{
+    userId: string
+    priority: number
+    selected: boolean
+  }>
+}
+
 interface Staff {
   ghl_id: string
   name: string
@@ -201,44 +218,60 @@ export default function WalkInPage() {
     }
   }
 
-  // Fetch groups from Supabase (same as checkout)
-  const fetchGroups = async () => {
+  // Fetch services using the working Netlify function (same as services page)
+  const fetchServices = async () => {
     try {
       setLoadingGroups(true)
-      const response = await fetch('/api/groups')
-      if (!response.ok) throw new Error('Failed to fetch groups')
-      const result = await response.json()
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getAllServices')
+      if (!response.ok) throw new Error('Failed to fetch services')
       
-      if (result.success) {
-        setGroups(result.groups)
-        if (result.groups.length > 0) {
-          setSelectedGroupId(result.groups[0].id)
+      const result = await response.json()
+      if (result.success && result.services) {
+        // Group services by category/type for better organization
+        const serviceGroups: { [key: string]: Service[] } = {}
+        const groupNames: Group[] = []
+        
+        result.services.forEach((service: ServiceResponse) => {
+          // Create a simple category grouping
+          const category = service.category || 'General Services'
+          if (!serviceGroups[category]) {
+            serviceGroups[category] = []
+            // Add to groups list if not already there
+            if (!groupNames.find(g => g.name === category)) {
+              groupNames.push({
+                id: category.toLowerCase().replace(/\s+/g, '-'),
+                name: category,
+                description: `${category} services`,
+                slug: category.toLowerCase().replace(/\s+/g, '-'),
+                isActive: true
+              })
+            }
+          }
+          
+          // Format service with required fields
+          serviceGroups[category].push({
+            id: service.id,
+            name: service.name || service.title || 'Unknown Service',
+            price: service.servicePrice || service.price || 0,
+            duration: service.durationMinutes || service.duration || 30,
+            description: service.description || '',
+            teamMembers: service.teamMembers || []
+          })
+        })
+        
+        setGroups(groupNames)
+        setGroupServices(serviceGroups)
+        
+        // Set first group as selected
+        if (groupNames.length > 0) {
+          setSelectedGroupId(groupNames[0].id)
         }
       }
     } catch (error) {
-      console.error('Error fetching groups:', error)
-      toast.error('Error loading service categories')
+      console.error('Error fetching services:', error)
+      toast.error('Error loading services')
     } finally {
       setLoadingGroups(false)
-    }
-  }
-
-  // Fetch services for a group (same as checkout)
-  const fetchServicesForGroup = async (groupId: string) => {
-    try {
-      const response = await fetch(`/api/services?groupId=${groupId}`)
-      if (!response.ok) throw new Error('Failed to fetch services')
-      const result = await response.json()
-      
-      if (result.success) {
-        // Filter services with valid pricing
-        const validServices = result.services.filter((service: Service) => 
-          service.price && service.price > 0
-        )
-        setGroupServices(prev => ({ ...prev, [groupId]: validServices }))
-      }
-    } catch (error) {
-      console.error('Error fetching services for group:', error)
     }
   }
 
@@ -246,32 +279,23 @@ export default function WalkInPage() {
   useEffect(() => {
     const initializeData = async () => {
       setLoading(true)
-      await Promise.all([
-        fetchCustomers(),
-        fetchStaffData(),
-        fetchGroups()
-      ])
-      setLoading(false)
+      try {
+        await Promise.all([
+          fetchCustomers(),
+          fetchStaffData(),
+          fetchServices()
+        ])
+      } catch (error) {
+        console.error('Error initializing data:', error)
+        toast.error('Failed to load data')
+      } finally {
+        setLoading(false)
+      }
     }
     
     initializeData()
-  }, [])
+  }, [])  // Fetch services for a group (same as checkout)
 
-  // Fetch services when groups are loaded
-  useEffect(() => {
-    if (groups.length > 0) {
-      void fetchAllServices()
-    }
-  }, [groups])
-
-  // Fetch all services for all groups
-  const fetchAllServices = async () => {
-    if (groups.length === 0) return
-    
-    // Fetch services for all groups in parallel
-    const promises = groups.map(group => fetchServicesForGroup(group.id))
-    await Promise.all(promises)
-  }
 
   // Add service to the list
   const addServiceToList = () => {
@@ -559,8 +583,8 @@ export default function WalkInPage() {
                               key={customer.id}
                               className={`p-3 rounded-lg border cursor-pointer transition-all ${
                                 selectedCustomer?.id === customer.id
-                                  ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
-                                  : 'border-neutral-200 hover:border-neutral-300'
+                                  ? 'border-[#7b1d1d] bg-[#7b1d1d]/10 shadow-sm'
+                                  : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
                               }`}
                               onClick={() => setSelectedCustomer(customer)}
                             >
