@@ -134,17 +134,13 @@ export async function GET(req: Request) {
     
     // Filter by appointment ID if provided
     if (appointmentId) {
-      console.log(`🔍 Searching for appointmentId: ${appointmentId}`)
-      query = query.eq('"Booking/ID"', appointmentId)
+      query = query.eq('Booking/ID', appointmentId)
     }
 
     const { data, error } = await query
 
     if (appointmentId && data) {
-      console.log(`📊 Found ${data.length} transactions for appointmentId: ${appointmentId}`)
-      data.forEach(tx => {
-        console.log(`  - Transaction ${tx['🔒 Row ID']}: BookingID="${tx['Booking/ID']}", Status="${tx['Payment/Status']}"`)
-      })
+      // Optional: log transaction count for debugging
     }
 
     if (error) {

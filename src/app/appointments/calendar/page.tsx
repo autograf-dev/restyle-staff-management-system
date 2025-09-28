@@ -149,7 +149,7 @@ function useAppointments() {
                 if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
                   const transaction = transactionData.data[0]
                   // Check if transaction has paid status
-                  if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === 'Yes') {
+                  if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true || transaction.paid === 'Yes') {
                     details.payment_status = 'paid'
                   } else {
                     details.payment_status = 'pending'
