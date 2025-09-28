@@ -23,7 +23,8 @@ import {
   DollarSign, 
   Clock, 
   Users, 
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  CheckCircle
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
@@ -68,11 +69,9 @@ export default function ServicesPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [staffDialogOpen, setStaffDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [creating, setCreating] = useState(false)
   const [updating, setUpdating] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [assigningStaff, setAssigningStaff] = useState(false)
   const isMobile = useIsMobile()
 
@@ -246,34 +245,6 @@ export default function ServicesPage() {
     }
   }
 
-  // Delete service using deleteFullService endpoint
-  const deleteService = async () => {
-    if (!selectedService) return
-
-    setDeleting(true)
-    try {
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/deleteFullService?serviceId=${selectedService.id}`, {
-        method: 'DELETE'
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        toast.success('✅ Service deleted successfully!')
-        setDeleteDialogOpen(false)
-        setSelectedService(null)
-        await fetchServices()
-      } else {
-        throw new Error(result.error || 'Failed to delete service')
-      }
-    } catch (error) {
-      console.error('Error deleting service:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to delete service')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
   // Assign/remove staff using manageServiceStaff endpoint
   const manageStaff = async (action: 'assign' | 'remove' | 'replace') => {
     if (!selectedService) return
@@ -359,11 +330,6 @@ export default function ServicesPage() {
     const assignedStaffIds = service.teamMembers?.map(member => member.userId) || [];
     setSelectedStaffIds(assignedStaffIds)
     setStaffDialogOpen(true)
-  }
-
-  const openDeleteDialog = (service: Service) => {
-    setSelectedService(service)
-    setDeleteDialogOpen(true)
   }
 
   const formatDuration = (minutes: number) => {
@@ -1115,65 +1081,7 @@ export default function ServicesPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Delete Confirmation Dialog */}
-          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  Delete Service
-                </DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to permanently delete this service? This action cannot be undone and will remove all associated appointments and staff assignments.
-                </DialogDescription>
-              </DialogHeader>
-              {selectedService && (
-                <div className="py-4">
-                  <div className="p-4 border rounded-lg bg-destructive/10 border-destructive/20">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-destructive">{selectedService.name}</h4>
-                        {selectedService.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {selectedService.description.replace(/<[^>]*>/g, '')}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {selectedService.duration ? formatDuration(selectedService.duration) : 'Duration not set'}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {selectedService.teamMembers?.length || 0} staff assigned
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={deleteService} disabled={deleting}>
-                  {deleting ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Service
-                    </>
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+
         </SidebarInset>
       </SidebarProvider>
       </TooltipProvider>

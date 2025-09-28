@@ -172,7 +172,7 @@ export default function SalonHoursPage() {
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Salon Hours</h1>
-              <span className="text-sm text-muted-foreground ml-2">Configure your salon's operating hours for each day of the week</span>
+              <span className="text-sm text-muted-foreground ml-2">Configure your salon&apos;s operating hours for each day of the week</span>
             </div>
           </header>
           

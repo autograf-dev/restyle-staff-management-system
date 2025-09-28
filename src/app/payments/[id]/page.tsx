@@ -6,7 +6,6 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -20,8 +19,7 @@ import {
   Calendar as CalendarIcon, 
   User as UserIcon, 
   Phone,
-  DollarSign,
-  CheckCircle
+  DollarSign
 } from "lucide-react"
 
 interface TransactionData {
@@ -56,7 +54,6 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<TransactionData | null>(null)
-  const [customerName, setCustomerName] = useState<string>('Unknown Customer')
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
 
