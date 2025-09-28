@@ -144,22 +144,35 @@ function useAppointments() {
             // Check payment status by looking up transactions with proper paid status
             try {
               const transactionRes = await fetch(`/api/transactions?appointmentId=${booking.id}&limit=1`)
+              console.log(`🔍 Payment check for ${booking.id}: API Status ${transactionRes.status}`)
               if (transactionRes.ok) {
                 const transactionData = await transactionRes.json()
+                console.log(`📊 Transaction data for ${booking.id}:`, transactionData)
                 if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
                   const transaction = transactionData.data[0]
+                  console.log(`💳 Transaction details:`, {
+                    id: transaction.id,
+                    status: transaction.status,
+                    paymentStatus: transaction.paymentStatus,
+                    paid: transaction.paid,
+                    bookingId: transaction.bookingId
+                  })
                   // Check if transaction has paid status
                   if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true || transaction.paid === 'Yes') {
                     details.payment_status = 'paid'
+                    console.log(`✅ MARKED AS PAID: ${booking.id}`)
                   } else {
                     details.payment_status = 'pending'
+                    console.log(`⏳ MARKED AS PENDING: ${booking.id}`)
                   }
                 } else {
                   // No transaction found - still pending payment
                   details.payment_status = 'pending'
+                  console.log(`❌ NO TRANSACTION FOUND: ${booking.id}`)
                 }
               } else {
                 details.payment_status = 'pending'
+                console.log(`❌ API FAILED: ${booking.id} - Status ${transactionRes.status}`)
               }
             } catch (error) {
               console.warn(`Failed to check payment status for booking ${booking.id}:`, error)
@@ -364,6 +377,16 @@ const StaffOverviewView = ({
               sunday: { start: barber["Sunday/Start Value"], end: barber["Sunday/End Value"] }
             }
           }))
+
+          // Debug: Log the first staff member's working hours
+          if (staffMembers.length > 0) {
+            console.log("📅 Staff working hours sample:", {
+              staff: staffMembers[0].name,
+              workingHours: staffMembers[0].workingHours,
+              currentDate: currentDate,
+              dayOfWeek: currentDate.getDay()
+            })
+          }
           
           // Filter staff based on user role
           if (user?.role === 'barber' && user.ghlId) {
@@ -535,13 +558,22 @@ const StaffOverviewView = ({
     const currentDayName = dayNames[currentDate.getDay()]
     const workingDay = staffMember.workingHours?.[currentDayName]
     
-    if (!workingDay || !workingDay.start || !workingDay.end || workingDay.start === 0 || workingDay.end === 0) {
+    if (!workingDay || !workingDay.start || !workingDay.end || 
+        workingDay.start === 0 || workingDay.end === 0 || 
+        workingDay.start === '0' || workingDay.end === '0' ||
+        workingDay.start === null || workingDay.end === null) {
       return null // Day off or no working hours set
     }
 
+    // Convert minutes from midnight to hours for calculation
+    const startMinutes = Number(workingDay.start)
+    const endMinutes = Number(workingDay.end)
+    
     return {
-      start: Number(workingDay.start),
-      end: Number(workingDay.end)
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
+      startHour: startMinutes / 60,
+      endHour: endMinutes / 60
     }
   }
 
@@ -559,8 +591,8 @@ const StaffOverviewView = ({
     const periods = []
     const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
     const dayEndMinutes = 20 * 60  // Calendar ends at 8PM
-    const workStartMinutes = workingHours.start * 60
-    const workEndMinutes = workingHours.end * 60
+    const workStartMinutes = workingHours.startMinutes
+    const workEndMinutes = workingHours.endMinutes
     
     // Before working hours (if work starts after 8AM)
     if (workStartMinutes > dayStartMinutes) {
@@ -698,29 +730,36 @@ const StaffOverviewView = ({
       <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0" ref={scrollContainerRef}>
         <div className="flex w-full" style={{ height: `${(timeSlots.length * 60) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
-          <div className="w-[120px] border-r bg-muted/30 flex-shrink-0 relative">
-            {timeSlots.map((time, index) => (
-              <div
-                key={time}
-                className="absolute left-0 right-0 border-b border-border/50 px-3 flex items-center justify-end"
-                style={{ 
-                  top: `${GRID_TOP_PADDING + index * 60}px`, 
-                  height: '60px'
-                }}
-              >
-                {time.endsWith(':00') && (
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {(() => {
-                      const hour = parseInt(time)
-                      if (hour === 0) return '12:00 AM'
-                      if (hour < 12) return `${hour}:00 AM`
-                      if (hour === 12) return '12:00 PM'
-                      return `${hour - 12}:00 PM`
-                    })()}
-                  </span>
-                )}
-              </div>
-            ))}
+          <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
+            {timeSlots.map((time, index) => {
+              const isHourMark = time.endsWith(':00')
+              return (
+                <div
+                  key={time}
+                  className={`absolute left-0 right-0 px-2 flex items-center justify-end ${
+                    isHourMark 
+                      ? 'border-b border-border' 
+                      : 'border-b border-border/20'
+                  }`}
+                  style={{ 
+                    top: `${GRID_TOP_PADDING + index * 60}px`, 
+                    height: '60px'
+                  }}
+                >
+                  {isHourMark && (
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {(() => {
+                        const hour = parseInt(time)
+                        if (hour === 0) return '12 AM'
+                        if (hour < 12) return `${hour} AM`
+                        if (hour === 12) return '12 PM'
+                        return `${hour - 12} PM`
+                      })()}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* Scrollable Staff columns container */}
@@ -736,18 +775,21 @@ const StaffOverviewView = ({
               {staff.map((staffMember) => (
                 <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
                   {/* Hour lines for this staff column */}
-                  {timeSlots.map((time, index) => (
-                    <div
-                      key={time}
-                      className={`absolute left-0 right-0 ${
-                        time.endsWith(':00') ? 'border-b border-border' : 'border-b border-border/30'
-                      }`}
-                      style={{ 
-                        top: `${GRID_TOP_PADDING + index * 60}px`, 
-                        height: '60px'
-                      }}
-                    />
-                  ))}
+                  {timeSlots.map((time, index) => {
+                    const isHourMark = time.endsWith(':00')
+                    return (
+                      <div
+                        key={time}
+                        className={`absolute left-0 right-0 ${
+                          isHourMark ? 'border-b border-border' : 'border-b border-border/20'
+                        }`}
+                        style={{ 
+                          top: `${GRID_TOP_PADDING + index * 60}px`, 
+                          height: '60px'
+                        }}
+                      />
+                    )
+                  })}
 
                   {/* Non-working hours grey overlay */}
                   {getNonWorkingPeriods(staffMember).map((period, index) => {
