@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator"
 import { RoleGuard } from "@/components/role-guard"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -869,218 +870,337 @@ export default function ServicesPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Edit Service Dialog */}
-          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Edit className="h-5 w-5 text-primary" />
-                  Edit Service: {selectedService?.name}
-                </DialogTitle>
-                <DialogDescription>
-                  Update service details, pricing, and staff assignments
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-6 py-4">
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-name">Service Name *</Label>
-                    <Input
-                      id="edit-name"
-                      value={formData.name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                      className="text-base"
-                    />
+          {/* Edit Service Sidebar */}
+          <Sheet open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+            <SheetContent side="right" className="w-[600px] sm:w-[700px]">
+              <SheetHeader className="pb-6">
+                <SheetTitle className="flex items-center gap-3 text-xl">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
+                    <Edit className="h-5 w-5 text-primary" />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-description">Service Description</Label>
-                    <Textarea
-                      id="edit-description"
-                      value={formData.description}
-                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                      rows={4}
-                      className="text-base"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-duration">Duration</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="edit-duration"
-                          type="number"
-                          min="5"
-                          max="480"
-                          value={formData.duration}
-                          onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
-                          className="flex-1"
-                        />
-                        <Select 
-                          value={formData.durationUnit} 
-                          onValueChange={(value) => setFormData(prev => ({ ...prev, durationUnit: value as 'mins' | 'hours' }))}
-                        >
-                          <SelectTrigger className="w-28">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="mins">Minutes</SelectItem>
-                            <SelectItem value="hours">Hours</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-price">Price</Label>
-                      <div className="flex gap-2">
-                        <Select 
-                          value={formData.currency} 
-                          onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
-                        >
-                          <SelectTrigger className="w-20">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="CA$">CA$</SelectItem>
-                            <SelectItem value="US$">US$</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          id="edit-price"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.price}
-                          onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
-                          className="flex-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Staff Assignment for Edit */}
-                  <div className="space-y-3">
-                    <Label>Staff Assignment</Label>
-                    <div className="border rounded-lg p-4 max-h-48 overflow-y-auto bg-muted/30">
-                      <div className="grid gap-2">
-                        {staffOptions.map((staff) => (
-                          <div key={staff.value} className="flex items-center space-x-3 p-2 rounded border bg-background">
-                            <Checkbox
-                              id={`edit-staff-${staff.value}`}
-                              checked={formData.selectedStaff.includes(staff.value)}
-                              onCheckedChange={(checked) => 
-                                handleFormStaffSelection(staff.value, checked as boolean)
-                              }
-                            />
-                            <div className="flex-1">
-                              <label htmlFor={`edit-staff-${staff.value}`} className="text-sm font-medium cursor-pointer">
-                                {staff.name}
-                              </label>
-                              <p className="text-xs text-muted-foreground">{staff.email}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={updateService} disabled={updating} className="bg-primary">
-                  {updating ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Update Service
-                    </>
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+                  Edit Service
+                </SheetTitle>
+                <SheetDescription className="text-base text-muted-foreground">
+                  Update details for <span className="font-semibold text-foreground">{selectedService?.name}</span>
+                </SheetDescription>
+              </SheetHeader>
 
-          {/* Advanced Staff Management Dialog */}
-          <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  Staff Management
-                </DialogTitle>
-                <DialogDescription>
-                  Manage staff assignment for: <strong>{selectedService?.name}</strong>
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-3">
-                  <Label>Staff Members</Label>
-                  <div className="border rounded-lg p-3 max-h-60 overflow-y-auto bg-muted/30">
-                    {staffOptions.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-6">
-                        No staff members available
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {staffOptions.map((staff) => {
-                          const isCurrentlyAssigned = selectedService?.teamMembers?.some(member => member.userId === staff.value);
-                          return (
-                            <div key={staff.value} className="flex items-center space-x-3 p-2 rounded border bg-background">
-                              <Checkbox
-                                id={`staff-manage-${staff.value}`}
-                                checked={selectedStaffIds.includes(staff.value)}
-                                onCheckedChange={(checked) => 
-                                  handleStaffSelection(staff.value, checked as boolean)
-                                }
-                              />
-                              <div className="flex-1">
-                                <label htmlFor={`staff-manage-${staff.value}`} className="text-sm font-medium cursor-pointer">
-                                  {staff.name}
-                                </label>
-                                <p className="text-xs text-muted-foreground">{staff.email}</p>
-                              </div>
-                              {isCurrentlyAssigned && (
-                                <Badge variant="default" className="text-xs">
-                                  Currently Assigned
-                                </Badge>
-                              )}
-                            </div>
-                          );
-                        })}
+              <div className="flex flex-col h-full">
+                <div className="flex-1 space-y-8 overflow-y-auto pr-2">
+                  
+                  {/* Service Basic Information */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <SettingsIcon className="h-5 w-5 text-primary" />
+                      <h3 className="text-lg font-semibold">Service Information</h3>
+                    </div>
+                    
+                    <div className="space-y-5">
+                      <div className="space-y-3">
+                        <Label htmlFor="edit-name" className="text-base font-medium">Service Name *</Label>
+                        <Input
+                          id="edit-name"
+                          value={formData.name}
+                          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                          className="text-base h-11"
+                          placeholder="Enter service name..."
+                        />
                       </div>
-                    )}
+
+                      <div className="space-y-3">
+                        <Label htmlFor="edit-description" className="text-base font-medium">Service Description</Label>
+                        <Textarea
+                          id="edit-description"
+                          value={formData.description}
+                          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Describe what this service includes..."
+                          className="min-h-[120px] resize-none text-base"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing & Duration */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <DollarSign className="h-5 w-5 text-primary" />
+                      <h3 className="text-lg font-semibold">Pricing & Duration</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <Label htmlFor="edit-duration" className="text-base font-medium">Service Duration *</Label>
+                        <div className="flex gap-3">
+                          <Input
+                            id="edit-duration"
+                            type="number"
+                            min="5"
+                            max="480"
+                            value={formData.duration}
+                            onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+                            className="flex-1 h-11 text-base"
+                            placeholder="60"
+                          />
+                          <Select 
+                            value={formData.durationUnit} 
+                            onValueChange={(value) => setFormData(prev => ({ ...prev, durationUnit: value as 'mins' | 'hours' }))}
+                          >
+                            <SelectTrigger className="w-32 h-11">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="mins">Minutes</SelectItem>
+                              <SelectItem value="hours">Hours</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label htmlFor="edit-price" className="text-base font-medium">Service Price *</Label>
+                        <div className="flex gap-3">
+                          <Select 
+                            value={formData.currency} 
+                            onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
+                          >
+                            <SelectTrigger className="w-24 h-11">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CA$">CA$</SelectItem>
+                              <SelectItem value="US$">US$</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            id="edit-price"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.price}
+                            onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                            className="flex-1 h-11 text-base"
+                            placeholder="85.00"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Staff Assignment */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <Users className="h-5 w-5 text-primary" />
+                      <h3 className="text-lg font-semibold">Staff Assignment</h3>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-medium">Assigned Staff Members</Label>
+                        <Badge variant="secondary" className="text-sm">
+                          {formData.selectedStaff.length} selected
+                        </Badge>
+                      </div>
+                      
+                      <div className="border rounded-xl p-4 max-h-64 overflow-y-auto bg-muted/30">
+                        {staffOptions.length === 0 ? (
+                          <div className="text-center py-8">
+                            <Users className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
+                            <p className="text-muted-foreground font-medium">No staff members available</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {staffOptions.map((staff) => (
+                              <div key={staff.value} className="flex items-center space-x-4 p-3 rounded-lg border bg-background hover:bg-muted/50 transition-colors">
+                                <Checkbox
+                                  id={`edit-staff-${staff.value}`}
+                                  checked={formData.selectedStaff.includes(staff.value)}
+                                  onCheckedChange={(checked) => 
+                                    handleFormStaffSelection(staff.value, checked as boolean)
+                                  }
+                                  className="w-5 h-5"
+                                />
+                                <div className="flex-1">
+                                  <label htmlFor={`edit-staff-${staff.value}`} className="text-base font-medium cursor-pointer block">
+                                    {staff.name}
+                                  </label>
+                                  <p className="text-sm text-muted-foreground">{staff.email}</p>
+                                </div>
+                                <Badge variant="outline" className="text-xs">
+                                  Available
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0">
+                            <Users className="h-5 w-5 text-amber-600" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-semibold text-amber-900">Staff Assignment Required</h4>
+                            <p className="text-sm text-amber-700 mt-1">
+                              At least one staff member must be assigned to provide this service. Select qualified team members.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="border-t pt-6 mt-6">
+                  <div className="flex justify-between gap-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setEditDialogOpen(false)}
+                      className="px-6 h-11 text-base"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={updateService} 
+                      disabled={updating}
+                      className="bg-[#601625] hover:bg-[#751a29] px-8 h-11 text-base font-semibold"
+                    >
+                      {updating ? (
+                        <>
+                          <RefreshCw className="h-5 w-5 mr-3 animate-spin" />
+                          Updating Service...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-5 w-5 mr-3" />
+                          Update Service
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button variant="outline" onClick={() => setStaffDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={() => manageStaff('replace')} 
-                  disabled={assigningStaff}
-                  className="bg-primary"
-                >
-                  {assigningStaff ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Update Assignment
-                    </>
-                  )}
-                </Button>
+            </SheetContent>
+          </Sheet>
+
+          {/* Advanced Staff Management Sidebar */}
+          <Sheet open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
+            <SheetContent side="right" className="w-[480px] sm:w-[540px]">
+              <SheetHeader className="pb-6">
+                <SheetTitle className="flex items-center gap-3 text-xl">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
+                    <Users className="h-5 w-5 text-primary" />
+                  </div>
+                  Staff Management
+                </SheetTitle>
+                <SheetDescription className="text-base text-muted-foreground">
+                  Manage staff assignment for <span className="font-semibold text-foreground">{selectedService?.name}</span>
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="flex flex-col h-full">
+                <div className="flex-1 space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold">Available Staff Members</Label>
+                      <Badge variant="secondary" className="text-sm">
+                        {selectedStaffIds.length} selected
+                      </Badge>
+                    </div>
+                    
+                    <div className="border rounded-xl p-4 max-h-[calc(100vh-280px)] overflow-y-auto bg-muted/30">
+                      {staffOptions.length === 0 ? (
+                        <div className="text-center py-12">
+                          <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                          <p className="text-muted-foreground text-base font-medium">No staff members available</p>
+                          <p className="text-sm text-muted-foreground mt-2">Add staff members to assign them to services</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {staffOptions.map((staff) => {
+                            const isCurrentlyAssigned = selectedService?.teamMembers?.some(member => member.userId === staff.value);
+                            return (
+                              <div key={staff.value} className="flex items-center space-x-4 p-4 rounded-lg border-2 bg-background hover:bg-muted/50 transition-colors duration-200">
+                                <Checkbox
+                                  id={`staff-manage-${staff.value}`}
+                                  checked={selectedStaffIds.includes(staff.value)}
+                                  onCheckedChange={(checked) => 
+                                    handleStaffSelection(staff.value, checked as boolean)
+                                  }
+                                  className="w-5 h-5"
+                                />
+                                <div className="flex-1 space-y-1">
+                                  <label htmlFor={`staff-manage-${staff.value}`} className="text-base font-semibold cursor-pointer block">
+                                    {staff.name}
+                                  </label>
+                                  <p className="text-sm text-muted-foreground">{staff.email}</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2">
+                                  {isCurrentlyAssigned && (
+                                    <Badge variant="default" className="text-xs font-medium">
+                                      Currently Assigned
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-xs">
+                                    Available
+                                  </Badge>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0">
+                          <Users className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-blue-900">Staff Assignment Tips</h4>
+                          <p className="text-sm text-blue-700 mt-1">
+                            Select staff members who are qualified to provide this service. You can assign multiple staff members to increase availability.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="border-t pt-6 mt-6">
+                  <div className="flex justify-between gap-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setStaffDialogOpen(false)}
+                      className="px-6 h-11 text-base"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={() => manageStaff('replace')} 
+                      disabled={assigningStaff}
+                      className="bg-[#601625] hover:bg-[#751a29] px-8 h-11 text-base font-semibold"
+                    >
+                      {assigningStaff ? (
+                        <>
+                          <RefreshCw className="h-5 w-5 mr-3 animate-spin" />
+                          Updating Assignment...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-5 w-5 mr-3" />
+                          Update Assignment
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </DialogContent>
-          </Dialog>
+            </SheetContent>
+          </Sheet>
 
 
         </SidebarInset>
