@@ -1688,14 +1688,26 @@ export default function CalendarPage() {
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4 w-full">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Calendar</h1>
-              <Badge variant="secondary" className="ml-2">
-                <CalendarIcon className="h-3 w-3 mr-1" />
-                Appointments
-              </Badge>
+            <div className="flex items-center justify-between gap-2 px-4 w-full">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h1 className="text-xl font-semibold">Calendar</h1>
+                <Badge variant="secondary" className="ml-2">
+                  <CalendarIcon className="h-3 w-3 mr-1" />
+                  Appointments
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="h-8 bg-[#601625] hover:bg-[#751a29]" onClick={() => router.push('/walk-in')}>
+                  <UserIcon className="h-4 w-4 mr-2" />
+                  Walk-in
+                </Button>
+                <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Appointment
+                </Button>
+              </div>
             </div>
           </header>
 
@@ -1769,10 +1781,6 @@ export default function CalendarPage() {
                 >
                   <RefreshCcw className="h-4 w-4" />
                 </button>
-                <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Appointment
-                </Button>
               </div>
             </div>
 
