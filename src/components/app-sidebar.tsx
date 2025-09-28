@@ -73,15 +73,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         isActive: false,
       },
       {
-        title: "Appointments",
-        url: `${prefix}/appointments`,
-        icon: Clock,
-        isActive: false,
-      },
-      {
         title: "Calendar",
         url: `${prefix}/calendar`,
         icon: CalendarIcon,
+        isActive: false,
+      },
+      {
+        title: "Appointments",
+        url: `${prefix}/appointments`,
+        icon: Clock,
         isActive: false,
       },
       {

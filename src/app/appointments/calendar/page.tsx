@@ -5,7 +5,7 @@ import { RoleGuard } from "@/components/role-guard"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
@@ -144,34 +144,22 @@ function useAppointments() {
             // Check payment status by looking up transactions with proper paid status
             try {
               const transactionRes = await fetch(`/api/transactions?appointmentId=${booking.id}&limit=1`)
-              console.log(`Payment status check for ${booking.id}: Status ${transactionRes.status}`)
               if (transactionRes.ok) {
                 const transactionData = await transactionRes.json()
-                console.log(`Transaction data for ${booking.id}:`, transactionData)
                 if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
                   const transaction = transactionData.data[0]
-                  console.log(`Transaction details for ${booking.id}:`, {
-                    status: transaction.status,
-                    paymentStatus: transaction.paymentStatus,
-                    paid: transaction.paid,
-                    id: transaction.id
-                  })
                   // Check if transaction has paid status
                   if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true || transaction.paid === 'Yes') {
                     details.payment_status = 'paid'
-                    console.log(`✅ Appointment ${booking.id} marked as PAID`)
                   } else {
                     details.payment_status = 'pending'
-                    console.log(`⏳ Appointment ${booking.id} marked as PENDING`)
                   }
                 } else {
                   // No transaction found - still pending payment
                   details.payment_status = 'pending'
-                  console.log(`❌ No transaction found for ${booking.id}`)
                 }
               } else {
                 details.payment_status = 'pending'
-                console.log(`❌ API call failed for ${booking.id}: ${transactionRes.status}`)
               }
             } catch (error) {
               console.warn(`Failed to check payment status for booking ${booking.id}:`, error)
@@ -236,10 +224,12 @@ function formatDate(date: Date) {
 const StaffOverviewView = ({ 
   appointments, 
   user, 
+  currentDate,
   onAppointmentClick 
 }: { 
   appointments: Appointment[], 
   user: User | null,
+  currentDate: Date,
   onAppointmentClick: (appointment: Appointment) => void 
 }) => {
   const [staff, setStaff] = React.useState<{
@@ -363,7 +353,16 @@ const StaffOverviewView = ({
             ghl_id: barber.ghl_id,
             name: barber["Barber/Name"],
             email: barber["Barber/Email"],
-            role: 'barber'
+            role: 'barber',
+            workingHours: {
+              monday: { start: barber["Monday/Start Value"], end: barber["Monday/End Value"] },
+              tuesday: { start: barber["Tuesday/Start Value"], end: barber["Tuesday/End Value"] },
+              wednesday: { start: barber["Wednesday/Start Value"], end: barber["Wednesday/End Value"] },
+              thursday: { start: barber["Thursday/Start Value"], end: barber["Thursday/End Value"] },
+              friday: { start: barber["Friday/Start Value"], end: barber["Friday/End Value"] },
+              saturday: { start: barber["Saturday/Start Value"], end: barber["Saturday/End Value"] },
+              sunday: { start: barber["Sunday/Start Value"], end: barber["Sunday/End Value"] }
+            }
           }))
           
           // Filter staff based on user role
@@ -530,6 +529,58 @@ const StaffOverviewView = ({
     }
   }
 
+  // Helper function to get staff working hours for current day
+  const getStaffWorkingHours = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }> }) => {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+    const currentDayName = dayNames[currentDate.getDay()]
+    const workingDay = staffMember.workingHours?.[currentDayName]
+    
+    if (!workingDay || !workingDay.start || !workingDay.end || workingDay.start === 0 || workingDay.end === 0) {
+      return null // Day off or no working hours set
+    }
+
+    return {
+      start: Number(workingDay.start),
+      end: Number(workingDay.end)
+    }
+  }
+
+  // Helper function to get non-working time periods for a staff member
+  const getNonWorkingPeriods = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, name?: string }) => {
+    const workingHours = getStaffWorkingHours(staffMember)
+    if (!workingHours) {
+      // Entire day is off - grey out from 8AM to 8PM (our calendar range)
+      return [{
+        startMinutes: 8 * 60, // 8AM
+        endMinutes: 20 * 60   // 8PM
+      }]
+    }
+
+    const periods = []
+    const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
+    const dayEndMinutes = 20 * 60  // Calendar ends at 8PM
+    const workStartMinutes = workingHours.start * 60
+    const workEndMinutes = workingHours.end * 60
+    
+    // Before working hours (if work starts after 8AM)
+    if (workStartMinutes > dayStartMinutes) {
+      periods.push({
+        startMinutes: dayStartMinutes,
+        endMinutes: Math.min(workStartMinutes, dayEndMinutes)
+      })
+    }
+    
+    // After working hours (if work ends before 8PM)
+    if (workEndMinutes < dayEndMinutes) {
+      periods.push({
+        startMinutes: Math.max(workEndMinutes, dayStartMinutes),
+        endMinutes: dayEndMinutes
+      })
+    }
+    
+    return periods
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -644,7 +695,7 @@ const StaffOverviewView = ({
       </div>
 
       {/* Scrollable Time grid container */}
-      <div className="max-h-[600px] overflow-y-auto w-full pt-2 pb-6" ref={scrollContainerRef}>
+      <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0" ref={scrollContainerRef}>
         <div className="flex w-full" style={{ height: `${(timeSlots.length * 60) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[120px] border-r bg-muted/30 flex-shrink-0 relative">
@@ -697,6 +748,26 @@ const StaffOverviewView = ({
                       }}
                     />
                   ))}
+
+                  {/* Non-working hours grey overlay */}
+                  {getNonWorkingPeriods(staffMember).map((period, index) => {
+                    const startPosition = GRID_TOP_PADDING + ((period.startMinutes - (8 * 60)) / 60) * 60
+                    const endPosition = GRID_TOP_PADDING + ((period.endMinutes - (8 * 60)) / 60) * 60
+                    const height = endPosition - startPosition
+                    
+                    return (
+                      <div
+                        key={`non-working-${index}`}
+                        className="absolute left-0 right-0 bg-gray-200/40 pointer-events-none"
+                        style={{
+                          top: `${startPosition}px`,
+                          height: `${height}px`,
+                          zIndex: 1
+                        }}
+                        title={`${staffMember.name} is not working during this time`}
+                      />
+                    )
+                  })}
 
                   {/* Live time indicator */}
                   {(() => {
@@ -1588,142 +1659,134 @@ export default function CalendarPage() {
             </div>
           </header>
 
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-0 h-full overflow-hidden">
+          <div className="flex flex-1 flex-col h-full overflow-hidden">
             {/* Calendar Controls */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={navigatePrevious}
-                        className="h-9 w-9"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={navigateNext}
-                        className="h-9 w-9"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-2xl font-bold">{getCurrentPeriodLabel()}</h2>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={goToToday}
-                        className="text-xs"
-                      >
-                        Today
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    {/* View type selectors */}
-                    <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
-                      <Button
-                        variant={view === 'day' ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => setView('day')}
-                        className="h-7 text-xs"
-                      >
-                        Day
-                      </Button>
-                      <Button
-                        variant={view === 'month' ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => setView('month')}
-                        className="h-7 text-xs"
-                      >
-                        Month
-                      </Button>
-                      <Button
-                        variant={view === 'year' ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => setView('year')}
-                        className="h-7 text-xs"
-                      >
-                        Year
-                      </Button>
-                    </div>
-                    <button
-                      className="inline-flex h-8 w-8 items-center justify-center rounded border"
-                      title="Refresh (bypass cache)"
-                      onClick={() => refresh()}
-                    >
-                      <RefreshCcw className="h-4 w-4" />
-                    </button>
-                    <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      New Appointment
-                    </Button>
-                  </div>
+            <div className="flex items-center justify-between p-4 bg-background border-b">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={navigatePrevious}
+                    className="h-9 w-9"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={navigateNext}
+                    className="h-9 w-9"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-              </CardHeader>
-            </Card>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold">{getCurrentPeriodLabel()}</h2>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToToday}
+                    className="text-xs"
+                  >
+                    Today
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* View type selectors */}
+                <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
+                  <Button
+                    variant={view === 'day' ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setView('day')}
+                    className="h-7 text-xs"
+                  >
+                    Day
+                  </Button>
+                  <Button
+                    variant={view === 'month' ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setView('month')}
+                    className="h-7 text-xs"
+                  >
+                    Month
+                  </Button>
+                  <Button
+                    variant={view === 'year' ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setView('year')}
+                    className="h-7 text-xs"
+                  >
+                    Year
+                  </Button>
+                </div>
+                <button
+                  className="inline-flex h-8 w-8 items-center justify-center rounded border"
+                  title="Refresh (bypass cache)"
+                  onClick={() => refresh()}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </button>
+                <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Appointment
+                </Button>
+              </div>
+            </div>
 
             {/* Calendar Views */}
             {loading ? (
-              <Card>
-                <CardContent className="p-6">
-                  <Skeleton className="h-96 w-full" />
-                </CardContent>
-              </Card>
+              <div className="flex-1 p-4">
+                <Skeleton className="h-full w-full min-h-[calc(100vh-200px)]" />
+              </div>
             ) : (
               <>
                 {/* Day View */}
                 {view === 'day' && (
-                  <Card className="flex-1">
-                    <CardContent className="p-6 h-full">
-                      {isSalonDayOff(currentDate) ? (
-                        <div className="text-center py-12 text-red-600">
-                          <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p className="font-medium">Salon is closed today</p>
-                          <p className="text-sm text-muted-foreground mt-2">No bookings available</p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Staff View Only */}
-                          {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
-                            <StaffOverviewView 
-                              appointments={dayAppointments} 
-                              user={user} 
-                              onAppointmentClick={(appointment) => {
-                                setSelectedAppointment(appointment)
-                                setDetailsOpen(true)
-                              }}
-                            />
-                          ) : (
-                            <div className="text-center py-12 text-muted-foreground">
-                              <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                              <p>Access restricted. Please contact your administrator.</p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <div className="flex-1 h-full">
+                    {isSalonDayOff(currentDate) ? (
+                      <div className="text-center py-12 text-red-600 h-full flex flex-col items-center justify-center">
+                        <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="font-medium">Salon is closed today</p>
+                        <p className="text-sm text-muted-foreground mt-2">No bookings available</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Staff View Only */}
+                        {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'barber') ? (
+                          <StaffOverviewView 
+                            appointments={dayAppointments} 
+                            user={user} 
+                            currentDate={currentDate}
+                            onAppointmentClick={(appointment) => {
+                              setSelectedAppointment(appointment)
+                              setDetailsOpen(true)
+                            }}
+                          />
+                        ) : (
+                          <div className="text-center py-12 text-muted-foreground h-full flex flex-col items-center justify-center">
+                            <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>Access restricted. Please contact your administrator.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {/* Month View */}
                 {view === 'month' && (
-                  <Card>
-                    <CardContent className="p-6">
-                      {/* Weekday Headers */}
-                      <div className="grid grid-cols-7 gap-1 mb-2">
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                          <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
-                            {day}
-                          </div>
-                        ))}
-                      </div>
+                  <div className="flex-1 p-4 h-full overflow-auto">
+                    {/* Weekday Headers */}
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                        <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
                       
                       {/* Calendar Grid */}
                       <div className="grid grid-cols-7 gap-1">
@@ -1795,15 +1858,13 @@ export default function CalendarPage() {
                           </div>
                         ))}
                       </div>
-                    </CardContent>
-                  </Card>
+                  </div>
                 )}
 
                 {/* Year View */}
                 {view === 'year' && (
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className="flex-1 p-4 h-full overflow-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {yearMonths.map((month) => (
                           <div
                             key={month.value}
@@ -1857,9 +1918,8 @@ export default function CalendarPage() {
                             </div>
                           </div>
                         ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
               </>
             )}
