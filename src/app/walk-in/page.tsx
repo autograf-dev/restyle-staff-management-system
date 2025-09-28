@@ -155,6 +155,17 @@ export default function WalkInPage() {
     return Crown
   }
 
+  // Extract price from HTML description
+  const extractPriceFromDescription = (description: string): number => {
+    try {
+      // Look for CA$XX.XX pattern in the HTML
+      const priceMatch = description.match(/CA\$(\d+\.?\d*)/)
+      return priceMatch ? parseFloat(priceMatch[1]) : 0
+    } catch {
+      return 0
+    }
+  }
+
   // Customer search function
   const searchCustomers = async (searchTerm: string) => {
     if (!searchTerm.trim()) {
@@ -251,14 +262,16 @@ export default function WalkInPage() {
             }
           }
           
+          const price = extractPriceFromDescription(service.description || '')
+          console.log(`Service: ${service.name || service.title}, Price from description: ${price}, Original price: ${service.servicePrice || service.price}`)
           servicesByCategory[category].push({
             id: service.id,
             name: service.name || service.title || 'Service',
-            price: service.servicePrice || service.price || 0,
+            price: price || service.servicePrice || service.price || 0,
             duration: service.durationMinutes || service.duration || 60,
             description: service.description || '',
             title: service.title,
-            servicePrice: service.servicePrice || service.price,
+            servicePrice: price || service.servicePrice || service.price,
             durationMinutes: service.durationMinutes || service.duration,
             teamMembers: service.teamMembers || []
           })
