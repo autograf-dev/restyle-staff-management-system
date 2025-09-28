@@ -1744,8 +1744,9 @@ function BookingsPageInner() {
               </SheetHeader>
               
               {selected && (
-                <div className="mt-6 space-y-6">
-                  <div className="grid gap-4">
+                <div className="space-y-6">
+                  {/* Appointment Details Card */}
+                  <div className="p-5 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border border-[#601625]/20 rounded-2xl space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Status</label>
@@ -1763,17 +1764,17 @@ function BookingsPageInner() {
 
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Start Time</label>
-                      <p className="mt-1 text-sm">{formatDateTime(selected.startTime)}</p>
+                      <p className="mt-1 text-sm font-medium text-[#601625]">{formatDateTime(selected.startTime)}</p>
                     </div>
 
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">End Time</label>
-                      <p className="mt-1 text-sm">{formatDateTime(selected.endTime)}</p>
+                      <p className="mt-1 text-sm font-medium text-[#601625]">{formatDateTime(selected.endTime)}</p>
                     </div>
 
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Customer</label>
-                      <p className="mt-1 text-sm font-medium">{selected.contactName || 'Unknown Customer'}</p>
+                      <p className="mt-1 text-sm font-medium text-[#601625]">{selected.contactName || 'Unknown Customer'}</p>
                       {selected.contactPhone && (
                         <p className="text-sm text-muted-foreground">{selected.contactPhone}</p>
                       )}
@@ -1781,12 +1782,10 @@ function BookingsPageInner() {
 
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Assigned Staff</label>
-                      <p className="mt-1 text-sm">
+                      <p className="mt-1 text-sm font-medium text-[#601625]">
                         {`${selected.assignedStaffFirstName || ''} ${selected.assignedStaffLastName || ''}`.trim() || (selected.assigned_user_id ? 'Assigned Staff' : 'Any available staff')}
-                </p>
-              </div>
-
-
+                      </p>
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
