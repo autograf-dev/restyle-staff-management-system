@@ -635,23 +635,23 @@ const StaffOverviewView = ({
   }
 
   return (
-    <div className="space-y-2">
-{(user?.role === 'admin' || user?.role === 'manager') && (
-  <div className="w-2/3 max-w-md">
-    <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 rounded-lg border border-[#601625]/20 p-3 overflow-x-auto">
-      <div className="flex items-center gap-1.5 min-w-max">
-        {staff.map((staffMember, index) => (
-          <div 
-            key={index}
-            className="h-2 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full w-8 flex-shrink-0 border border-[#601625]/10"
-            title={staffMember.name}
-          />
-        ))}
-      </div>
-    </div>
-  </div>
-)}
+    <div className="space-y-1">
     <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full max-w-[95vw] mx-auto">
+      
+      {/* Horizontal Scrolling Navigation - Moved to top */}
+      {(user?.role === 'admin' || user?.role === 'manager') && (
+        <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 p-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            {staff.map((staffMember, index) => (
+              <div 
+                key={index}
+                className="h-1.5 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full w-6 flex-shrink-0 border border-[#601625]/10"
+                title={staffMember.name}
+              />
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Header - Sticky time column + scrollable staff columns */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
@@ -2052,7 +2052,7 @@ export default function CalendarPage() {
                         </Button>
                         <Button 
                           variant="outline"
-                          className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => handleCancelAppointment(selectedAppointment)}
                           disabled={
                             selectedAppointment.appointment_status === 'cancelled' || 
@@ -2096,7 +2096,7 @@ export default function CalendarPage() {
                 <Button 
                   onClick={confirmCancelAppointment}
                   disabled={cancelLoading}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 font-medium"
+                  className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white rounded-xl py-2.5 font-medium"
                 >
                   {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
                 </Button>
