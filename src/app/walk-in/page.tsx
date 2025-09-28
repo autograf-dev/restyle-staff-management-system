@@ -50,6 +50,15 @@ interface Customer {
   fullName: string
 }
 
+interface ContactResponse {
+  id: string | number
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  contactName?: string
+}
+
 interface Staff {
   ghl_id: string
   name: string
@@ -156,7 +165,7 @@ export default function WalkInPage() {
       if (!res.ok) throw new Error("Failed to fetch customers")
       const json = await res.json()
       
-      const formattedCustomers = json.contacts?.map((contact: any) => ({
+      const formattedCustomers = json.contacts?.map((contact: ContactResponse) => ({
         id: String(contact.id),
         firstName: contact.firstName || '',
         lastName: contact.lastName || '',
