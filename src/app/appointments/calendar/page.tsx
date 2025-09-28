@@ -635,29 +635,63 @@ const StaffOverviewView = ({
   }
 
   return (
-    <div className="space-y-1">
-    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full max-w-[95vw] mx-auto">
+    <div className="space-y-3">
+    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full">
       
-      {/* Horizontal Scrolling Navigation - Moved to top */}
+      {/* Horizontal scrolling navigation - moved to top of calendar */}
       {(user?.role === 'admin' || user?.role === 'manager') && (
-        <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 p-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {staff.map((staffMember, index) => (
+        <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 p-2 flex items-center gap-3">
+          <button
+            className="h-6 w-6 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0"
+            onClick={() => {
+              const delta = -columnWidth*3
+              const h = headerScrollRef.current
+              const b = columnsScrollRef.current
+              if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
+              if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
+            }}
+            aria-label="Scroll left"
+          >
+            <ArrowLeft className="h-3 w-3" />
+          </button>
+          
+          <div className="flex-1 flex items-center gap-1 px-1">
+            {staff.slice(0, 8).map((_, index) => (
               <div 
                 key={index}
-                className="h-1.5 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full w-6 flex-shrink-0 border border-[#601625]/10"
-                title={staffMember.name}
+                className="h-1.5 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full flex-1 cursor-pointer hover:from-[#601625]/40 hover:to-[#751a29]/40 transition-all duration-200 border border-[#601625]/10"
+                onClick={() => {
+                  const scrollPosition = (index * columnWidth * staff.length) / 8
+                  const h = headerScrollRef.current
+                  const b = columnsScrollRef.current
+                  if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+                  if (b) b.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+                }}
               />
             ))}
           </div>
+          
+          <button
+            className="h-6 w-6 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0"
+            onClick={() => {
+              const delta = columnWidth*3
+              const h = headerScrollRef.current
+              const b = columnsScrollRef.current
+              if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
+              if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
+            }}
+            aria-label="Scroll right"
+          >
+            <ArrowRight className="h-3 w-3" />
+          </button>
         </div>
       )}
       
       {/* Header - Sticky time column + scrollable staff columns */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
         {/* Sticky Time Header */}
-        <div className="w-[80px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-[#601625]/10 flex items-center justify-center flex-shrink-0 text-[#601625]">
-          <Clock className="h-4 w-4" />
+        <div className="w-[120px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-[#601625]/10 flex items-center justify-center flex-shrink-0 text-[#601625]">
+          
         </div>
         
         {/* Scrollable Staff Headers */}
@@ -691,7 +725,7 @@ const StaffOverviewView = ({
       </div>
 
       {/* Scrollable Time grid container */}
-      <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0 max-h-[calc(100vh-280px)]" ref={scrollContainerRef}>
+      <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0" ref={scrollContainerRef}>
         <div className="flex w-full" style={{ height: `${(timeSlots.length * 60) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
@@ -2052,7 +2086,7 @@ export default function CalendarPage() {
                         </Button>
                         <Button 
                           variant="outline"
-                          className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => handleCancelAppointment(selectedAppointment)}
                           disabled={
                             selectedAppointment.appointment_status === 'cancelled' || 
@@ -2096,7 +2130,7 @@ export default function CalendarPage() {
                 <Button 
                   onClick={confirmCancelAppointment}
                   disabled={cancelLoading}
-                  className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white rounded-xl py-2.5 font-medium"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 font-medium"
                 >
                   {cancelLoading ? "Cancelling..." : "Cancel Appointment"}
                 </Button>

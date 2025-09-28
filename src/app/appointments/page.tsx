@@ -1731,17 +1731,17 @@ function BookingsPageInner() {
             </Card>
           </div>
 
-          {/* Appointment Details Modal */}
-          <ConfirmDialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <ConfirmContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <ConfirmHeader>
-                <ConfirmTitle>
+          {/* Appointment Details Sidebar */}
+          <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <SheetContent side="right" className="w-full sm:max-w-lg bg-white">
+              <SheetHeader className="pb-4">
+                <SheetTitle className="text-lg font-semibold text-[#601625]">
                   {selected?.serviceName || selected?.title || 'Appointment Details'}
-                </ConfirmTitle>
-                <div className="text-sm text-muted-foreground">
-                  Appointment ID: {selected?.id}
-                </div>
-              </ConfirmHeader>
+                </SheetTitle>
+                <SheetDescription className="text-gray-600">
+                  View and manage this appointment
+                </SheetDescription>
+              </SheetHeader>
               
               {selected && (
                 <div className="mt-6 space-y-6">
@@ -1786,15 +1786,7 @@ function BookingsPageInner() {
                 </p>
               </div>
 
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
-                      <p className="mt-1 text-sm">{selected.address || 'Not specified'}</p>
-            </div>
 
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Recurring</label>
-                      <p className="mt-1 text-sm">{selected.is_recurring ? 'Yes' : 'No'}</p>
-          </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -1810,7 +1802,7 @@ function BookingsPageInner() {
                               handleCancelBooking(selected)
                             }}
                             disabled={isWithinTwoHours(selected.startTime)}
-                            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white border-orange-500"
+                            className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white border-[#601625]"
                           >
                             Cancel
                           </Button>
@@ -1824,7 +1816,7 @@ function BookingsPageInner() {
                               handleRescheduleBooking(selected)
                             }}
                             disabled={isWithinTwoHours(selected.startTime)}
-                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white border-blue-500"
+                            className="flex-1 bg-[#751a29] hover:bg-[#5e1521] text-white border-[#751a29]"
                           >
                             Reschedule
                           </Button>
@@ -1836,7 +1828,7 @@ function BookingsPageInner() {
                             setDetailsOpen(false)
                             handleDeleteBooking(selected)
                           }}
-                          className="flex-1 bg-red-500 hover:bg-red-600 text-white border-red-500"
+                          className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white border-[#601625]"
                         >
                           Delete
                         </Button>
@@ -1852,8 +1844,8 @@ function BookingsPageInner() {
                   </div>
                 </div>
               )}
-            </ConfirmContent>
-          </ConfirmDialog>
+            </SheetContent>
+          </Sheet>
 
           {/* Cancel Confirmation Dialog */}
           <ConfirmDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
