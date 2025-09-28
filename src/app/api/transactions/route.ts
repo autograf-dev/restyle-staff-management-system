@@ -135,7 +135,7 @@ export async function GET(req: Request) {
     // Filter by appointment ID if provided
     if (appointmentId) {
       console.log(`🔍 Searching for appointmentId: ${appointmentId}`)
-      query = query.eq('Booking/ID', appointmentId)
+      query = query.eq('"Booking/ID"', appointmentId)
     }
 
     const { data, error } = await query
