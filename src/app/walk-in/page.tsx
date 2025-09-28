@@ -12,8 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator as UISeparator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { 
   DollarSign, 
   Clock, 
@@ -24,8 +23,6 @@ import {
   Loader2,
   Receipt,
   Users,
-  Phone,
-  Wallet,
   Plus,
   Scissors,
   Sparkles,
@@ -35,12 +32,7 @@ import {
   Flame,
   Star,
   Gem,
-  X,
   CheckCircle,
-  CheckCircle2,
-  Calendar as CalendarIcon,
-  Edit,
-  RefreshCw,
   Trash2
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
@@ -63,23 +55,6 @@ interface ContactResponse {
   email?: string
   phone?: string
   contactName?: string
-}
-
-interface ServiceResponse {
-  id: string
-  name?: string
-  title?: string
-  description?: string
-  category?: string
-  servicePrice?: number
-  price?: number
-  durationMinutes?: number
-  duration?: number
-  teamMembers?: Array<{
-    userId: string
-    priority: number
-    selected: boolean
-  }>
 }
 
 interface Staff {
@@ -116,17 +91,6 @@ interface GroupServices {
   [groupId: string]: Service[]
 }
 
-interface PricingBreakdown {
-  subtotal: number
-  tipAmount: number
-  taxes: {
-    gst: { rate: number; amount: number }
-    totalTax: number
-  }
-  totalAmount: number
-  currency: string
-}
-
 interface TipDistribution {
   staffName: string
   sharePercentage: number
@@ -140,7 +104,6 @@ export default function WalkInPage() {
   
   // State
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [selectedServices, setSelectedServices] = useState<Array<{
     service: Service
@@ -154,7 +117,6 @@ export default function WalkInPage() {
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   
   // Loading states
-  const [loading, setLoading] = useState(true)
   const [loadingGroups, setLoadingGroups] = useState(false)
   const [processingCheckout, setProcessingCheckout] = useState(false)
   const [loadingCustomers, setLoadingCustomers] = useState(false)
@@ -234,8 +196,8 @@ export default function WalkInPage() {
       const data = await response.json()
       if (data.success && Array.isArray(data.users)) {
         const staff = data.users
-          .filter((user: any) => user.role === 'staff' || user.role === 'admin')
-          .map((user: any) => ({
+          .filter((user: { role: string }) => user.role === 'staff' || user.role === 'admin')
+          .map((user: { ghl_id: string; name?: string; firstName?: string; lastName?: string }) => ({
             ghl_id: user.ghl_id,
             name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim()
           }))
@@ -261,7 +223,18 @@ export default function WalkInPage() {
         const groupNames: Group[] = []
         const servicesByCategory: GroupServices = {}
         
-        services.forEach((service: any) => {
+        services.forEach((service: { 
+          id: string;
+          name?: string;
+          title?: string;
+          category?: string;
+          price?: number;
+          servicePrice?: number;
+          duration?: number;
+          durationMinutes?: number;
+          description?: string;
+          teamMembers?: Array<{ userId: string; priority: number; selected: boolean }>;
+        }) => {
           const category = service.category || 'General Services'
           
           if (!servicesByCategory[category]) {
@@ -476,7 +449,6 @@ export default function WalkInPage() {
   useEffect(() => {
     fetchGroups()
     fetchStaffData()
-    setLoading(false)
   }, [])
 
   // Handle customer search
@@ -680,7 +652,7 @@ export default function WalkInPage() {
                                           <div className="text-center py-12">
                                             <AlertCircle className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
                                             <h3 className="text-lg font-semibold text-neutral-700 mb-2">No services found</h3>
-                                            <p className="text-neutral-500">This category doesn't have any services yet.</p>
+                                            <p className="text-neutral-500">This category doesn&apos;t have any services yet.</p>
                                           </div>
                                         )
                                       ) : (
@@ -794,7 +766,7 @@ export default function WalkInPage() {
                       <div className="text-center py-8 text-neutral-500">
                         <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         <p>No services added yet</p>
-                        <p className="text-sm">Click "Add Service" to get started</p>
+                                                      <p className="text-sm">Click &quot;Add Service&quot; to get started</p>
                       </div>
                     )}
                   </CardContent>
