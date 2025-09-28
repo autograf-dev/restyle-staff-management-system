@@ -1,874 +1,630 @@
 "use client"
 
 import { AppSidebar } from "@/components/app-sidebar"
-import { RoleGuard } from "@/components/role-guard"
-import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import { RoleGuard } from "@/components/role-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator as UISeparator } from "@/components/ui/separator"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { 
+  Users, 
+  Plus, 
   DollarSign, 
   Clock, 
-  User as UserIcon, 
   CreditCard,
-  ArrowLeft,
-  AlertCircle,
-  Loader2,
-  Receipt,
-  Users,
-  Phone,
-  Wallet,
-  Plus,
-  Scissors,
-  Sparkles,
-  Heart,
-  Crown,
-  Zap,
-  Flame,
-  Star,
-  Gem,
-  X,
+  CheckCircle2,
+  User,
+  Trash2,
+  RefreshCw
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { useUser } from "@/contexts/user-context"
+import { useRouter } from "next/navigation"
 
+// Interfaces matching the services tab exactly
 interface Customer {
   id: string
   firstName: string
   lastName: string
-  email: string
-  phone?: string
-  fullName: string
-}
-
-interface ContactResponse {
-  id: string | number
-  firstName?: string
-  lastName?: string
   email?: string
   phone?: string
-  contactName?: string
-}
-
-interface ServiceResponse {
-  id: string
-  name?: string
-  title?: string
-  description?: string
-  category?: string
-  servicePrice?: number
-  price?: number
-  durationMinutes?: number
-  duration?: number
-  teamMembers?: Array<{
-    userId: string
-    priority: number
-    selected: boolean
-  }>
-}
-
-interface Staff {
-  ghl_id: string
-  name: string
-  email?: string
+  fullName?: string
 }
 
 interface Service {
   id: string
   name: string
-  price: number
-  duration: number
   description?: string
-  title?: string
-  servicePrice?: number
-  durationMinutes?: number
-  teamMembers?: Array<{
-    userId: string
-    priority: number
-    selected: boolean
-  }>
+  slotDuration?: number
+  slotDurationUnit?: 'mins' | 'hours'
+  duration?: number
+  teamMembers?: { userId: string; name?: string }[]
 }
 
-interface Group {
+interface ServiceResponse {
+  success: boolean
+  calendars: Service[]
+}
+
+interface Staff {
+  value: string
+  label: string
   id: string
   name: string
-  description: string
-  slug: string
-  isActive: boolean
+  email: string
 }
 
-interface GroupServices {
-  [groupId: string]: Service[]
-}
-
-interface PricingBreakdown {
-  subtotal: number
-  tipAmount: number
-  taxes: {
-    gst: { rate: number; amount: number }
-    totalTax: number
-  }
-  totalAmount: number
-  currency: string
+interface SelectedService {
+  service: Service
+  staff: Staff
+  price: number
 }
 
 export default function WalkInPage() {
   const router = useRouter()
-  
-  // State
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
-  const [selectedService, setSelectedService] = useState<Service | null>(null)
-  const [selectedServices, setSelectedServices] = useState<Array<{
-    service: Service
-    staff: Staff
-    id: string
-  }>>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [staffData, setStaffData] = useState<Array<{ ghl_id: string; name: string }>>([])
-  const [groups, setGroups] = useState<Group[]>([])
-  const [groupServices, setGroupServices] = useState<GroupServices>({})
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('')
-  
-  // Loading states
-  const [loading, setLoading] = useState(true)
-  const [loadingGroups, setLoadingGroups] = useState(false)
-  const [processingCheckout, setProcessingCheckout] = useState(false)
-  
-  // Form state
-  const [tipPercentage, setTipPercentage] = useState(18)
-  const [customTipAmount, setCustomTipAmount] = useState('')
-  const [useCustomTip, setUseCustomTip] = useState(false)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
+
+  // Customer search and selection
   const [customerSearch, setCustomerSearch] = useState('')
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [loadingCustomers, setLoadingCustomers] = useState(false)
 
-  // Get icon for group
-  const getGroupIcon = (groupName: string) => {
-    const name = groupName.toLowerCase()
-    if (name.includes('bridal')) return Crown
-    if (name.includes('facial')) return Sparkles
-    if (name.includes('gents')) return UserIcon
-    if (name.includes('ladies')) return Heart
-    if (name.includes('laser')) return Zap
-    if (name.includes('threading')) return Scissors
-    if (name.includes('waxing')) return Flame
-    return Star
-  }
+  // Services - using exact same approach as services tab
+  const [services, setServices] = useState<Service[]>([])
+  const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
+  const [loadingServices, setLoadingServices] = useState(true)
 
-  // Get icon for service
-  const getServiceIcon = (serviceName: string) => {
-    const name = serviceName.toLowerCase()
-    if (name.includes('makeup')) return Sparkles
-    if (name.includes('hair')) return Scissors
-    if (name.includes('facial')) return Heart
-    if (name.includes('massage')) return Gem
-    if (name.includes('nail')) return Star
-    return Crown
-  }
+  // Staff - using exact same approach as services tab
+  const [availableStaff, setAvailableStaff] = useState<Staff[]>([])
 
-  // Fetch customers from the same endpoint as customer page
-  const fetchCustomers = async () => {
-    try {
-      const res = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=1')
-      if (!res.ok) throw new Error("Failed to fetch customers")
-      const json = await res.json()
-      
-      const formattedCustomers = json.contacts?.map((contact: ContactResponse) => ({
-        id: String(contact.id),
-        firstName: contact.firstName || '',
-        lastName: contact.lastName || '',
-        email: contact.email || '',
-        phone: contact.phone,
-        fullName: contact.contactName || `${contact.firstName || ''} ${contact.lastName || ''}`.trim()
-      })) || []
-      
-      setCustomers(formattedCustomers)
-    } catch (error) {
-      console.error('Error fetching customers:', error)
-      toast.error('Error loading customers')
-    }
-  }
+  // Service selection dialog
+  const [showServiceDialog, setShowServiceDialog] = useState(false)
+  const [tempSelectedService, setTempSelectedService] = useState<Service | null>(null)
+  const [tempSelectedStaff, setTempSelectedStaff] = useState<Staff | null>(null)
 
-  // Fetch staff data (same as checkout)
-  const fetchStaffData = async () => {
-    try {
-      const response = await fetch('/api/barber-hours')
-      if (!response.ok) throw new Error('Failed to fetch staff data')
-      const result = await response.json()
-      
-      if (result.ok && result.data) {
-        const staff = result.data.map((barber: { ghl_id: string; 'Barber/Name': string }) => ({
-          ghl_id: barber['ghl_id'],
-          name: barber['Barber/Name']
-        }))
-        setStaffData(staff)
-      }
-    } catch (error) {
-      console.error('Error fetching staff data:', error)
-      toast.error('Error loading staff')
-    }
-  }
+  // Tip and pricing
+  const [tipPercentage, setTipPercentage] = useState(18)
+  const [useCustomTip, setUseCustomTip] = useState(false)
+  const [customTipAmount, setCustomTipAmount] = useState('')
 
-  // Fetch services using the working Netlify function (same as services page)
+  // Processing
+  const [processing, setProcessing] = useState(false)
+
+  // Fetch services using EXACT same approach as services tab
   const fetchServices = async () => {
     try {
-      setLoadingGroups(true)
+      setLoadingServices(true)
       const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getAllServices')
-      if (!response.ok) throw new Error('Failed to fetch services')
       
-      const result = await response.json()
-      if (result.success && result.services) {
-        // Group services by category/type for better organization
-        const serviceGroups: { [key: string]: Service[] } = {}
-        const groupNames: Group[] = []
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result: ServiceResponse = await response.json()
+      
+      if (result.success) {
+        const servicesData = result.calendars || []
         
-        result.services.forEach((service: ServiceResponse) => {
-          // Create a simple category grouping
-          const category = service.category || 'General Services'
-          if (!serviceGroups[category]) {
-            serviceGroups[category] = []
-            // Add to groups list if not already there
-            if (!groupNames.find(g => g.name === category)) {
-              groupNames.push({
-                id: category.toLowerCase().replace(/\s+/g, '-'),
-                name: category,
-                description: `${category} services`,
-                slug: category.toLowerCase().replace(/\s+/g, '-'),
-                isActive: true
-              })
-            }
-          }
-          
-          // Format service with required fields
-          serviceGroups[category].push({
-            id: service.id,
-            name: service.name || service.title || 'Unknown Service',
-            price: service.servicePrice || service.price || 0,
-            duration: service.durationMinutes || service.duration || 30,
-            description: service.description || '',
-            teamMembers: service.teamMembers || []
-          })
-        })
+        // Transform the data exactly like services tab
+        const transformedServices = servicesData.map((service) => ({
+          ...service,
+          duration: service.slotDuration ? (() => {
+            const duration = Number(service.slotDuration)
+            const unit = service.slotDurationUnit as string
+            return unit === 'hours' ? duration * 60 : duration
+          })() : 60
+        }))
         
-        setGroups(groupNames)
-        setGroupServices(serviceGroups)
-        
-        // Set first group as selected
-        if (groupNames.length > 0) {
-          setSelectedGroupId(groupNames[0].id)
-        }
+        setServices(transformedServices)
+        toast.success(`Loaded ${transformedServices.length} services`)
+      } else {
+        throw new Error('Failed to fetch services')
       }
     } catch (error) {
       console.error('Error fetching services:', error)
-      toast.error('Error loading services')
+      toast.error('Failed to load services')
+      setServices([])
     } finally {
-      setLoadingGroups(false)
+      setLoadingServices(false)
     }
   }
 
-  // Initialize data
-  useEffect(() => {
-    const initializeData = async () => {
-      setLoading(true)
-      try {
-        await Promise.all([
-          fetchCustomers(),
-          fetchStaffData(),
-          fetchServices()
-        ])
-      } catch (error) {
-        console.error('Error initializing data:', error)
-        toast.error('Failed to load data')
-      } finally {
-        setLoading(false)
+  // Fetch staff using EXACT same approach as services tab
+  const fetchAvailableStaff = async () => {
+    try {
+      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/getAvailableStaff')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
+      const result = await response.json()
+      
+      if (result.success && result.dropdownOptions) {
+        setAvailableStaff(result.dropdownOptions)
+        toast.success(`Loaded ${result.totalStaff} staff members`)
+      }
+    } catch (error) {
+      console.error('Error fetching available staff:', error)
+      toast.error('Failed to load staff options')
     }
-    
-    initializeData()
-  }, [])  // Fetch services for a group (same as checkout)
+  }
 
+  // Extract price from service description exactly like services tab
+  const getServicePrice = (service: Service): number => {
+    if (!service.description) return 0
+    const priceMatch = service.description.match(/CA\$(\d+(?:\.\d{2})?)/)
+    return priceMatch ? parseFloat(priceMatch[1]) : 0
+  }
 
-  // Add service to the list
-  const addServiceToList = () => {
-    if (!selectedService || !selectedStaff) {
-      toast.error('Please select both service and staff')
+  // Format duration exactly like services tab
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    if (hours > 0) {
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+    }
+    return `${mins}m`
+  }
+
+  // Customer search
+  const searchCustomers = async (query: string) => {
+    if (!query.trim()) {
+      setCustomers([])
       return
     }
 
-    const serviceId = `service_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-    const newServiceItem = {
-      service: selectedService,
-      staff: selectedStaff,
-      id: serviceId
+    setLoadingCustomers(true)
+    try {
+      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/searchContacts?query=${encodeURIComponent(query)}&limit=20`)
+      if (!response.ok) throw new Error('Failed to search customers')
+      
+      const data = await response.json()
+      const contacts = data.contacts || []
+      
+      const customerData = contacts.map((contact: {
+        id: string
+        firstName?: string
+        lastName?: string
+        email?: string
+        phone?: string
+      }) => ({
+        id: contact.id,
+        firstName: contact.firstName || '',
+        lastName: contact.lastName || '',
+        email: contact.email || '',
+        phone: contact.phone || '',
+        fullName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim()
+      }))
+      
+      setCustomers(customerData)
+    } catch (error) {
+      console.error('Error searching customers:', error)
+      toast.error('Failed to search customers')
+    } finally {
+      setLoadingCustomers(false)
     }
-
-    setSelectedServices(prev => [...prev, newServiceItem])
-    setSelectedService(null)
-    setSelectedStaff(null)
-    setSelectedGroupId('')
-    toast.success('Service added to checkout')
   }
 
-  // Remove service from list
-  const removeService = (serviceId: string) => {
-    setSelectedServices(prev => prev.filter(s => s.id !== serviceId))
-    toast.success('Service removed from checkout')
+  // Handle service selection
+  const handleAddService = () => {
+    if (!tempSelectedService || !tempSelectedStaff) {
+      toast.error('Please select both a service and staff member')
+      return
+    }
+
+    const price = getServicePrice(tempSelectedService)
+    
+    setSelectedServices(prev => [...prev, {
+      service: tempSelectedService,
+      staff: tempSelectedStaff,
+      price
+    }])
+    
+    setTempSelectedService(null)
+    setTempSelectedStaff(null)
+    setShowServiceDialog(false)
+    toast.success('Service added successfully')
+  }
+
+  // Remove service
+  const removeService = (index: number) => {
+    setSelectedServices(prev => prev.filter((_, i) => i !== index))
+    toast.success('Service removed')
   }
 
   // Calculate pricing
-  const calculatePricing = (): PricingBreakdown | null => {
-    if (selectedServices.length === 0) return null
-    
-    const subtotal = selectedServices.reduce((total, item) => total + item.service.price, 0)
-    const tipAmount = useCustomTip 
-      ? parseFloat(customTipAmount) || 0 
-      : (subtotal * tipPercentage) / 100
-    
-    const gstRate = 0.05 // 5% GST
-    const gstAmount = subtotal * gstRate
-    const totalTax = gstAmount
-    const totalAmount = subtotal + tipAmount + totalTax
-    
-    return {
-      subtotal,
-      tipAmount,
-      taxes: {
-        gst: { rate: gstRate, amount: gstAmount },
-        totalTax
-      },
-      totalAmount,
-      currency: 'CAD'
-    }
-  }
+  const subtotal = selectedServices.reduce((sum, item) => sum + item.price, 0)
+  const tipAmount = useCustomTip 
+    ? parseFloat(customTipAmount) || 0 
+    : (subtotal * tipPercentage) / 100
+  const gst = subtotal * 0.05 // 5% GST
+  const total = subtotal + tipAmount + gst
 
-  const pricing = calculatePricing()
-
-  // Filter customers based on search
-  const filteredCustomers = customers.filter(customer =>
-    customer.fullName.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    customer.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    (customer.phone && customer.phone.includes(customerSearch))
-  )
-
-  // Handle checkout
-  const handleCheckout = async () => {
-    if (!selectedCustomer || selectedServices.length === 0 || !pricing) {
-      toast.error('Please select customer and at least one service')
+  // Process walk-in checkout
+  const processWalkIn = async () => {
+    if (!selectedCustomer) {
+      toast.error('Please select a customer')
       return
     }
 
+    if (selectedServices.length === 0) {
+      toast.error('Please add at least one service')
+      return
+    }
+
+    setProcessing(true)
     try {
-      setProcessingCheckout(true)
+      const transactionId = crypto.randomUUID()
       
-      // Generate unique IDs
-      const transactionId = `walkin_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-      
-      // Calculate tip distribution across staff members
-      const staffTipDistribution = calculateTipDistribution()
-      
-      // Prepare service names and IDs
-      const serviceNames = selectedServices.map(s => s.service.name).join(', ')
-      const serviceIds = selectedServices.map(s => s.service.id).join(', ')
-      const staffNames = Array.from(new Set(selectedServices.map(s => s.staff.name))).join(', ')
-      
-      // Prepare transaction data
-      const transactionPayload = {
+      const items = selectedServices.map((item) => ({
+        id: crypto.randomUUID(),
+        serviceId: item.service.id,
+        serviceName: item.service.name,
+        price: item.price,
+        staffName: item.staff.name,
+        paymentId: transactionId
+      }))
+
+      const payload = {
         transaction: {
           id: transactionId,
-          bookingId: null, // No appointment ID for walk-ins
-          bookingServiceLookup: serviceNames,
-          bookingBookedRate: pricing.subtotal,
-          bookingCustomerPhone: selectedCustomer.phone || null,
-          bookingType: "Walk-in",
-          customerPhone: selectedCustomer.phone || null,
-          customerLookup: selectedCustomer.fullName,
           paymentDate: new Date().toISOString(),
-          method: selectedPaymentMethod === 'visa' ? 'Card' : 'Cash',
-          paymentSort: new Date().getTime(),
-          paymentStaff: staffNames,
-          subtotal: pricing.subtotal,
-          status: "Paid",
-          transactionServices: pricing.subtotal,
-          transactionServicesTotal: pricing.subtotal,
-          tax: pricing.taxes.totalTax,
-          totalPaid: pricing.totalAmount,
-          serviceNamesJoined: serviceNames,
-          serviceAcuityIds: serviceIds,
-          tip: pricing.tipAmount,
-          walkInCustomerId: selectedCustomer.id,
-          walkInPhone: selectedCustomer.phone || null,
-          transactionPaid: "Yes",
+          method: 'cash', // Default for walk-in
+          subtotal,
+          tax: gst,
+          tip: tipAmount,
+          totalPaid: total,
+          serviceNamesJoined: selectedServices.map(s => s.service.name).join(', '),
+          serviceAcuityIds: selectedServices.map(s => s.service.id).join(', '),
+          customerPhone: selectedCustomer.phone || null,
+          bookingType: 'Walk-in',
+          paymentStaff: selectedServices.map(s => s.staff.name).join(', '),
+          status: 'Paid',
         },
-        items: selectedServices.map((serviceItem) => {
-          const itemId = `item_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-          const staffTip = staffTipDistribution.find(dist => dist.staffName === serviceItem.staff.name)
-          
-          return {
-            id: itemId,
-            paymentId: transactionId,
-            staffName: serviceItem.staff.name,
-            staffTipSplit: staffTip?.tipAmount || 0,
-            staffTipCollected: staffTip?.tipAmount || 0,
-            serviceId: serviceItem.service.id,
-            serviceName: serviceItem.service.name,
-            price: serviceItem.service.price,
-          }
-        })
+        items,
+        meta: {
+          customerFirstName: selectedCustomer.firstName,
+          customerName: selectedCustomer.fullName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`,
+        }
       }
 
-      // Save transaction to Supabase
-      const persistRes = await fetch('/api/transactions', {
+      const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transactionPayload),
+        body: JSON.stringify(payload),
       })
 
-      if (!persistRes.ok) {
-        const err = await persistRes.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to save transaction')
-      }
+      if (!response.ok) throw new Error('Failed to process transaction')
 
-      // Cache for success page fallback
-      try {
-        sessionStorage.setItem(`tx:${transactionId}`, JSON.stringify(transactionPayload))
-      } catch {}
-
-      toast.success(`Walk-in transaction completed successfully! Total: $${pricing.totalAmount.toFixed(2)}`)
-      
-      // Redirect to success page
-      router.push(`/checkout/success?id=${transactionId}`)
+      toast.success('Walk-in processed successfully!')
+      router.push('/dashboard')
       
     } catch (error) {
-      console.error('Error processing walk-in checkout:', error)
-      toast.error('Failed to process walk-in checkout')
+      console.error('Error processing walk-in:', error)
+      toast.error('Failed to process walk-in')
     } finally {
-      setProcessingCheckout(false)
+      setProcessing(false)
     }
   }
 
-  // Calculate tip distribution across staff members
-  const calculateTipDistribution = () => {
-    if (selectedServices.length === 0 || !pricing) return []
+  useEffect(() => {
+    fetchServices()
+    fetchAvailableStaff()
+  }, [])
 
-    // Group services by staff
-    const servicesByStaff = selectedServices.reduce((acc, serviceItem) => {
-      const staffName = serviceItem.staff.name
-      if (!acc[staffName]) {
-        acc[staffName] = {
-          staffName,
-          services: [],
-          totalServicePrice: 0
-        }
-      }
-      acc[staffName].services.push(serviceItem)
-      acc[staffName].totalServicePrice += serviceItem.service.price
-      return acc
-    }, {} as Record<string, { staffName: string; services: Array<{service: Service; staff: Staff; id: string}>; totalServicePrice: number }>)
-
-    // Calculate tip distribution based on service price percentage
-    return Object.values(servicesByStaff).map(staffGroup => {
-      const sharePercentage = staffGroup.totalServicePrice / pricing.subtotal
-      const tipAmount = pricing.tipAmount * sharePercentage
-      
-      return {
-        staffName: staffGroup.staffName,
-        servicePrice: staffGroup.totalServicePrice,
-        sharePercentage: sharePercentage * 100,
-        tipAmount: tipAmount,
-        totalEarning: staffGroup.totalServicePrice + tipAmount
-      }
-    })
-  }
-
-  if (loading) {
-    return (
-      <RoleGuard>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <header className="flex h-14 items-center border-b bg-white/60 backdrop-blur px-4">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mx-2 h-4" />
-                <div className="flex items-center gap-2">
-                  <UserIcon className="h-5 w-5 text-[#7b1d1d]" />
-                  <h1 className="text-[15px] font-semibold tracking-tight">Walk-in</h1>
-                </div>
-              </div>
-              <div className="ml-auto">
-                <Button variant="outline" onClick={() => router.push('/calendar')} className="rounded-lg">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Calendar
-                </Button>
-              </div>
-            </header>
-            <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
-              <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
-                <Skeleton className="h-96 rounded-2xl" />
-              </div>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
-      </RoleGuard>
-    )
-  }
+  useEffect(() => {
+    if (customerSearch) {
+      const timer = setTimeout(() => searchCustomers(customerSearch), 300)
+      return () => clearTimeout(timer)
+    } else {
+      setCustomers([])
+    }
+  }, [customerSearch])
 
   return (
     <RoleGuard>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <div className="flex h-16 shrink-0 items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-            </div>
-          </div>
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Walk-in Processing</h1>
-                <p className="text-gray-600">Process walk-in customers quickly and efficiently</p>
+          {/* Header */}
+          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[data-collapsible=icon]/sidebar-wrapper:h-12">
+            <div className="flex items-center justify-between gap-2 px-4 w-full">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h1 className="text-xl font-semibold">Walk-in Checkout</h1>
               </div>
+            </div>
+          </header>
 
-              <div className="grid gap-6 lg:grid-cols-2">
-                {/* Customer Selection */}
-                <Card className="rounded-2xl border-neutral-200 shadow-none">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                      <Users className="h-5 w-5 text-[#7b1d1d]" />
-                      Select Customer
-                    </CardTitle>
-                    <CardDescription className="text-[13px]">Choose existing customer</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <div className="space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                          <Skeleton key={i} className="h-12 w-full" />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="relative">
-                          <Input
-                            placeholder="Search customers..."
-                            value={customerSearch}
-                            onChange={(e) => setCustomerSearch(e.target.value)}
-                            className="pl-4"
-                          />
-                        </div>
-                        
-                        <div className="max-h-60 overflow-y-auto space-y-2">
-                          {filteredCustomers.map((customer) => (
-                            <div
-                              key={customer.id}
-                              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                                selectedCustomer?.id === customer.id
-                                  ? 'border-[#7b1d1d] bg-[#7b1d1d]/10 shadow-sm'
-                                  : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
-                              }`}
-                              onClick={() => setSelectedCustomer(customer)}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-medium text-sm">{customer.fullName}</p>
-                                  <p className="text-xs text-gray-500">{customer.email}</p>
-                                  {customer.phone && (
-                                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                                      <Phone className="h-3 w-3" />
-                                      {customer.phone}
-                                    </p>
-                                  )}
-                                </div>
-                                {selectedCustomer?.id === customer.id && (
-                                  <div className="h-4 w-4 rounded-full bg-[#7b1d1d] flex items-center justify-center">
-                                    <div className="h-2 w-2 rounded-full bg-white" />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Services Selection */}
-                <Card className="rounded-2xl border-neutral-200 shadow-none">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                      <Scissors className="h-5 w-5 text-[#7b1d1d]" />
-                      Add Services
-                    </CardTitle>
-                    <CardDescription className="text-[13px]">Select services and assign staff</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <div className="space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                          <Skeleton key={i} className="h-12 w-full" />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {/* Service Group Selection */}
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Service Category</Label>
-                          <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select service category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {groups.map((group) => (
-                                <SelectItem key={group.id} value={group.id}>
-                                  {group.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Service Selection */}
-                        {selectedGroupId && (
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Service</Label>
-                            <Select 
-                              value={selectedService?.id || ''} 
-                              onValueChange={(value) => {
-                                const service = groupServices[selectedGroupId]?.find(s => s.id === value)
-                                setSelectedService(service || null)
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select service" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(groupServices[selectedGroupId] || []).map((service) => (
-                                  <SelectItem key={service.id} value={service.id}>
-                                    <div className="flex items-center justify-between w-full">
-                                      <span>{service.name}</span>
-                                      <span className="ml-2 text-sm text-gray-500">${service.price}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-
-                        {/* Staff Selection */}
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Assigned Staff</Label>
-                          <Select 
-                            value={selectedStaff?.ghl_id || ''} 
-                            onValueChange={(value) => {
-                              const staff = staffData.find(s => s.ghl_id === value)
-                              setSelectedStaff(staff ? { ...staff, email: undefined } : null)
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select staff member" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {staffData.map((staff) => (
-                                <SelectItem key={staff.ghl_id} value={staff.ghl_id}>
-                                  {staff.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Add Service Button */}
-                        <Button 
-                          onClick={addServiceToList}
-                          disabled={!selectedService || !selectedStaff}
-                          className="w-full bg-[#7b1d1d] hover:bg-[#601625]"
+          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+            <div className="space-y-6">
+              
+              {/* Customer Selection */}
+              <Card className="border-neutral-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5 text-[#7b1d1d]" />
+                    Customer Selection
+                  </CardTitle>
+                  <CardDescription>Search and select a customer for this walk-in service</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Search Customer</Label>
+                    <Input
+                      placeholder="Search by name, email, or phone..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  {loadingCustomers && (
+                    <div className="text-center py-4">
+                      <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                      <p>Searching customers...</p>
+                    </div>
+                  )}
+                  
+                  {customers.length > 0 && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {customers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          onClick={() => setSelectedCustomer(customer)}
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                            selectedCustomer?.id === customer.id
+                              ? 'bg-[#7b1d1d]/10 border-[#7b1d1d] shadow-sm'
+                              : 'border-neutral-200 hover:bg-neutral-50'
+                          }`}
                         >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Service
-                        </Button>
+                          <div className="font-medium">{customer.fullName || `${customer.firstName} ${customer.lastName}`}</div>
+                          <div className="text-sm text-neutral-600 space-x-3">
+                            {customer.email && <span>{customer.email}</span>}
+                            {customer.phone && <span>{customer.phone}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {selectedCustomer && (
+                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-800">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="font-medium">Selected Customer:</span>
+                        <span>{selectedCustomer.fullName || `${selectedCustomer.firstName} ${selectedCustomer.lastName}`}</span>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                {/* Selected Services */}
-                {selectedServices.length > 0 && (
-                  <Card className="rounded-2xl border-neutral-200 shadow-none lg:col-span-2">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-[#7b1d1d]" />
-                        Selected Services
-                      </CardTitle>
-                      <CardDescription className="text-[13px]">Review and modify selected services</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {selectedServices.map((item, index) => (
-                          <div key={item.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-xl">
-                            <div className="flex items-center gap-4">
-                              <div className="flex-1">
-                                <h4 className="font-medium text-sm">{item.service.name}</h4>
-                                <p className="text-xs text-gray-500">
-                                  {item.staff?.name} • {item.service.duration} min • ${item.service.price}
-                                </p>
+              {/* Service Selection */}
+              <Card className="border-neutral-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-[#7b1d1d]" />
+                    Services
+                  </CardTitle>
+                  <CardDescription>Add services for this walk-in appointment</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button 
+                    onClick={() => setShowServiceDialog(true)}
+                    className="bg-[#7b1d1d] hover:bg-[#6b1717]"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Service
+                  </Button>
+
+                  {selectedServices.length > 0 && (
+                    <div className="space-y-3">
+                      {selectedServices.map((item, index) => (
+                        <div key={index} className="p-4 border border-neutral-200 rounded-lg bg-white">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <div className="font-medium">{item.service.name}</div>
+                              <div className="text-sm text-neutral-600">
+                                with {item.staff.name} • {formatDuration(item.service.duration || 60)} • CA${item.price.toFixed(2)}
                               </div>
                             </div>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              onClick={() => removeService(item.id)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => removeService(index)}
+                              className="text-red-600 hover:bg-red-50"
                             >
-                              <X className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Pricing and Checkout Section */}
-                {selectedCustomer && selectedServices.length > 0 && pricing && (
-                  <Card className="rounded-2xl border-neutral-200 shadow-none lg:col-span-2">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
-                        Pricing Summary
-                      </CardTitle>
-                      <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      {/* Tip Selection */}
-                      <div className="space-y-3">
-                        <Label className="text-sm font-medium">Tip Amount</Label>
-                        <Tabs value={useCustomTip ? "custom" : "percentage"} onValueChange={(value) => setUseCustomTip(value === "custom")}>
-                          <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="percentage">Percentage</TabsTrigger>
-                            <TabsTrigger value="custom">Custom Amount</TabsTrigger>
-                          </TabsList>
-                          <TabsContent value="percentage" className="space-y-3">
-                            <div className="flex gap-2">
-                              {[15, 18, 20, 25].map((percent) => (
-                                <Button
-                                  key={percent}
-                                  variant={tipPercentage === percent ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => setTipPercentage(percent)}
-                                  className="flex-1"
-                                >
-                                  {percent}%
-                                </Button>
-                              ))}
-                            </div>
-                          </TabsContent>
-                          <TabsContent value="custom" className="space-y-3">
-                            <div className="relative">
-                              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                type="number"
-                                placeholder="0.00"
-                                value={customTipAmount}
-                                onChange={(e) => setCustomTipAmount(e.target.value)}
-                                className="pl-10"
-                              />
-                            </div>
-                          </TabsContent>
-                        </Tabs>
-                      </div>
-
-                      {/* Pricing Breakdown */}
-                      <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                        <div className="flex justify-between text-sm">
-                          <span>Service Price</span>
-                          <span>${pricing.subtotal.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Tip ({useCustomTip ? 'Custom' : `${tipPercentage}%`})</span>
-                          <span>${pricing.tipAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>GST ({(pricing.taxes.gst.rate * 100).toFixed(1)}%)</span>
-                          <span>${pricing.taxes.gst.amount.toFixed(2)}</span>
-                        </div>
-                        <UISeparator />
-                        <div className="flex justify-between font-semibold">
-                          <span>Total</span>
-                          <span>${pricing.totalAmount.toFixed(2)} {pricing.currency}</span>
-                        </div>
-                      </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                      {/* Payment Method */}
-                      <div className="space-y-3">
-                        <Label className="text-sm font-medium">Payment Method</Label>
-                        <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select payment method" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="visa">
-                              <div className="flex items-center gap-2">
-                                <CreditCard className="h-4 w-4" />
-                                Visa/Mastercard
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="cash">
-                              <div className="flex items-center gap-2">
-                                <Wallet className="h-4 w-4" />
-                                Cash
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+              {/* Pricing Summary */}
+              {selectedServices.length > 0 && (
+                <Card className="border-neutral-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
+                      Pricing Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>CA${subtotal.toFixed(2)}</span>
                       </div>
-
-                      {/* Checkout Button */}
-                      <Button 
-                        size="lg" 
-                        className="w-full bg-[#7b1d1d] hover:bg-[#601625]"
-                        onClick={handleCheckout}
-                        disabled={processingCheckout}
-                      >
-                        {processingCheckout ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <Receipt className="h-4 w-4 mr-2" />
-                            Complete Walk-in (${pricing.totalAmount.toFixed(2)})
-                          </>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label>Tip:</Label>
+                          <Select value={useCustomTip ? 'custom' : tipPercentage.toString()} onValueChange={(value) => {
+                            if (value === 'custom') {
+                              setUseCustomTip(true)
+                            } else {
+                              setUseCustomTip(false)
+                              setTipPercentage(parseInt(value))
+                            }
+                          }}>
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="15">15%</SelectItem>
+                              <SelectItem value="18">18%</SelectItem>
+                              <SelectItem value="20">20%</SelectItem>
+                              <SelectItem value="25">25%</SelectItem>
+                              <SelectItem value="custom">Custom</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {useCustomTip && (
+                          <Input
+                            type="number"
+                            placeholder="Enter custom tip amount"
+                            value={customTipAmount}
+                            onChange={(e) => setCustomTipAmount(e.target.value)}
+                            className="w-48"
+                          />
                         )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                        
+                        <div className="flex justify-between">
+                          <span>Tip Amount:</span>
+                          <span>CA${tipAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between">
+                        <span>GST (5%):</span>
+                        <span>CA${gst.toFixed(2)}</span>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div className="flex justify-between text-lg font-semibold">
+                        <span>Total:</span>
+                        <span>CA${total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Process Button */}
+              {selectedCustomer && selectedServices.length > 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    onClick={processWalkIn}
+                    disabled={processing}
+                    className="bg-green-600 hover:bg-green-700 px-8 py-3 text-lg"
+                  >
+                    {processing ? (
+                      <>
+                        <RefreshCw className="h-5 w-5 mr-3 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-5 w-5 mr-3" />
+                        Process Walk-in (CA${total.toFixed(2)})
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Service Selection Dialog */}
+          <Dialog open={showServiceDialog} onOpenChange={setShowServiceDialog}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add Service</DialogTitle>
+                <DialogDescription>Select a service and assign a staff member</DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label>Select Service</Label>
+                    {loadingServices ? (
+                      <div className="text-center py-8">
+                        <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+                        <p>Loading services...</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 max-h-60 overflow-y-auto mt-2">
+                        {services.map((service) => {
+                          const price = getServicePrice(service)
+                          return (
+                            <div
+                              key={service.id}
+                              onClick={() => setTempSelectedService(service)}
+                              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                                tempSelectedService?.id === service.id
+                                  ? 'bg-[#7b1d1d]/10 border-[#7b1d1d]'
+                                  : 'border-neutral-200 hover:bg-neutral-50'
+                              }`}
+                            >
+                              <div className="font-medium">{service.name}</div>
+                              <div className="text-sm text-neutral-600">
+                                {formatDuration(service.duration || 60)} • CA${price.toFixed(2)}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Select Staff Member</Label>
+                    <div className="grid gap-3 max-h-60 overflow-y-auto mt-2">
+                      {availableStaff.map((staff) => (
+                        <div
+                          key={staff.value}
+                          onClick={() => setTempSelectedStaff(staff)}
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                            tempSelectedStaff?.value === staff.value
+                              ? 'bg-[#7b1d1d]/10 border-[#7b1d1d]'
+                              : 'border-neutral-200 hover:bg-neutral-50'
+                          }`}
+                        >
+                          <div className="font-medium">{staff.name}</div>
+                          <div className="text-sm text-neutral-600">{staff.email}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <Button variant="outline" onClick={() => setShowServiceDialog(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleAddService}
+                    disabled={!tempSelectedService || !tempSelectedStaff}
+                    className="bg-[#7b1d1d] hover:bg-[#6b1717]"
+                  >
+                    Add Service
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>
