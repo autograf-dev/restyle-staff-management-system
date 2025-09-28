@@ -247,7 +247,19 @@ export default function WalkInPage() {
           description?: string;
           teamMembers?: Array<{ userId: string; priority: number; selected: boolean }>;
         }) => {
+          const price = extractPriceFromDescription(service.description || '')
+          
+          // Skip services without prices (personal calendars)
+          if (!price && !service.servicePrice && !service.price) {
+            return
+          }
+          
           const category = service.category || 'General Services'
+          
+          // Skip "General Services" category
+          if (category === 'General Services') {
+            return
+          }
           
           if (!servicesByCategory[category]) {
             servicesByCategory[category] = []
@@ -262,7 +274,6 @@ export default function WalkInPage() {
             }
           }
           
-          const price = extractPriceFromDescription(service.description || '')
           servicesByCategory[category].push({
             id: service.id,
             name: service.name || service.title || 'Service',
@@ -430,6 +441,7 @@ export default function WalkInPage() {
           customerPhone: selectedCustomer.phone || null,
           customerName: selectedCustomer.fullName,
           customerFirstName: selectedCustomer.firstName,
+          customerLookup: selectedCustomer.id, // Add the customer lookup ID from search results
           bookingType: 'Walk-in',
           paymentStaff: selectedServices.map(s => s.staff.name).join(', '),
           status: 'Paid',
@@ -554,7 +566,7 @@ export default function WalkInPage() {
               </div>
             </div>
 
-            <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-1">
+            <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-2">
               <div className="space-y-6">
 
                 {/* Services Card */}
@@ -821,32 +833,41 @@ export default function WalkInPage() {
                   </Card>
                 )}
 
-                {/* Staff Tip Distribution - matching checkout page */}
-                {selectedServices.length > 0 && getStaffTipDistribution().length > 0 && (
+
+
+              </div>
+
+              {/* Right Column - Payment & Distribution Cards */}
+              <div className="space-y-6">
+                {/* Pricing Summary */}
+                {selectedServices.length > 0 && (
                   <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                        <Users className="h-5 w-5 text-[#7b1d1d]" />
-                        Staff Tip Distribution
+                        <DollarSign className="h-5 w-5 text-[#7b1d1d]" />
+                        Pricing Summary
                       </CardTitle>
-                      <CardDescription className="text-[13px]">How tips are distributed among staff members</CardDescription>
+                      <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                       <div className="space-y-3">
-                        {getStaffTipDistribution().map((staff, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 border border-neutral-200 rounded-lg bg-neutral-50">
-                            <div className="space-y-1">
-                              <div className="font-medium">{staff.staffName}</div>
-                              <div className="text-sm text-neutral-600">
-                                {staff.sharePercentage.toFixed(1)}% share • CA${staff.totalServicePrice.toFixed(2)} services
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-medium">CA${staff.totalEarning.toFixed(2)}</div>
-                              <div className="text-sm text-neutral-600">+CA${staff.tipShare.toFixed(2)} tip</div>
-                            </div>
-                          </div>
-                        ))}
+                        <div className="flex justify-between text-base">
+                          <span>Subtotal:</span>
+                          <span>CA${subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-base">
+                          <span>Tip ({useCustomTip ? 'Custom' : `${tipPercentage}%`}):</span>
+                          <span>CA${tipAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-base">
+                          <span>GST (5%):</span>
+                          <span>CA${gst.toFixed(2)}</span>
+                        </div>
+                        <UISeparator />
+                        <div className="flex justify-between text-xl font-semibold">
+                          <span>Total:</span>
+                          <span>CA${total.toFixed(2)}</span>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -854,7 +875,7 @@ export default function WalkInPage() {
 
                 {/* Payment Method & Tip Selection */}
                 {selectedServices.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <>
                     {/* Payment Method Card */}
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
                       <CardHeader className="pb-3">
@@ -937,44 +958,76 @@ export default function WalkInPage() {
                         </div>
                       </CardContent>
                     </Card>
-                  </div>
+                  </>
                 )}
 
-                {/* Complete Checkout Button */}
-                {selectedCustomer && selectedServices.length > 0 && (
-                  <Card className="rounded-2xl border-green-200 bg-green-50 shadow-none">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-green-800">Ready to Process</h3>
-                          <p className="text-green-700 text-sm">
-                            {selectedServices.length} service{selectedServices.length !== 1 ? 's' : ''} • {selectedCustomer.fullName} • CA${total.toFixed(2)}
-                          </p>
-                        </div>
-                        <Button
-                          onClick={processWalkIn}
-                          disabled={processingCheckout}
-                          className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg"
-                        >
-                          {processingCheckout ? (
-                            <>
-                              <Loader2 className="h-5 w-5 mr-3 animate-spin" />
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-5 w-5 mr-3" />
-                              Complete Walk-in (CA${total.toFixed(2)})
-                            </>
-                          )}
-                        </Button>
+                {/* Staff Tip Distribution - matching checkout page */}
+                {selectedServices.length > 0 && getStaffTipDistribution().length > 0 && (
+                  <Card className="rounded-2xl border-neutral-200 shadow-none">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                        <Users className="h-5 w-5 text-[#7b1d1d]" />
+                        Staff Tip Distribution
+                      </CardTitle>
+                      <CardDescription className="text-[13px]">How tips are distributed among staff members</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {getStaffTipDistribution().map((staff, index) => (
+                          <div key={index} className="flex items-center justify-between p-3 border border-neutral-200 rounded-lg bg-neutral-50">
+                            <div className="space-y-1">
+                              <div className="font-medium">{staff.staffName}</div>
+                              <div className="text-sm text-neutral-600">
+                                {staff.sharePercentage.toFixed(1)}% share • CA${staff.totalServicePrice.toFixed(2)} services
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">CA${staff.totalEarning.toFixed(2)}</div>
+                              <div className="text-sm text-neutral-600">+CA${staff.tipShare.toFixed(2)} tip</div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
                 )}
-
               </div>
             </div>
+
+            {/* Complete Checkout Button - Full Width */}
+            {selectedCustomer && selectedServices.length > 0 && (
+              <div className="mx-auto w-full max-w-7xl">
+                <Card className="rounded-2xl border-[#7b1d1d] bg-[#7b1d1d]/5 shadow-none">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-[#7b1d1d]">Ready to Process</h3>
+                        <p className="text-[#7b1d1d]/80 text-sm">
+                          {selectedServices.length} service{selectedServices.length !== 1 ? 's' : ''} • {selectedCustomer.fullName} • CA${total.toFixed(2)}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={processWalkIn}
+                        disabled={processingCheckout}
+                        className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white px-8 py-3 text-lg"
+                      >
+                        {processingCheckout ? (
+                          <>
+                            <Loader2 className="h-5 w-5 mr-3 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-5 w-5 mr-3" />
+                            Complete Walk-in (CA${total.toFixed(2)})
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
 
         </SidebarInset>
