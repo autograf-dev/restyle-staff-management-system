@@ -199,26 +199,15 @@ export default function PaymentDetailPage() {
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-[#7b1d1d]" />
-                  <h1 className="text-xl font-semibold">Payment Information</h1>
+                  <CreditCard className="h-5 w-5 text-[#601625]" />
+                  <h1 className="text-xl font-semibold">Payment Details</h1>
+                  <span className="text-sm text-muted-foreground ml-2">Complete transaction information and service details</span>
                 </div>
               </div>
             </div>
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0 max-w-4xl mx-auto">
-            
-            {/* Header */}
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#601625]/10 mb-4">
-                <CreditCard className="h-8 w-8 text-[#601625]" />
-              </div>
-              <h1 className="text-2xl font-bold text-[#601625] mb-1">Payment Details</h1>
-              <p className="text-muted-foreground">
-                Complete transaction information and service details.
-              </p>
-            </div>
-
             <div className="grid gap-6 md:grid-cols-2">
               
               {/* Payment Details */}
@@ -291,9 +280,6 @@ export default function PaymentDetailPage() {
                             <span className="inline-flex items-center rounded-full bg-[#601625]/10 px-2 py-0.5 font-medium text-[#601625] border border-[#601625]/20">
                               {String(it.staffName) || 'Staff'}
                             </span>
-                            {it.serviceId != null && it.serviceId !== '' && (
-                              <span className="text-[11px] text-neutral-400">ID: {String(it.serviceId)}</span>
-                            )}
                           </div>
                         </div>
                         <div className="text-right">

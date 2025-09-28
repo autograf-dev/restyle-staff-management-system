@@ -20,15 +20,10 @@ import {
   Plus, 
   RefreshCw, 
   Edit, 
-  Trash2, 
   DollarSign, 
   Clock, 
   Users, 
-  Settings as SettingsIcon,
-  AlertTriangle,
-  CheckCircle,
-  Star,
-  Sparkles
+  Settings as SettingsIcon
 } from "lucide-react"
 import React, { useState, useEffect } from "react"
 import { toast } from "sonner"
@@ -418,8 +413,8 @@ export default function ServicesPage() {
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  <h1 className="text-xl font-semibold">Services Management</h1>
+                  <SettingsIcon className="h-5 w-5 text-[#601625]" />
+                  <h1 className="text-xl font-semibold">Manage Services</h1>
                 </div>
               </div>
               <Button onClick={() => setCreateDialogOpen(true)} className="bg-primary text-primary-foreground">
@@ -430,80 +425,17 @@ export default function ServicesPage() {
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Services</CardTitle>
-                  <SettingsIcon className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{services.length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    All salon services
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Available Staff</CardTitle>
-                  <Users className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-600">{staffOptions.length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Ready to assign
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
-                  <Clock className="h-4 w-4 text-orange-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-600">
-                    {services.length > 0 
-                      ? (() => {
-                          const validDurations = services.filter(s => s.duration && s.duration > 0)
-                          return validDurations.length > 0
-                            ? formatDuration(Math.round(validDurations.reduce((sum, s) => sum + (s.duration as number), 0) / validDurations.length))
-                            : '0m'
-                        })()
-                      : '0m'
-                    }
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Service duration
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Staff Assignments</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
-                    {services.reduce((total, service) => total + (service.teamMembers?.length || 0), 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Total assignments
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
 
             {/* Services List */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Star className="h-5 w-5 text-yellow-500" />
+                    <SettingsIcon className="h-5 w-5 text-[#601625]" />
                     Services Overview
                   </CardTitle>
                   <CardDescription>
-                    GoHighLevel-style service management with comprehensive staff assignments
+                    Manage your salon services with staff assignments and scheduling
                   </CardDescription>
                 </div>
                 <Button 
@@ -591,14 +523,6 @@ export default function ServicesPage() {
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => openDeleteDialog(service)}
-                                    className="h-8 w-8 hover:bg-destructive hover:text-destructive-foreground"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
                                 </div>
                               </div>
                             </CardContent>
@@ -613,8 +537,8 @@ export default function ServicesPage() {
                           <TableRow>
                             <TableHead className="w-[300px]">Service Details</TableHead>
                             <TableHead>Duration</TableHead>
-                            <TableHead>Assigned Staff</TableHead>
                             <TableHead>Price</TableHead>
+                            <TableHead>Assigned Staff</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -662,6 +586,17 @@ export default function ServicesPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="h-4 w-4 text-[#601625]" />
+                                    <span className="font-medium text-[#601625]">
+                                      {(() => {
+                                        const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/);
+                                        return priceMatch ? `CA$${priceMatch[1]}` : 'Not set';
+                                      })()}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
                                   <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                       <Users className="h-4 w-4 text-muted-foreground" />
@@ -670,7 +605,7 @@ export default function ServicesPage() {
                                     {service.teamMembers && service.teamMembers.length > 0 ? (
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <div className="text-xs text-blue-600 cursor-pointer hover:underline">
+                                          <div className="text-xs text-[#601625] cursor-pointer hover:underline">
                                             {service.teamMembers.slice(0, 2).map(member => 
                                               getStaffNameById(member.userId)
                                             ).join(', ')}
@@ -693,17 +628,6 @@ export default function ServicesPage() {
                                         No staff assigned
                                       </div>
                                     )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <DollarSign className="h-4 w-4 text-green-600" />
-                                    <span className="font-medium text-green-600">
-                                      {(() => {
-                                        const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/);
-                                        return priceMatch ? `CA$${priceMatch[1]}` : 'Not set';
-                                      })()}
-                                    </span>
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -735,20 +659,6 @@ export default function ServicesPage() {
                                       </TooltipTrigger>
                                       <TooltipContent>Edit Service</TooltipContent>
                                     </Tooltip>
-                                    
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => openDeleteDialog(service)}
-                                          className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Delete Service</TooltipContent>
-                                    </Tooltip>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -768,7 +678,7 @@ export default function ServicesPage() {
             <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
+                  <Plus className="h-5 w-5 text-primary" />
                   Create New Service
                 </DialogTitle>
                 <DialogDescription>
@@ -916,7 +826,7 @@ export default function ServicesPage() {
                 {/* Service Settings */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                    <SettingsIcon className="h-4 w-4 text-muted-foreground" />
                     <h3 className="text-lg font-medium">Service Settings</h3>
                   </div>
                   <div className="grid gap-4">

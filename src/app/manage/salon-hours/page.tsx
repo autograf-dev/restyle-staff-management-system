@@ -171,18 +171,14 @@ export default function SalonHoursPage() {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Salon Hours</h1>
+              <h1 className="text-xl font-semibold">Manage Salon Hours</h1>
+              <span className="text-sm text-muted-foreground ml-2">Configure your salon's operating hours for each day of the week</span>
             </div>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Business Hours Management</h2>
-                <p className="text-muted-foreground">
-                  Configure your salon&apos;s operating hours for each day of the week
-                </p>
-              </div>
+            <div className="flex items-center justify-end">
+              <div></div>
               <Button 
                 onClick={fetchBusinessHours} 
                 variant="outline" 

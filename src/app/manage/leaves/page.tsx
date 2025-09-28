@@ -272,18 +272,14 @@ export default function LeavesPage() {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Leaves</h1>
+              <h1 className="text-xl font-semibold">Manage Holidays</h1>
+              <span className="text-sm text-muted-foreground ml-2">Manage staff leaves and time-off requests</span>
             </div>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Leave Management</h2>
-                <p className="text-muted-foreground">
-                  Manage staff leaves and time-off requests
-                </p>
-              </div>
+            <div className="flex items-center justify-end">
+              <div></div>
               <div className="flex gap-2">
                 <Button 
                   onClick={fetchAllData} 

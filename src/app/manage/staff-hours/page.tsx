@@ -255,18 +255,14 @@ export default function StaffHoursPage() {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Staff Hours</h1>
+              <h1 className="text-xl font-semibold">Manage Staff Hours</h1>
+              <span className="text-sm text-muted-foreground ml-2">Manage individual schedules and working hours for each barber</span>
             </div>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Staff Working Hours</h2>
-                <p className="text-muted-foreground">
-                  Manage individual schedules and working hours for each barber
-                </p>
-              </div>
+            <div className="flex items-center justify-end">
+              <div></div>
               <Button 
                 onClick={fetchBarberHours} 
                 variant="outline" 

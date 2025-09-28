@@ -166,18 +166,14 @@ export default function StylistsPage() {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Stylists</h1>
+              <h1 className="text-xl font-semibold">Manage Stylists</h1>
+              <span className="text-sm text-muted-foreground ml-2">Manage your stylists and their availability</span>
             </div>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Stylist Management</h2>
-                <p className="text-muted-foreground">
-                  Manage your stylists and their availability
-                </p>
-              </div>
+            <div className="flex items-center justify-end">
+              <div></div>
               <Button 
                 onClick={fetchStaffData} 
                 variant="outline" 

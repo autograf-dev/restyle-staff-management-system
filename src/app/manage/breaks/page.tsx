@@ -83,15 +83,13 @@ export default function BreaksPage() {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Breaks</h1>
+              <h1 className="text-xl font-semibold">Manage Breaks</h1>
+              <span className="text-sm text-muted-foreground ml-2">Create recurring or one-time breaks for staff</span>
             </div>
           </header>
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Break Management</h2>
-                <p className="text-muted-foreground">Create recurring or one-time breaks for staff</p>
-              </div>
+            <div className="flex items-center justify-end">
+              <div></div>
               <div className="flex gap-2">
                 <Button onClick={refreshAll} variant="outline" size="sm" disabled={loading}><RefreshCw className="h-4 w-4 mr-2"/>Refresh</Button>
                 <Button onClick={() => { setEditing(null); setOpen(true) }} className="bg-primary hover:bg-primary/90"><Plus className="h-4 w-4 mr-2"/>Add Break</Button>

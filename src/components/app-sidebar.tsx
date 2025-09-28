@@ -110,9 +110,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: Settings,
         isActive: true,
         items: [
-          { title: "My Hours", url: myHoursUrl },
-          { title: "My Holidays", url: `${prefix}/manage/leaves` },
-          { title: "My Breaks", url: `${prefix}/manage/breaks` },
+          { title: "Manage Hours", url: myHoursUrl },
+          { title: "Manage Holidays", url: `${prefix}/manage/leaves` },
+          { title: "Manage Breaks", url: `${prefix}/manage/breaks` },
         ],
       })
     } else {
@@ -123,11 +123,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: Settings,
         isActive: true,
         items: [
-          { title: "Services", url: `${prefix}/manage/services` },
-          { title: "Salon Hours", url: `${prefix}/manage/salon-hours` },
-          { title: "Stylists", url: `${prefix}/manage/stylists` },
-          { title: "Holidays", url: `${prefix}/manage/leaves` },
-          { title: "Breaks", url: `${prefix}/manage/breaks` },
+          { title: "Manage Services", url: `${prefix}/manage/services` },
+          { title: "Manage Salon Hours", url: `${prefix}/manage/salon-hours` },
+          { title: "Manage Stylists", url: `${prefix}/manage/stylists` },
+          { title: "Manage Holidays", url: `${prefix}/manage/leaves` },
+          { title: "Manage Breaks", url: `${prefix}/manage/breaks` },
           ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams" }] : []),
         ],
       })
