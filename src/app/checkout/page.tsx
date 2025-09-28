@@ -897,6 +897,9 @@ function CheckoutContent() {
                         </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-3">
+                      {/* Buttons removed as requested */}
+                    </div>
                   </div>
                 </div>
               </div>
