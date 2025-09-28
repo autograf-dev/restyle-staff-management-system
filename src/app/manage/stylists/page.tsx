@@ -172,8 +172,11 @@ export default function StylistsPage() {
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-end">
-              <div></div>
+            <div className="flex items-center justify-between">
+              <Button className="bg-primary" onClick={() => setCreateDialogOpen(true)}>
+                <Scissors className="h-4 w-4 mr-2" />
+                Add Stylists
+              </Button>
               <Button 
                 onClick={fetchStaffData} 
                 variant="outline" 
@@ -182,13 +185,6 @@ export default function StylistsPage() {
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
-              </Button>
-            </div>
-
-            <div>
-              <Button className="bg-primary" onClick={() => setCreateDialogOpen(true)}>
-                <Scissors className="h-4 w-4 mr-2" />
-                Add Stylists
               </Button>
             </div>
 

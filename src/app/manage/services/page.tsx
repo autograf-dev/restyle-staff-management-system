@@ -448,9 +448,8 @@ export default function ServicesPage() {
                             <CardContent className="p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <div className="font-medium leading-tight flex items-center gap-2">
+                                  <div className="font-medium leading-tight">
                                     {service.name}
-                                    <Badge variant="outline" className="text-[10px]">Service</Badge>
                                   </div>
                                   {service.description && (
                                     <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -534,9 +533,8 @@ export default function ServicesPage() {
                               <TableRow key={service.id} className="hover:bg-muted/50">
                                 <TableCell>
                                   <div className="space-y-1">
-                                    <div className="font-medium flex items-center gap-2">
+                                    <div className="font-medium">
                                       {service.name}
-                                      <Badge variant="outline" className="text-xs">Service</Badge>
                                     </div>
                                     {service.description && (
                                       <div className="text-sm text-muted-foreground max-w-xs line-clamp-2">

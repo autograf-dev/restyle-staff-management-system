@@ -690,7 +690,7 @@ const StaffOverviewView = ({
       {/* Header - Sticky time column + scrollable staff columns */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
         {/* Sticky Time Header */}
-        <div className="w-[80px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-[#601625]/10 flex items-center justify-center flex-shrink-0 text-[#601625]">
+        <div className="w-[80px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
           
         </div>
         
