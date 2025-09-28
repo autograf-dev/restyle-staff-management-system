@@ -368,7 +368,7 @@ export default function Page() {
                 Add User
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground ml-8">Manage your team members and their access levels</p>
+            <p className="text-sm text-muted-foreground ml-16">Manage your team members and their access levels</p>
           </header>
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
 

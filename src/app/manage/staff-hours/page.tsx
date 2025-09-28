@@ -257,7 +257,7 @@ export default function StaffHoursPage() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Staff Hours</h1>
             </div>
-            <p className="text-sm text-muted-foreground ml-8">Manage individual schedules and working hours for each barber</p>
+            <p className="text-sm text-muted-foreground ml-11">Manage individual schedules and working hours for each barber</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

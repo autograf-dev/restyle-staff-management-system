@@ -389,7 +389,7 @@ export default function ServicesPage() {
                 Create Service
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground ml-8">Manage your salon services and their configurations</p>
+            <p className="text-sm text-muted-foreground ml-16">Manage your salon services and their configurations</p>
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">

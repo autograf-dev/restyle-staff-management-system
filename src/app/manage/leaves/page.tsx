@@ -274,7 +274,7 @@ export default function LeavesPage() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Holidays</h1>
             </div>
-            <p className="text-sm text-muted-foreground ml-8">Manage staff leaves and time-off requests</p>
+            <p className="text-sm text-muted-foreground ml-11">Manage staff leaves and time-off requests</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
