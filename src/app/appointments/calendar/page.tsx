@@ -635,65 +635,29 @@ const StaffOverviewView = ({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
 {(user?.role === 'admin' || user?.role === 'manager') && (
-  <div className="w-full">
-    <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 rounded-lg border border-[#601625]/20 p-3 flex items-center gap-3">
-      <button
-        className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625]"
-        onClick={() => {
-          const delta = -columnWidth*3
-          const h = headerScrollRef.current
-          const b = columnsScrollRef.current
-          if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
-          if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
-        }}
-        aria-label="Scroll left"
-      >
-        <ArrowLeft className="h-4 w-4" />
-      </button>
-      
-      <div className="flex-1 flex items-center gap-2 px-2">
-        <div className="flex-1 flex items-center gap-1.5">
-          {staff.slice(0, 8).map((_, index) => (
-            <div 
-              key={index}
-              className="h-2 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full flex-1 cursor-pointer hover:from-[#601625]/40 hover:to-[#751a29]/40 transition-all duration-200 border border-[#601625]/10"
-              onClick={() => {
-                const scrollPosition = (index * columnWidth * staff.length) / 8
-                const h = headerScrollRef.current
-                const b = columnsScrollRef.current
-                if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-                if (b) b.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-              }}
-            />
-          ))}
-        </div>
+  <div className="w-2/3 max-w-md">
+    <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 rounded-lg border border-[#601625]/20 p-3 overflow-x-auto">
+      <div className="flex items-center gap-1.5 min-w-max">
+        {staff.map((staffMember, index) => (
+          <div 
+            key={index}
+            className="h-2 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full w-8 flex-shrink-0 border border-[#601625]/10"
+            title={staffMember.name}
+          />
+        ))}
       </div>
-      
-      <button
-        className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625]"
-        onClick={() => {
-          const delta = columnWidth*3
-          const h = headerScrollRef.current
-          const b = columnsScrollRef.current
-          if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
-          if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
-        }}
-        aria-label="Scroll right"
-      >
-        <ArrowRight className="h-4 w-4" />
-      </button>
     </div>
   </div>
 )}
-    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full">
+    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full max-w-[95vw] mx-auto">
       
       {/* Header - Sticky time column + scrollable staff columns */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
         {/* Sticky Time Header */}
-        <div className="w-[120px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-[#601625]/10 flex items-center justify-center flex-shrink-0 text-[#601625]">
-          
+        <div className="w-[80px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-[#601625]/10 flex items-center justify-center flex-shrink-0 text-[#601625]">
+          <Clock className="h-4 w-4" />
         </div>
         
         {/* Scrollable Staff Headers */}
@@ -727,7 +691,7 @@ const StaffOverviewView = ({
       </div>
 
       {/* Scrollable Time grid container */}
-      <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0" ref={scrollContainerRef}>
+      <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0 max-h-[calc(100vh-280px)]" ref={scrollContainerRef}>
         <div className="flex w-full" style={{ height: `${(timeSlots.length * 60) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
