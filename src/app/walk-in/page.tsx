@@ -169,7 +169,7 @@ export default function WalkInPage() {
       if (!response.ok) throw new Error('Failed to search contacts')
       
       const json = await response.json()
-      const formattedCustomers = json.contacts?.map((contact: ContactResponse) => ({
+      const formattedCustomers = json.results?.map((contact: ContactResponse) => ({
         id: contact.id.toString(),
         firstName: contact.firstName || '',
         lastName: contact.lastName || '',
@@ -190,21 +190,22 @@ export default function WalkInPage() {
   // Fetch staff data
   const fetchStaffData = async () => {
     try {
-      const response = await fetch('/api/getUsers')
-      if (!response.ok) throw new Error('Failed to fetch staff')
+      const response = await fetch('/api/barber-hours')
+      if (!response.ok) throw new Error('Failed to fetch staff data')
+      const result = await response.json()
       
-      const data = await response.json()
-      if (data.success && Array.isArray(data.users)) {
-        const staff = data.users
-          .filter((user: { role: string }) => user.role === 'staff' || user.role === 'admin')
-          .map((user: { ghl_id: string; name?: string; firstName?: string; lastName?: string }) => ({
-            ghl_id: user.ghl_id,
-            name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim()
-          }))
+      console.log('Staff API response:', result)
+      
+      if (result.ok && result.data) {
+        const staff = result.data.map((barber: { ghl_id: string; 'Barber/Name': string }) => ({
+          ghl_id: barber['ghl_id'],
+          name: barber['Barber/Name']
+        }))
+        console.log('Mapped staff data:', staff)
         setStaffData(staff)
       }
     } catch (error) {
-      console.error('Error fetching staff:', error)
+      console.error('Error fetching staff data:', error)
     }
   }
 
