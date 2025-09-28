@@ -134,17 +134,18 @@ export async function GET(req: Request) {
     
     // Filter by appointment ID if provided
     if (appointmentId) {
-      // Handle comma-separated appointment IDs in Booking/ID field
-      // This matches: exact match, starts with appointmentId+comma, ends with comma+appointmentId, or contains comma+appointmentId+comma
-      query = query.or([
-        `"Booking/ID".eq.${appointmentId}`,                    // Exact match: "12345"
-        `"Booking/ID".like.${appointmentId},%`,                // Starts with: "12345,67890"  
-        `"Booking/ID".like.%,${appointmentId}`,                // Ends with: "67890,12345"
-        `"Booking/ID".like.%,${appointmentId},%`               // Contains: "67890,12345,11111"
-      ].join(','))
+      console.log(`🔍 Searching for appointmentId: ${appointmentId}`)
+      query = query.eq('Booking/ID', appointmentId)
     }
 
     const { data, error } = await query
+
+    if (appointmentId && data) {
+      console.log(`📊 Found ${data.length} transactions for appointmentId: ${appointmentId}`)
+      data.forEach(tx => {
+        console.log(`  - Transaction ${tx['🔒 Row ID']}: BookingID="${tx['Booking/ID']}", Status="${tx['Payment/Status']}"`)
+      })
+    }
 
     if (error) {
       console.error('Supabase error:', error)
