@@ -545,7 +545,15 @@ function CheckoutContent() {
           bookingType: 'Booking',
           customerLookup: appointmentDetails?.contact_id || null,
           customerPhone: appointmentDetails?.customerPhone ?? null,
-          bookingId: appointmentDetails?.id ?? null,
+          bookingId: (() => {
+            // For "add service" case, ensure we link to the original appointment from the calendar
+            // If paymentSession has appointments, use the first one as it's likely the original
+            if (paymentSession?.appointments && paymentSession.appointments.length > 0) {
+              const firstAppt = paymentSession.appointments[0] as { id?: string }
+              return firstAppt?.id ?? appointmentDetails?.id ?? null
+            }
+            return appointmentDetails?.id ?? null
+          })(),
           paymentStaff: items.map((i) => i.staffName).filter((name) => Boolean(name)).join(', ') || null,
           status: 'Paid',
         },
