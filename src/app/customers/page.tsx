@@ -717,32 +717,31 @@ export default function Page() {
         <AppSidebar />
         <SidebarInset>
         <header className="flex flex-col gap-2 px-4 py-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-            <h1 className="text-xl font-semibold">Customers</h1>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+              <h1 className="text-xl font-semibold">Customers</h1>
+            </div>
+            <Button onClick={() => openEdit()} className="h-9">
+              <Plus className="mr-2 h-4 w-4" /> Add customer
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground ml-8">Create, update, and edit your customers from here</p>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="flex items-center justify-between">
-            <div></div>
-            <div className="flex items-center gap-2">
-              {table.getFilteredSelectedRowModel().rows.length > 0 && (
-                <Button 
-                  variant="destructive" 
-                  onClick={() => setBulkDeleteOpen(true)}
-                  className="h-9"
-                >
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete ({table.getFilteredSelectedRowModel().rows.length})
-                </Button>
-              )}
-              <Button onClick={() => openEdit()} className="h-9">
-                <Plus className="mr-2 h-4 w-4" /> Add customer
+          {table.getFilteredSelectedRowModel().rows.length > 0 && (
+            <div className="flex items-center justify-end">
+              <Button 
+                variant="destructive" 
+                onClick={() => setBulkDeleteOpen(true)}
+                className="h-9"
+              >
+                <Trash className="mr-2 h-4 w-4" />
+                Delete ({table.getFilteredSelectedRowModel().rows.length})
               </Button>
             </div>
-          </div>
+          )}
 
           <div className="w-full space-y-3">
             <div className="flex items-center gap-2">

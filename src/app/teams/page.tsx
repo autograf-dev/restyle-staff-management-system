@@ -355,23 +355,22 @@ export default function Page() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-            </div>
-          </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-6">
-            <div className="flex items-center justify-between">
+          <header className="flex flex-col gap-2 px-4 py-4">
+            <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">
-                <Users className="h-6 w-6" />
-                <h1 className="text-2xl font-bold">Team Management</h1>
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                <Users className="h-5 w-5" />
+                <h1 className="text-xl font-semibold">Team Management</h1>
               </div>
-              <Button onClick={handleAdd}>
+              <Button onClick={handleAdd} className="h-9">
                 <Plus className="mr-2 h-4 w-4" />
                 Add User
               </Button>
             </div>
+            <p className="text-sm text-muted-foreground ml-8">Manage your team members and their access levels</p>
+          </header>
+          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
 
             <div className="flex items-center py-4">
               <Input
