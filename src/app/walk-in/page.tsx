@@ -263,7 +263,6 @@ export default function WalkInPage() {
           }
           
           const price = extractPriceFromDescription(service.description || '')
-          console.log(`Service: ${service.name || service.title}, Price from description: ${price}, Original price: ${service.servicePrice || service.price}`)
           servicesByCategory[category].push({
             id: service.id,
             name: service.name || service.title || 'Service',
@@ -429,6 +428,8 @@ export default function WalkInPage() {
           serviceNamesJoined: selectedServices.map(s => s.service.name).join(', '),
           serviceAcuityIds: selectedServices.map(s => s.service.id).join(', '),
           customerPhone: selectedCustomer.phone || null,
+          customerName: selectedCustomer.fullName,
+          customerFirstName: selectedCustomer.firstName,
           bookingType: 'Walk-in',
           paymentStaff: selectedServices.map(s => s.staff.name).join(', '),
           status: 'Paid',
