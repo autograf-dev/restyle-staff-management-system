@@ -144,22 +144,34 @@ function useAppointments() {
             // Check payment status by looking up transactions with proper paid status
             try {
               const transactionRes = await fetch(`/api/transactions?appointmentId=${booking.id}&limit=1`)
+              console.log(`Payment status check for ${booking.id}: Status ${transactionRes.status}`)
               if (transactionRes.ok) {
                 const transactionData = await transactionRes.json()
+                console.log(`Transaction data for ${booking.id}:`, transactionData)
                 if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
                   const transaction = transactionData.data[0]
+                  console.log(`Transaction details for ${booking.id}:`, {
+                    status: transaction.status,
+                    paymentStatus: transaction.paymentStatus,
+                    paid: transaction.paid,
+                    id: transaction.id
+                  })
                   // Check if transaction has paid status
                   if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true || transaction.paid === 'Yes') {
                     details.payment_status = 'paid'
+                    console.log(`✅ Appointment ${booking.id} marked as PAID`)
                   } else {
                     details.payment_status = 'pending'
+                    console.log(`⏳ Appointment ${booking.id} marked as PENDING`)
                   }
                 } else {
                   // No transaction found - still pending payment
                   details.payment_status = 'pending'
+                  console.log(`❌ No transaction found for ${booking.id}`)
                 }
               } else {
                 details.payment_status = 'pending'
+                console.log(`❌ API call failed for ${booking.id}: ${transactionRes.status}`)
               }
             } catch (error) {
               console.warn(`Failed to check payment status for booking ${booking.id}:`, error)
