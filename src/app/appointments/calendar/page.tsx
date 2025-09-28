@@ -143,27 +143,20 @@ function useAppointments() {
 
             // Check payment status by looking up transactions with proper paid status
             try {
-              console.log(`🔍 Checking payment for appointment: ${booking.id}`)
               const transactionRes = await fetch(`/api/transactions?appointmentId=${booking.id}&limit=1`)
-              console.log(`📡 Transaction response status: ${transactionRes.status}`)
               if (transactionRes.ok) {
                 const transactionData = await transactionRes.json()
-                console.log(`📊 Transaction data for ${booking.id}:`, transactionData)
                 if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
                   const transaction = transactionData.data[0]
-                  console.log(`💰 Transaction details:`, transaction)
                   // Check if transaction has paid status
                   if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true || transaction.paid === 'Yes') {
                     details.payment_status = 'paid'
-                    console.log(`✅ PAID - Appointment ${booking.id}`)
                   } else {
                     details.payment_status = 'pending'
-                    console.log(`⏳ PENDING - Appointment ${booking.id}`)
                   }
                 } else {
                   // No transaction found - still pending payment
                   details.payment_status = 'pending'
-                  console.log(`❌ NO TRANSACTION - Appointment ${booking.id}`)
                 }
               } else {
                 details.payment_status = 'pending'
