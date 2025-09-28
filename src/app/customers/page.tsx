@@ -716,18 +716,17 @@ export default function Page() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+        <header className="flex flex-col gap-2 px-4 py-4">
+          <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+            <h1 className="text-xl font-semibold">Customers</h1>
           </div>
+          <p className="text-sm text-muted-foreground ml-8">Create, update, and edit your customers from here</p>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-[1.4rem] font-semibold leading-none">Customers - Restyle Salon</h1>
-              <p className="text-muted-foreground">Create, update, and edit your customers from here.</p>
-            </div>
+            <div></div>
             <div className="flex items-center gap-2">
               {table.getFilteredSelectedRowModel().rows.length > 0 && (
                 <Button 

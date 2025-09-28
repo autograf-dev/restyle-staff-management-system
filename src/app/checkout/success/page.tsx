@@ -203,7 +203,7 @@ function CheckoutSuccessContent() {
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <CheckCircle className="h-5 w-5 text-[#601625]" />
                   <h1 className="text-xl font-semibold">Payment Successful</h1>
                 </div>
               </div>
@@ -214,10 +214,10 @@ function CheckoutSuccessContent() {
             
             {/* Success Header */}
             <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#601625]/10 mb-4">
+                <CheckCircle className="h-8 w-8 text-[#601625]" />
               </div>
-              <h1 className="text-2xl font-bold text-green-600 mb-2">Payment Completed!</h1>
+              <h1 className="text-2xl font-bold text-[#601625] mb-2">Payment Completed!</h1>
               <p className="text-muted-foreground">
                 Thank you for your payment. Your appointment is confirmed and you should receive a confirmation email shortly.
               </p>
@@ -240,18 +240,8 @@ function CheckoutSuccessContent() {
                   <CardContent className="space-y-4">
                     <div className="grid gap-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Payment ID</span>
-                        <span className="font-mono text-sm">{paymentResult.paymentId}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Appointment ID</span>
-                        <span className="font-mono text-sm">{paymentResult.appointmentId}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Amount Paid</span>
-                        <span className="font-semibold text-lg text-green-600">
+                        <span className="font-semibold text-lg text-[#601625]">
                           {formatCurrency(paymentResult.amount)}
                         </span>
                       </div>
@@ -299,12 +289,12 @@ function CheckoutSuccessContent() {
                       )}
 
                       <div className="flex items-start gap-3">
-                        <div className="p-2 bg-green-100 rounded-full">
-                          <UserIcon className="h-4 w-4 text-green-600" />
+                        <div className="p-2 bg-[#601625]/10 rounded-full">
+                          <UserIcon className="h-4 w-4 text-[#601625]" />
                         </div>
                         <div>
                           <div className="font-medium">{paymentResult.staffName}</div>
-                          <div className="text-sm text-muted-foreground">Your Stylist</div>
+                          <div className="text-sm text-muted-foreground">Staff Member</div>
                         </div>
                       </div>
                     </div>
@@ -332,13 +322,6 @@ function CheckoutSuccessContent() {
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-3">
-                        <Receipt className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">{paymentResult.paymentId}</div>
-                          <div className="text-sm text-muted-foreground">Payment ID</div>
-                        </div>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -358,19 +341,6 @@ function CheckoutSuccessContent() {
               </Button>
             </div>
 
-            {/* Additional Information */}
-            <Card className="bg-blue-50/50 border-blue-200">
-              <CardContent className="pt-6">
-                <div className="text-center space-y-2">
-                  <h3 className="font-semibold text-blue-900">What happens next?</h3>
-                  <p className="text-sm text-blue-700">
-                    • Your payment has been processed successfully<br />
-                    • You&apos;ll receive a reminder 24 hours before your appointment<br />
-                    • If you need to reschedule, please contact us at least 24 hours in advance
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </SidebarInset>
       </SidebarProvider>

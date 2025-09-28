@@ -251,13 +251,13 @@ export default function StaffHoursPage() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4">
+          <header className="flex flex-col gap-2 px-4 py-4">
+            <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Staff Hours</h1>
-              <span className="text-sm text-muted-foreground ml-2">Manage individual schedules and working hours for each barber</span>
             </div>
+            <p className="text-sm text-muted-foreground ml-8">Manage individual schedules and working hours for each barber</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

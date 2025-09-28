@@ -208,33 +208,36 @@ export default function PaymentsPage() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-14 items-center border-b bg-white/60 backdrop-blur px-4">
+          <header className="flex flex-col gap-2 px-4 py-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mx-2 h-4" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
               <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-[#7b1d1d]" />
-                <h1 className="text-[15px] font-semibold tracking-tight">Payments</h1>
+                <CreditCard className="h-5 w-5 text-[#601625]" />
+                <h1 className="text-xl font-semibold">Payments</h1>
               </div>
             </div>
+            <p className="text-sm text-muted-foreground ml-8">View and manage all customer payments and transactions</p>
           </header>
-          <div className="flex flex-1 flex-col gap-6 p-4 pt-0 bg-neutral-50">
+          <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+            <div className="flex items-center justify-end">
+              <div className="relative">
+                <input
+                  className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
+                  placeholder="Search services, staff, phone, ID"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              </div>
+            </div>
             <div className="w-full">
-              <Card className="rounded-2xl border-neutral-200 shadow-none">
+              <Card className="border-neutral-200 shadow-none">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-[16px] font-semibold">Payments</CardTitle>
-                      <CardDescription className="text-[13px]">Transactions synced from checkout</CardDescription>
-                    </div>
-                    <div className="relative">
-                      <input
-                        className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-[13px] outline-none focus:ring-2 focus:ring-[#7b1d1d]/20"
-                        placeholder="Search services, staff, phone, ID"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                      <CardTitle className="text-base font-semibold">Transaction History</CardTitle>
+                      <CardDescription className="text-sm">View all customer payments and transactions</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
