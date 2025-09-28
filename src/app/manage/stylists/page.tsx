@@ -168,7 +168,7 @@ export default function StylistsPage() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Stylists</h1>
             </div>
-            <p className="text-sm text-muted-foreground ml-11">Manage your stylists and their availability</p>
+            <p className="text-sm text-muted-foreground ml-12">Manage your stylists and their availability</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

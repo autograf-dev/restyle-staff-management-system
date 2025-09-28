@@ -389,7 +389,7 @@ export default function ServicesPage() {
                 Create Service
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground ml-16">Manage your salon services and their configurations</p>
+            <p className="text-sm text-muted-foreground ml-[4.5rem]">Manage your salon services and their configurations</p>
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -398,8 +398,7 @@ export default function ServicesPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <SettingsIcon className="h-5 w-5 text-[#601625]" />
+                  <CardTitle>
                     Services Overview
                   </CardTitle>
                   <CardDescription>
@@ -427,22 +426,24 @@ export default function ServicesPage() {
                 ) : (
                   isMobile ? (
                     <div className="grid gap-3">
-                      {services.length === 0 ? (
+                      {services.filter(service => {
+                        const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/)
+                        return priceMatch
+                      }).length === 0 ? (
                         <Card>
-                          <CardContent className="p-6 text-center">
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="p-4 rounded-full bg-muted">
-                                <SettingsIcon className="h-8 w-8 text-muted-foreground" />
-                              </div>
-                              <div>
-                                <p className="font-medium">No services found</p>
-                                <p className="text-sm text-muted-foreground">Create your first service to get started!</p>
-                              </div>
+                          <CardContent className="p-8 text-center">
+                            <div className="text-muted-foreground">
+                              <SettingsIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                              <p className="text-base font-medium">No services found</p>
+                              <p className="text-sm">Create your first service to get started</p>
                             </div>
                           </CardContent>
                         </Card>
                       ) : (
-                        services.map((service) => (
+                        services.filter(service => {
+                          const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/)
+                          return priceMatch
+                        }).map((service) => (
                           <Card key={service.id}>
                             <CardContent className="p-4">
                               <div className="flex items-start justify-between gap-3">
@@ -526,7 +527,10 @@ export default function ServicesPage() {
                               </TableCell>
                             </TableRow>
                           ) : (
-                            services.map((service) => (
+                            services.filter(service => {
+                              const priceMatch = service.description?.match(/CA\$(\d+(?:\.\d{2})?)/)
+                              return priceMatch
+                            }).map((service) => (
                               <TableRow key={service.id} className="hover:bg-muted/50">
                                 <TableCell>
                                   <div className="space-y-1">

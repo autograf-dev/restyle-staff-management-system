@@ -173,7 +173,7 @@ export default function SalonHoursPage() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Salon Hours</h1>
             </div>
-            <p className="text-sm text-muted-foreground ml-11">Configure your salon&apos;s operating hours for each day of the week</p>
+            <p className="text-sm text-muted-foreground ml-12">Configure your salon&apos;s operating hours for each day of the week</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

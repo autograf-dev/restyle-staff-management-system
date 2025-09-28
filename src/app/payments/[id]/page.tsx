@@ -201,7 +201,7 @@ export default function PaymentDetailPage() {
                 </div>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground ml-16">Complete transaction information and service details</p>
+            <p className="text-sm text-muted-foreground ml-[4.5rem]">Complete transaction information and service details</p>
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0 max-w-4xl mx-auto">

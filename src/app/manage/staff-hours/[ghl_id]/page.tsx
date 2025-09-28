@@ -292,7 +292,7 @@ export default function StaffHoursDetailPage() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Manage Hours</h1>
             </div>
-            <p className="text-sm text-muted-foreground ml-11">Configure working hours and availability</p>
+            <p className="text-sm text-muted-foreground ml-12">Configure working hours and availability</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

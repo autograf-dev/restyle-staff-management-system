@@ -228,7 +228,7 @@ export default function PaymentsPage() {
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
               </div>
             </div>
-            <p className="text-sm text-muted-foreground ml-16">View and manage all customer payments and transactions</p>
+            <p className="text-sm text-muted-foreground ml-[4.5rem]">View and manage all customer payments and transactions</p>
           </header>
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
             <div className="w-full">

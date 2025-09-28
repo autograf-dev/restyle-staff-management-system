@@ -727,7 +727,7 @@ export default function Page() {
               <Plus className="mr-2 h-4 w-4" /> Add customer
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground ml-11">Create, update, and edit your customers from here</p>
+          <p className="text-sm text-muted-foreground ml-12">Create, update, and edit your customers from here</p>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           {table.getFilteredSelectedRowModel().rows.length > 0 && (
