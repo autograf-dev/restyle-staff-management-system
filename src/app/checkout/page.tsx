@@ -2012,7 +2012,7 @@ function CheckoutContent() {
                   Split Payment Options
                 </DialogTitle>
                 <DialogDescription>
-                  Choose how you'd like to split this transaction - by payment method or by service.
+                  Choose how you&apos;d like to split this transaction - by payment method or by service.
                 </DialogDescription>
               </DialogHeader>
               
