@@ -282,8 +282,8 @@ const StaffOverviewView = ({
   const columnsScrollRef = React.useRef<HTMLDivElement>(null)
   const columnWidth = 220
   const [currentTime, setCurrentTime] = React.useState(new Date())
-  // Visual padding for the time grid so first/last rows aren't clipped
-  const GRID_TOP_PADDING = 48
+  // Minimal padding for the time grid
+  const GRID_TOP_PADDING = 8
   const GRID_BOTTOM_PADDING = 16
 
   // Update current time every minute
@@ -299,12 +299,12 @@ const StaffOverviewView = ({
     const hour = now.getHours()
     const minute = now.getMinutes()
     
-    // Only show if within business hours (8 AM to 8 PM)
-    if (hour < 8 || hour >= 20) return null
+    // Only show if within business hours (8 AM to 7 PM)
+    if (hour < 8 || hour >= 19) return null
     
     const currentMinutes = hour * 60 + minute
     const dayStartMinutes = 8 * 60 // 8 AM
-    const position = GRID_TOP_PADDING + ((currentMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
+    const position = GRID_TOP_PADDING + ((currentMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
     
     return position
   }
@@ -324,7 +324,7 @@ const StaffOverviewView = ({
           setTimeout(scrollToCurrentTime, 150)
           return
         }
-        const totalHeight = timeSlots.length * 60 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
+        const totalHeight = 12 * 120 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
         const desiredTop = currentTimePosition - (containerHeight / 2)
         const clampedTop = Math.max(0, Math.min(totalHeight - containerHeight, desiredTop))
         container.scrollTop = clampedTop
@@ -334,7 +334,7 @@ const StaffOverviewView = ({
         if (hourNow < 8) {
           scrollContainerRef.current.scrollTop = 0
         } else {
-          const totalHeight = timeSlots.length * 60 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
+          const totalHeight = 12 * 120 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
           scrollContainerRef.current.scrollTop = totalHeight
         }
       }
@@ -415,8 +415,10 @@ const StaffOverviewView = ({
         // Fetch salon hours data
         const salonRes = await fetch('/api/business-hours')
         const salonJson = await salonRes.json()
+        console.log('📅 Salon hours API response:', salonJson)
         if (salonJson.ok) {
           setSalonHours(salonJson.data || [])
+          console.log('📅 Salon hours data set:', salonJson.data)
         }
       } catch (error) {
         console.error('Failed to fetch data:', error)
@@ -450,21 +452,20 @@ const StaffOverviewView = ({
     }
   }, [headerScrollRef.current, columnsScrollRef.current])
 
-  // Generate time slots from 8:00 AM to 8:00 PM inclusive (30-min increments)
+  // Generate time slots from 8:00 AM to 7:00 PM inclusive (hourly)
   const generateTimeSlots = () => {
     const slots: string[] = []
-    // 8:00 AM → 7:30 PM
+    // 8:00 AM → 7:00 PM (12 hours total)
     for (let hour = 8; hour <= 19; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        slots.push(`${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')}`)
-      }
+      slots.push(`${hour.toString().padStart(2,'0')}:00`)
     }
-    // Add final 8:00 PM slot, but not 8:30 PM
-    slots.push('20:00')
     return slots
   }
 
   const timeSlots = generateTimeSlots()
+  
+  // Debug: Log the first few time slots
+  console.log(`📅 Time slots generated:`, timeSlots.slice(0, 10))
 
   // Helper function to get appointment position and height (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment) => {
@@ -489,8 +490,8 @@ const StaffOverviewView = ({
       return { display: 'none' }
     }
     
-    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
-    const height = ((endMinutes - startMinutes) / 30) * 60
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
+    const height = ((endMinutes - startMinutes) / 60) * 120
     
     return {
       position: 'absolute' as const,
@@ -534,13 +535,13 @@ const StaffOverviewView = ({
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
-    // Only show if within 8AM-8PM range
+    // Only show if within 8AM-8PM range  
     if (startMinutes < dayStartMinutes || startMinutes >= 20 * 60) {
       return { display: 'none' }
     }
     
-    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 30) * 60 // 60px per 30min slot
-    const height = ((endMinutes - startMinutes) / 30) * 60
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
+    const height = ((endMinutes - startMinutes) / 60) * 120
     
     return {
       position: 'absolute' as const,
@@ -577,40 +578,222 @@ const StaffOverviewView = ({
     }
   }
 
+  // Helper function to get salon working hours for current day
+  const getSalonWorkingHours = () => {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+    const currentDayName = currentDate.getDay()
+    const dayHours = salonHours.find(hour => hour.day_of_week === currentDayName)
+    
+    console.log(`📅 Salon hours debug:`, {
+      currentDate: currentDate,
+      currentDayName: currentDayName,
+      dayHours: dayHours,
+      allSalonHours: salonHours,
+      lookingForDay: currentDayName
+    })
+    
+    if (!dayHours || !dayHours.is_open || !dayHours.open_time || !dayHours.close_time) {
+      console.log(`📅 Salon is closed for day ${currentDayName}`)
+      return null // Salon is closed
+    }
+
+    const result = {
+      startMinutes: dayHours.open_time,
+      endMinutes: dayHours.close_time
+    }
+    
+    console.log(`📅 Salon working hours:`, {
+      openTime: `${Math.floor(dayHours.open_time/60)}:${(dayHours.open_time%60).toString().padStart(2,'0')}`,
+      closeTime: `${Math.floor(dayHours.close_time/60)}:${(dayHours.close_time%60).toString().padStart(2,'0')}`,
+      startMinutes: dayHours.open_time,
+      endMinutes: dayHours.close_time
+    })
+    
+    return result
+  }
+
+  // Helper function to check if staff member is on leave for current day
+  const isStaffOnLeave = (staffGhlId: string) => {
+    const dayLeaves = getStaffLeaves(staffGhlId)
+    return dayLeaves.some(leave => {
+      const start = new Date(leave["Event/Start"])
+      const end = new Date(leave["Event/End"])
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+      const endDayExclusive = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+      const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+      return currentDay >= startDay && currentDay < endDayExclusive
+    })
+  }
+
+  // Helper function to get break periods for staff member on current day
+  const getStaffBreakPeriods = (staffGhlId: string) => {
+    const dayBreaks = getStaffBreaks(staffGhlId)
+    const periods: { startMinutes: number, endMinutes: number }[] = []
+    
+    dayBreaks.forEach(breakItem => {
+      const startTime = breakItem["Block/Start"]
+      const endTime = breakItem["Block/End"]
+      
+      if (startTime && endTime) {
+        // Break times are stored as minutes from midnight
+        const startMinutes = parseInt(startTime)
+        const endMinutes = parseInt(endTime)
+        
+        // Only include breaks within our calendar range (8AM-8PM)
+        if (startMinutes >= 8 * 60 && endMinutes <= 20 * 60) {
+          periods.push({ startMinutes, endMinutes })
+        }
+      }
+    })
+    
+    return periods
+  }
+
   // Helper function to get non-working time periods for a staff member
-  const getNonWorkingPeriods = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, name?: string }) => {
-    const workingHours = getStaffWorkingHours(staffMember)
-    if (!workingHours) {
-      // Entire day is off - grey out from 8AM to 8PM (our calendar range)
+  const getNonWorkingPeriods = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, name?: string, ghl_id?: string }) => {
+    const periods: { startMinutes: number, endMinutes: number, type: string }[] = []
+    const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
+    const dayEndMinutes = 20 * 60  // Gray area extends till 8PM (even though view ends at 7PM)
+
+    // Check if staff member is on leave - grey out entire day
+    if (staffMember.ghl_id && isStaffOnLeave(staffMember.ghl_id)) {
+      console.log(`📅 ${staffMember.name} is on leave - greying entire day`)
       return [{
         startMinutes: 8 * 60, // 8AM
-        endMinutes: 20 * 60   // 8PM
+        endMinutes: 20 * 60,  // 8PM
+        type: 'leave'
       }]
     }
 
-    const periods = []
-    const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
-    const dayEndMinutes = 20 * 60  // Calendar ends at 8PM
-    const workStartMinutes = workingHours.startMinutes
-    const workEndMinutes = workingHours.endMinutes
+    // Get salon working hours
+    const salonHours = getSalonWorkingHours()
     
-    // Before working hours (if work starts after 8AM)
-    if (workStartMinutes > dayStartMinutes) {
-      periods.push({
+    // Get staff working hours
+    const workingHours = getStaffWorkingHours(staffMember)
+    
+    // If salon is closed, grey out entire day
+    if (!salonHours) {
+      console.log(`📅 Salon is closed - greying entire day for ${staffMember.name}`)
+      return [{
+        startMinutes: 8 * 60, // 8AM
+        endMinutes: 20 * 60,  // 8PM
+        type: 'salon-closed'
+      }]
+    }
+
+    // If staff has no working hours, grey out entire day
+    if (!workingHours) {
+      console.log(`📅 ${staffMember.name} has no working hours - greying entire day`)
+      return [{
+        startMinutes: 8 * 60, // 8AM
+        endMinutes: 20 * 60,  // 8PM
+        type: 'staff-off'
+      }]
+    }
+
+    console.log(`📅 ${staffMember.name} working analysis:`, {
+      salon: {
+        hours: `${Math.floor(salonHours.startMinutes/60)}:${(salonHours.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(salonHours.endMinutes/60)}:${(salonHours.endMinutes%60).toString().padStart(2,'0')}`,
+        minutes: `${salonHours.startMinutes} - ${salonHours.endMinutes}`
+      },
+      staff: {
+        hours: `${Math.floor(workingHours.startMinutes/60)}:${(workingHours.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(workingHours.endMinutes/60)}:${(workingHours.endMinutes%60).toString().padStart(2,'0')}`,
+        minutes: `${workingHours.startMinutes} - ${workingHours.endMinutes}`
+      }
+    })
+
+    // Salon hours greying (before salon opens and after salon closes)
+    console.log(`📅 Salon hours calculation for ${staffMember.name}:`, {
+      dayStart: `${dayStartMinutes} (${Math.floor(dayStartMinutes/60)}:${(dayStartMinutes%60).toString().padStart(2,'0')})`,
+      dayEnd: `${dayEndMinutes} (${Math.floor(dayEndMinutes/60)}:${(dayEndMinutes%60).toString().padStart(2,'0')})`,
+      salonStart: `${salonHours.startMinutes} (${Math.floor(salonHours.startMinutes/60)}:${(salonHours.startMinutes%60).toString().padStart(2,'0')})`,
+      salonEnd: `${salonHours.endMinutes} (${Math.floor(salonHours.endMinutes/60)}:${(salonHours.endMinutes%60).toString().padStart(2,'0')})`
+    })
+    
+    if (salonHours.startMinutes > dayStartMinutes) {
+      const beforeOpenPeriod = {
         startMinutes: dayStartMinutes,
-        endMinutes: Math.min(workStartMinutes, dayEndMinutes)
-      })
+        endMinutes: Math.min(salonHours.startMinutes, dayEndMinutes),
+        type: 'salon-closed'
+      }
+      console.log(`📅 Adding before-open period:`, beforeOpenPeriod)
+      periods.push(beforeOpenPeriod)
     }
     
-    // After working hours (if work ends before 8PM)
-    if (workEndMinutes < dayEndMinutes) {
-      periods.push({
-        startMinutes: Math.max(workEndMinutes, dayStartMinutes),
-        endMinutes: dayEndMinutes
+    if (salonHours.endMinutes < dayEndMinutes) {
+      const afterClosePeriod = {
+        startMinutes: Math.max(salonHours.endMinutes, dayStartMinutes),
+        endMinutes: dayEndMinutes,
+        type: 'salon-closed'
+      }
+      console.log(`📅 Adding after-close period:`, {
+        ...afterClosePeriod,
+        timeRange: `${Math.floor(afterClosePeriod.startMinutes/60)}:${(afterClosePeriod.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(afterClosePeriod.endMinutes/60)}:${(afterClosePeriod.endMinutes%60).toString().padStart(2,'0')}`,
+        shouldCover: "Should gray out entire area after salon closes"
       })
+      periods.push(afterClosePeriod)
+    }
+
+    // Staff hours greying (before staff starts and after staff ends, but only within salon hours)
+    // Only add staff-specific graying within salon operating hours
+    const effectiveWorkStart = Math.max(workingHours.startMinutes, salonHours.startMinutes)
+    const effectiveWorkEnd = Math.min(workingHours.endMinutes, salonHours.endMinutes)
+    
+    console.log(`📅 Staff hours calculation for ${staffMember.name}:`, {
+      salonOpen: salonHours.startMinutes,
+      salonClose: salonHours.endMinutes,
+      staffStart: workingHours.startMinutes,
+      staffEnd: workingHours.endMinutes,
+      effectiveStart: effectiveWorkStart,
+      effectiveEnd: effectiveWorkEnd
+    })
+    
+    // Before staff starts (within salon hours only)
+    if (effectiveWorkStart > salonHours.startMinutes) {
+      const beforeStaffPeriod = {
+        startMinutes: salonHours.startMinutes,
+        endMinutes: effectiveWorkStart,
+        type: 'staff-off'
+      }
+      console.log(`📅 Adding before-staff period:`, beforeStaffPeriod)
+      periods.push(beforeStaffPeriod)
     }
     
-    return periods
+    // After staff ends (within salon hours only)
+    if (effectiveWorkEnd < salonHours.endMinutes) {
+      const afterStaffPeriod = {
+        startMinutes: effectiveWorkEnd,
+        endMinutes: salonHours.endMinutes,
+        type: 'staff-off'
+      }
+      console.log(`📅 Adding after-staff period:`, afterStaffPeriod)
+      periods.push(afterStaffPeriod)
+    }
+
+    // Add break periods
+    if (staffMember.ghl_id) {
+      const breakPeriods = getStaffBreakPeriods(staffMember.ghl_id)
+      if (breakPeriods.length > 0) {
+        console.log(`📅 ${staffMember.name} has ${breakPeriods.length} break periods:`, breakPeriods)
+      }
+      periods.push(...breakPeriods.map(period => ({ ...period, type: 'break' })))
+    }
+    
+    // Sort periods by start time 
+    periods.sort((a, b) => a.startMinutes - b.startMinutes)
+    
+    // Simple approach - don't merge, just return all periods
+    // Let CSS handle overlapping with z-index and opacity
+    const finalPeriods = periods.filter(p => p.startMinutes < p.endMinutes)
+    
+    console.log(`📅 ${staffMember.name} non-working periods (final):`, finalPeriods.map(p => ({
+      type: p.type,
+      time: `${Math.floor(p.startMinutes/60)}:${(p.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(p.endMinutes/60)}:${(p.endMinutes%60).toString().padStart(2,'0')}`,
+      startMinutes: p.startMinutes,
+      endMinutes: p.endMinutes
+    })))
+    
+    return finalPeriods
   }
 
   if (loading) {
@@ -725,36 +908,28 @@ const StaffOverviewView = ({
       </div>
 
       {/* Scrollable Time grid container */}
-      <div className="flex-1 overflow-y-auto w-full pt-2 pb-6 min-h-0" ref={scrollContainerRef}>
-        <div className="flex w-full" style={{ height: `${(timeSlots.length * 60) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+      <div className="flex-1 overflow-y-auto w-full pb-6 min-h-0" ref={scrollContainerRef}>
+        <div className="flex w-full" style={{ height: `${(12 * 120) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
             {timeSlots.map((time, index) => {
-              const isHourMark = time.endsWith(':00')
               return (
                 <div
                   key={time}
-                  className={`absolute left-0 right-0 px-2 flex items-center justify-end ${
-                    isHourMark 
-                      ? 'border-b border-border' 
-                      : 'border-b border-border/20'
-                  }`}
+                  className={"absolute left-0 right-0 px-2 flex items-center justify-end border-b border-border"}
                   style={{ 
-                    top: `${GRID_TOP_PADDING + index * 60}px`, 
-                    height: '60px'
+                    top: `${GRID_TOP_PADDING + index * 120}px`, 
+                    height: '120px'
                   }}
                 >
-                  {isHourMark && (
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {(() => {
-                        const hour = parseInt(time)
-                        if (hour === 0) return '12 AM'
-                        if (hour < 12) return `${hour} AM`
-                        if (hour === 12) return '12 PM'
-                        return `${hour - 12} PM`
-                      })()}
-                    </span>
-                  )}
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {(() => {
+                      const hour = parseInt(time)
+                      if (hour === 12) return '12 PM'
+                      if (hour > 12) return `${hour - 12} PM`
+                      return `${hour} AM`
+                    })()}
+                  </span>
                 </div>
               )
             })}
@@ -768,22 +943,19 @@ const StaffOverviewView = ({
               h.scrollLeft = sl
             }
           }}>
-            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${timeSlots.length * 60 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${(12 * 120) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
                 <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
                   {/* Hour lines for this staff column */}
                   {timeSlots.map((time, index) => {
-                    const isHourMark = time.endsWith(':00')
                     return (
                       <div
                         key={time}
-                        className={`absolute left-0 right-0 ${
-                          isHourMark ? 'border-b border-border' : 'border-b border-border/20'
-                        }`}
+                        className={`absolute left-0 right-0 border-b border-border`}
                         style={{ 
-                          top: `${GRID_TOP_PADDING + index * 60}px`, 
-                          height: '60px'
+                          top: `${GRID_TOP_PADDING + index * 120}px`, 
+                          height: '120px'
                         }}
                       />
                     )
@@ -791,21 +963,90 @@ const StaffOverviewView = ({
 
                   {/* Non-working hours grey overlay */}
                   {getNonWorkingPeriods(staffMember).map((period, index) => {
-                    const startPosition = GRID_TOP_PADDING + ((period.startMinutes - (8 * 60)) / 60) * 60
-                    const endPosition = GRID_TOP_PADDING + ((period.endMinutes - (8 * 60)) / 60) * 60
+                    // Calculate slot index based on time
+    // Each slot is 60 minutes, starting from 8:00 AM (slot 0)
+    const startSlotIndex = (period.startMinutes - (8 * 60)) / 60
+    const endSlotIndex = (period.endMinutes - (8 * 60)) / 60
+    
+    // Position based on slot index (each slot is 120px high)
+    // Use the exact same positioning as the time slot lines
+    const startPosition = GRID_TOP_PADDING + startSlotIndex * 120
+    const endPosition = GRID_TOP_PADDING + endSlotIndex * 120
                     const height = endPosition - startPosition
+                    
+                    // Debug logging
+                    console.log(`📅 ${staffMember.name} period ${index}:`, {
+                      type: period.type,
+                      startMinutes: period.startMinutes,
+                      endMinutes: period.endMinutes,
+                      startTime: `${Math.floor(period.startMinutes/60)}:${(period.startMinutes%60).toString().padStart(2,'0')}`,
+                      endTime: `${Math.floor(period.endMinutes/60)}:${(period.endMinutes%60).toString().padStart(2,'0')}`,
+                      startSlotIndex,
+                      endSlotIndex,
+                      startPosition,
+                      endPosition,
+                      height,
+                      GRID_TOP_PADDING,
+                      expectedSlots: `Should cover slots ${startSlotIndex} to ${endSlotIndex} (${endSlotIndex - startSlotIndex} slots)`,
+                      timeSlotMapping: {
+                        slot10: '18:00 (6 PM)',
+                        slot11: '19:00 (7 PM)'
+                      }
+                    })
+                    
+                    // Validate positioning
+                    if (height <= 0) {
+                      console.warn(`📅 Invalid height for ${staffMember.name} period ${index}:`, height)
+                      return null
+                    }
+                    
+                    // Different styling based on type
+                    let bgClass = "bg-gray-200/40"
+                    let titleText = `${staffMember.name} is not working during this time`
+                    let zIndex = 1
+                    
+                    switch (period.type) {
+                      case 'leave':
+                        bgClass = "bg-orange-200/60"
+                        titleText = `${staffMember.name} is on leave`
+                        zIndex = 4
+                        break
+                      case 'salon-closed':
+                        bgClass = "bg-red-200/50"
+                        titleText = "Salon is closed during this time"
+                        zIndex = 3 // Highest priority
+                        break
+                      case 'staff-off':
+                        bgClass = "bg-gray-300/50"
+                        titleText = `${staffMember.name} is not scheduled to work`
+                        zIndex = 2
+                        break
+                      case 'break':
+                        bgClass = "bg-blue-200/50"
+                        titleText = `${staffMember.name} is on break`
+                        zIndex = 4
+                        break
+                    }
                     
                     return (
                       <div
                         key={`non-working-${index}`}
-                        className="absolute left-0 right-0 bg-gray-200/40 pointer-events-none"
+                        className={`absolute left-0 right-0 ${bgClass} group cursor-help`}
                         style={{
                           top: `${startPosition}px`,
                           height: `${height}px`,
-                          zIndex: 1
+                          zIndex: zIndex
                         }}
-                        title={`${staffMember.name} is not working during this time`}
-                      />
+                        title={titleText}
+                      >
+                        {/* Tooltip */}
+                        <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 text-white text-xs rounded px-2 py-1 pointer-events-none z-50 whitespace-nowrap left-2 top-1">
+                          {titleText}
+                          <div className="text-gray-300 text-[10px]">
+                            {Math.floor(period.startMinutes/60)}:{(period.startMinutes%60).toString().padStart(2,'0')} - {Math.floor(period.endMinutes/60)}:{(period.endMinutes%60).toString().padStart(2,'0')}
+                          </div>
+                        </div>
+                      </div>
                     )
                   })}
 
@@ -1793,7 +2034,7 @@ export default function CalendarPage() {
               <>
                 {/* Day View */}
                 {view === 'day' && (
-                  <div className="flex-1 h-full">
+                  <div className="flex-1 h-full px-4 py-4">
                     {isSalonDayOff(currentDate) ? (
                       <div className="text-center py-12 text-red-600 h-full flex flex-col items-center justify-center">
                         <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
