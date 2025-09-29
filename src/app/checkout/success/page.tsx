@@ -14,7 +14,10 @@ import {
   Clock,
   User as UserIcon,
   Mail,
-  Phone
+  Phone,
+  Split,
+  CreditCard,
+  DollarSign
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -30,6 +33,21 @@ interface PaymentResult {
   appointmentDate: string
   appointmentTime: string
   paymentId: string
+  isSplitPayment?: boolean
+  isServiceSplit?: boolean
+  splitPayments?: Array<{
+    method: string
+    amount: number
+    percentage: number
+  }>
+  serviceSplits?: Array<{
+    serviceId: string
+    serviceName: string
+    servicePrice: number
+    paymentMethod: string
+    staffNames: string[]
+  }>
+  paymentMethod?: string
 }
 
 function CheckoutSuccessContent() {
@@ -64,7 +82,12 @@ function CheckoutSuccessContent() {
           staffName: parsedData.transaction.paymentStaff || 'Staff',
           appointmentDate: parsedData.transaction.paymentDate || new Date().toISOString(),
           appointmentTime: '',
-          paymentId: transactionId
+          paymentId: transactionId,
+          isSplitPayment: parsedData.transaction.isSplitPayment || false,
+          isServiceSplit: parsedData.transaction.isServiceSplit || false,
+          splitPayments: parsedData.transaction.splitPayments || [],
+          serviceSplits: parsedData.transaction.serviceSplits || [],
+          paymentMethod: parsedData.transaction.method || 'card'
         })
         toast.success('Payment completed successfully!')
         return
@@ -96,7 +119,12 @@ function CheckoutSuccessContent() {
         staffName: transaction.staff || items.map((item: { staffName: string }) => item.staffName).join(', ') || 'Staff',
         appointmentDate: transaction.paymentDate || new Date().toISOString(),
         appointmentTime: '',
-        paymentId: transactionId
+        paymentId: transactionId,
+        isSplitPayment: transaction.isSplitPayment || false,
+        isServiceSplit: transaction.isServiceSplit || false,
+        splitPayments: transaction.splitPayments || [],
+        serviceSplits: transaction.serviceSplits || [],
+        paymentMethod: transaction.method || 'card'
       })
       
       toast.success('Payment completed successfully!')
@@ -130,6 +158,41 @@ function CheckoutSuccessContent() {
         minute: '2-digit',
         hour12: true
       })
+    }
+  }
+
+  // Get payment method icon
+  const getPaymentMethodIcon = (method: string) => {
+    switch (method.toLowerCase()) {
+      case 'cash':
+        return DollarSign
+      case 'split_payment':
+      case 'service_split':
+        return Split
+      default:
+        return CreditCard
+    }
+  }
+
+  // Get payment method display name
+  const getPaymentMethodName = (method: string) => {
+    switch (method.toLowerCase()) {
+      case 'visa':
+        return 'Visa'
+      case 'mastercard':
+        return 'Mastercard'
+      case 'amex':
+        return 'American Express'
+      case 'debit':
+        return 'Debit Card'
+      case 'cash':
+        return 'Cash'
+      case 'split_payment':
+        return 'Split Payment'
+      case 'service_split':
+        return 'Service Split'
+      default:
+        return 'Card Payment'
     }
   }
 
@@ -240,10 +303,80 @@ function CheckoutSuccessContent() {
                   <CardContent className="space-y-4">
                     <div className="grid gap-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Amount Paid</span>
+                        <span className="text-sm text-muted-foreground">Total Amount</span>
                         <span className="font-semibold text-lg text-[#601625]">
                           {formatCurrency(paymentResult.amount)}
                         </span>
+                      </div>
+                      
+                      {/* Payment Method Information */}
+                      <div className="pt-3 border-t border-neutral-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          {(() => {
+                            const IconComponent = getPaymentMethodIcon(paymentResult.paymentMethod || 'card')
+                            return <IconComponent className="h-4 w-4 text-[#601625]" />
+                          })()}
+                          <span className="text-sm font-medium">
+                            {getPaymentMethodName(paymentResult.paymentMethod || 'card')}
+                          </span>
+                        </div>
+                        
+                        {/* Split Payment Details */}
+                        {paymentResult.isSplitPayment && paymentResult.splitPayments && paymentResult.splitPayments.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground mb-2">Payment Breakdown:</p>
+                            {paymentResult.splitPayments.map((split, index) => (
+                              <div key={index} className="flex items-center justify-between py-2 px-3 bg-neutral-50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  {(() => {
+                                    const IconComponent = getPaymentMethodIcon(split.method)
+                                    return <IconComponent className="h-3 w-3 text-neutral-600" />
+                                  })()}
+                                  <span className="text-sm font-medium">{getPaymentMethodName(split.method)}</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold text-[#601625]">
+                                    {formatCurrency(split.amount)}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {split.percentage.toFixed(1)}%
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Service Split Details */}
+                        {paymentResult.isServiceSplit && paymentResult.serviceSplits && paymentResult.serviceSplits.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground mb-2">Service Payment Breakdown:</p>
+                            {paymentResult.serviceSplits.map((split, index) => (
+                              <div key={index} className="py-2 px-3 bg-neutral-50 rounded-lg">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium">{split.serviceName}</span>
+                                  <span className="text-sm font-semibold text-[#601625]">
+                                    {formatCurrency(split.servicePrice)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    {(() => {
+                                      const IconComponent = getPaymentMethodIcon(split.paymentMethod)
+                                      return <IconComponent className="h-3 w-3 text-neutral-600" />
+                                    })()}
+                                    <span className="text-xs text-muted-foreground">
+                                      {getPaymentMethodName(split.paymentMethod)}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">
+                                    {split.staffNames.join(', ')}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>

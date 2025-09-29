@@ -38,6 +38,12 @@ import {
   Gem,
   CheckCircle2,
   Edit3,
+  Split,
+  X,
+  Calculator,
+  Target,
+  Banknote,
+  Minus
 } from "lucide-react"
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -145,27 +151,199 @@ function CheckoutContent() {
   const [customTipAmount, setCustomTipAmount] = useState('')
   const [useCustomTip, setUseCustomTip] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
+  const [isSplitPayment, setIsSplitPayment] = useState(false)
+  const [splitPayments, setSplitPayments] = useState<Array<{
+    id: string
+    method: string
+    amount: string
+    percentage: number
+  }>>([
+    { id: '1', method: 'visa', amount: '', percentage: 100 }
+  ])
+  const [splitMode, setSplitMode] = useState<'payment' | 'service'>('payment')
+  const [showSplitDialog, setShowSplitDialog] = useState(false)
+  const [serviceSplits, setServiceSplits] = useState<Array<{
+    id: string
+    serviceId: string
+    serviceName: string
+    servicePrice: number
+    paymentMethod: string
+    staffNames: string[]
+  }>>([])
+  const [isServiceSplit, setIsServiceSplit] = useState(false)
   const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false)
   const [groups, setGroups] = useState<Group[]>([])
   const [groupServices, setGroupServices] = useState<GroupServices>({})
   const [loadingGroups, setLoadingGroups] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   const [selectedService, setSelectedService] = useState<Service | null>(null)
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('')
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([])
   const [showStaffSelection, setShowStaffSelection] = useState(false)
-  const [staffData, setStaffData] = useState<Array<{ ghl_id: string; name: string }>>([])
+  const [staffData, setStaffData] = useState<Array<{ ghl_id: string; name: string; userId: string }>>([])
   const [selectedStaffTab, setSelectedStaffTab] = useState<'all' | 'available'>('all')
   const [additionalServices, setAdditionalServices] = useState<Array<{
     id: string
     name: string
     price: number
     duration: number
-    staffId: string
-    staffName: string
+    staffIds: string[]
+    staffNames: string[]
+    priceDistribution: Array<{ staffId: string; staffName: string; amount: number }>
   }>>([])
   const [editingService, setEditingService] = useState<{ type: 'appointment' | 'additional', index: number } | null>(null)
   const [editPrice, setEditPrice] = useState<string>('')
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+
+  // Utility functions for price and tip distribution
+  const calculatePriceDistribution = (totalPrice: number, staffCount: number) => {
+    const baseAmount = Math.floor((totalPrice / staffCount) * 100) / 100
+    const remainder = Math.round((totalPrice - (baseAmount * staffCount)) * 100) / 100
+    
+    const distribution = Array(staffCount).fill(baseAmount)
+    if (remainder > 0) {
+      distribution[0] += remainder
+    }
+    
+    return distribution
+  }
+
+  const calculateTipDistribution = (totalTip: number, staffCount: number) => {
+    return calculatePriceDistribution(totalTip, staffCount)
+  }
+
+  const toggleStaffSelection = (staffId: string) => {
+    setSelectedStaffIds(prev => {
+      if (prev.includes(staffId)) {
+        return prev.filter(id => id !== staffId)
+      } else {
+        return [...prev, staffId]
+      }
+    })
+  }
+
+  // Split payment utility functions
+  const getTotalAmount = () => {
+    if (!paymentSession) return 0
+    return getCurrentSubtotal() + getEffectiveTipAmount() + getCurrentGST()
+  }
+
+  const addSplitPayment = () => {
+    if (splitPayments.length >= 3) return
+    
+    const newId = (splitPayments.length + 1).toString()
+    setSplitPayments(prev => [...prev, {
+      id: newId,
+      method: 'visa',
+      amount: '',
+      percentage: 0
+    }])
+  }
+
+  const removeSplitPayment = (id: string) => {
+    if (splitPayments.length <= 1) return
+    setSplitPayments(prev => prev.filter(payment => payment.id !== id))
+  }
+
+  const updateSplitPayment = (id: string, field: 'method' | 'amount', value: string) => {
+    setSplitPayments(prev => prev.map(payment => {
+      if (payment.id === id) {
+        if (field === 'amount') {
+          const amount = parseFloat(value) || 0
+          const totalAmount = getTotalAmount()
+          const percentage = totalAmount > 0 ? (amount / totalAmount) * 100 : 0
+          return { ...payment, amount: value, percentage }
+        } else {
+          return { ...payment, [field]: value }
+        }
+      }
+      return payment
+    }))
+  }
+
+  const getSplitPaymentTotal = () => {
+    return splitPayments.reduce((total, payment) => {
+      return total + (parseFloat(payment.amount) || 0)
+    }, 0)
+  }
+
+  const getRemainingAmount = () => {
+    return getTotalAmount() - getSplitPaymentTotal()
+  }
+
+  const autoDistributeRemaining = () => {
+    const remaining = getRemainingAmount()
+    const emptyPayments = splitPayments.filter(p => !p.amount || parseFloat(p.amount) === 0)
+    
+    if (emptyPayments.length > 0 && remaining > 0) {
+      const amountPerPayment = remaining / emptyPayments.length
+      setSplitPayments(prev => prev.map(payment => {
+        if (emptyPayments.some(ep => ep.id === payment.id)) {
+          const totalAmount = getTotalAmount()
+          const percentage = totalAmount > 0 ? (amountPerPayment / totalAmount) * 100 : 0
+          return { ...payment, amount: amountPerPayment.toFixed(2), percentage }
+        }
+        return payment
+      }))
+    }
+  }
+
+  // Service splitting utility functions
+  const initializeServiceSplits = () => {
+    const allServices: Array<{
+      id: string
+      serviceId: string
+      serviceName: string
+      servicePrice: number
+      paymentMethod: string
+      staffNames: string[]
+    }> = []
+    
+    // Add appointment services
+    if (paymentSession?.appointments) {
+      paymentSession.appointments.forEach((appointment, index) => {
+        allServices.push({
+          id: `appointment-${index}`,
+          serviceId: appointment.serviceName,
+          serviceName: appointment.serviceName,
+          servicePrice: appointment.servicePrice,
+          paymentMethod: 'visa',
+          staffNames: [appointment.staffName]
+        })
+      })
+    }
+    
+    // Add additional services
+    additionalServices.forEach((service, index) => {
+      allServices.push({
+        id: `additional-${index}`,
+        serviceId: service.id,
+        serviceName: service.name,
+        servicePrice: service.price,
+        paymentMethod: 'visa',
+        staffNames: service.staffNames || []
+      })
+    })
+    
+    setServiceSplits(allServices)
+  }
+
+  const updateServicePaymentMethod = (serviceId: string, method: string) => {
+    setServiceSplits(prev => prev.map(service => 
+      service.id === serviceId ? { ...service, paymentMethod: method } : service
+    ))
+  }
+
+  const autoDistributeServicePayments = () => {
+    const paymentMethods = ['visa', 'mastercard', 'cash']
+    setServiceSplits(prev => prev.map((service, index) => ({
+      ...service,
+      paymentMethod: paymentMethods[index % paymentMethods.length]
+    })))
+  }
+
+  const getServiceSplitTotal = () => {
+    return serviceSplits.reduce((total, service) => total + service.servicePrice, 0)
+  }
 
   // Get icon for group
   const getGroupIcon = (groupName: string) => {
@@ -195,14 +373,22 @@ function CheckoutContent() {
   const handleServiceClick = (service: Service) => {
     setSelectedService(service)
     setShowStaffSelection(true)
-    setSelectedStaffId('') // No default selection
+    setSelectedStaffIds([]) // No default selection
     setSelectedStaffTab('all') // Default to all staff tab
   }
 
-  // Handle add service
+  // Handle add service with multiple staff
   const handleAddService = () => {
-    if (selectedService && selectedStaffId) {
-      const staffName = getStaffName(selectedStaffId)
+    if (selectedService && selectedStaffIds.length > 0) {
+      const staffNames = selectedStaffIds.map(id => getStaffName(id))
+      const pricePerStaff = calculatePriceDistribution(selectedService.price, selectedStaffIds.length)
+      
+      // Create price distribution for each staff member
+      const priceDistribution = selectedStaffIds.map((staffId, index) => ({
+        staffId,
+        staffName: getStaffName(staffId),
+        amount: pricePerStaff[index]
+      }))
       
       // Add service to additional services
       const newService = {
@@ -210,18 +396,19 @@ function CheckoutContent() {
         name: selectedService.name,
         price: selectedService.price,
         duration: selectedService.duration,
-        staffId: selectedStaffId,
-        staffName: staffName
+        staffIds: selectedStaffIds,
+        staffNames: staffNames,
+        priceDistribution: priceDistribution
       }
       
       setAdditionalServices(prev => [...prev, newService])
       
-      console.log('Adding service:', selectedService.name, 'with staff:', staffName)
-      toast.success(`${selectedService.name} added to appointment`)
+      console.log('Adding service:', selectedService.name, 'with staff:', staffNames.join(', '))
+      toast.success(`${selectedService.name} added with ${selectedStaffIds.length} staff member${selectedStaffIds.length > 1 ? 's' : ''}`)
       
       // Reset states and close dialog
       setSelectedService(null)
-      setSelectedStaffId('')
+      setSelectedStaffIds([])
       setShowStaffSelection(false)
       setAddServiceDialogOpen(false)
     }
@@ -239,7 +426,8 @@ function CheckoutContent() {
       if (result.ok && result.data) {
         const staff = result.data.map((barber: { ghl_id: string; 'Barber/Name': string }) => ({
           ghl_id: barber['ghl_id'],
-          name: barber['Barber/Name']
+          name: barber['Barber/Name'],
+          userId: barber['ghl_id'] // Use ghl_id as userId for consistency
         }))
         console.log('Mapped staff data:', staff)
         setStaffData(staff)
@@ -484,6 +672,27 @@ function CheckoutContent() {
       toast.error('Please complete all required fields')
       return
     }
+    
+    // Validate split payments if enabled
+    if (isSplitPayment) {
+      const totalAmount = getTotalAmount()
+      const splitTotal = getSplitPaymentTotal()
+      if (Math.abs(totalAmount - splitTotal) > 0.01) {
+        toast.error('Split payment amounts must equal the total amount')
+        return
+      }
+      if (splitPayments.some(p => !p.amount || parseFloat(p.amount) <= 0)) {
+        toast.error('All payment methods must have valid amounts')
+        return
+      }
+    }
+
+    // Validate service splits if enabled
+    if (isServiceSplit && serviceSplits.length === 0) {
+      toast.error('Please configure service split payments')
+      return
+    }
+    
     setProcessingPayment(true)
     try {
       // 1) Persist to Supabase first - Use consistent subtotal calculation
@@ -500,13 +709,33 @@ function CheckoutContent() {
         price: a.servicePrice,
         staffName: a.staffName,
       }))
-      const addItems = additionalServices.map((s) => ({
-        id: crypto.randomUUID(),
-        serviceId: s.id,
-        serviceName: s.name,
-        price: s.price,
-        staffName: s.staffName,
-      }))
+      const addItems = additionalServices.flatMap((s) => {
+        // Handle multi-staff services with price distribution
+        if (s.priceDistribution && s.priceDistribution.length > 0) {
+          return s.priceDistribution.map((dist) => ({
+            id: crypto.randomUUID(),
+            serviceId: s.id,
+            serviceName: s.name,
+            price: dist.amount,
+            staffName: dist.staffName,
+            staffId: dist.staffId,
+            isMultiStaffPortion: true,
+            originalServicePrice: s.price,
+            staffCount: s.priceDistribution.length
+          }))
+        } else {
+          // Fallback for old single-staff services
+          return [{
+            id: crypto.randomUUID(),
+            serviceId: s.id,
+            serviceName: s.name,
+            price: s.price,
+            staffName: s.staffNames?.[0] || '',
+            staffId: s.staffIds?.[0] || '',
+            isMultiStaffPortion: false
+          }]
+        }
+      })
       const items = [...baseItems, ...addItems]
 
       const distribution = getStaffTipDistribution() // per-staff tip shares
@@ -520,15 +749,48 @@ function CheckoutContent() {
       })
 
       const transactionId = crypto.randomUUID()
+      
+      // Handle split payment data
+      const splitPaymentData = isSplitPayment ? {
+        isSplitPayment: true,
+        isServiceSplit: false,
+        splitPayments: splitPayments.map(p => ({
+          method: p.method,
+          amount: parseFloat(p.amount) || 0,
+          percentage: p.percentage
+        })),
+        splitCount: splitPayments.length,
+        serviceSplits: []
+      } : isServiceSplit ? {
+        isSplitPayment: false,
+        isServiceSplit: true,
+        splitPayments: [],
+        splitCount: serviceSplits.length,
+        serviceSplits: serviceSplits.map(s => ({
+          serviceId: s.serviceId,
+          serviceName: s.serviceName,
+          servicePrice: s.servicePrice,
+          paymentMethod: s.paymentMethod,
+          staffNames: s.staffNames
+        }))
+      } : {
+        isSplitPayment: false,
+        isServiceSplit: false,
+        splitPayments: [],
+        splitCount: 1,
+        serviceSplits: []
+      }
+      
       const payload = {
         transaction: {
           id: transactionId,
           paymentDate: new Date().toISOString(),
-          method: selectedPaymentMethod,
+          method: isSplitPayment ? 'split_payment' : isServiceSplit ? 'service_split' : selectedPaymentMethod,
           subtotal,
           tax: gst,
           tip,
           totalPaid,
+          ...splitPaymentData,
           serviceNamesJoined: items.map((i) => i.serviceName).join(', '),
           // Provide all known service IDs for reporting/relations on Supabase
           serviceAcuityIds: items
@@ -617,7 +879,7 @@ function CheckoutContent() {
     return Number((subtotal * 0.05).toFixed(2))  // 5% GST
   }
 
-  // Calculate staff tip distribution
+  // Calculate staff tip distribution with multiple staff support
   const getStaffTipDistribution = () => {
     if (!paymentSession || getEffectiveTipAmount() <= 0) return []
     
@@ -627,11 +889,21 @@ function CheckoutContent() {
         staffName: apt.staffName,
         servicePrice: apt.servicePrice
       })),
-      ...additionalServices.map(service => ({
-        staffId: service.staffId,
-        staffName: service.staffName,
-        servicePrice: service.price
-      }))
+      // Handle multiple staff services with price distribution
+      ...additionalServices.flatMap(service => 
+        service.priceDistribution ? 
+          service.priceDistribution.map(dist => ({
+            staffId: dist.staffId,
+            staffName: dist.staffName,
+            servicePrice: dist.amount
+          })) :
+          // Fallback for old single-staff services
+          [{
+            staffId: service.staffIds?.[0] || '',
+            staffName: service.staffNames?.[0] || '',
+            servicePrice: service.price
+          }]
+      )
     ]
     
     // Group by staff member
@@ -715,12 +987,44 @@ function CheckoutContent() {
         }
       } : null)
     } else if (editingService.type === 'additional') {
-      // Update additional service price
+      // Update additional service price and recalculate price distribution for multiple staff
       const updatedAdditionalServices = [...additionalServices]
-      updatedAdditionalServices[editingService.index] = {
-        ...updatedAdditionalServices[editingService.index],
-        price: newPrice
+      const serviceToUpdate = updatedAdditionalServices[editingService.index]
+      
+      // If this service has multiple staff, recalculate price distribution
+      if (serviceToUpdate.priceDistribution && serviceToUpdate.priceDistribution.length > 0) {
+        const newPriceDistribution = calculatePriceDistribution(newPrice, serviceToUpdate.priceDistribution.length)
+        
+        // Update price distribution with new amounts
+        const updatedPriceDistribution = serviceToUpdate.priceDistribution.map((dist, index) => ({
+          ...dist,
+          amount: newPriceDistribution[index]
+        }))
+        
+        updatedAdditionalServices[editingService.index] = {
+          ...serviceToUpdate,
+          price: newPrice,
+          priceDistribution: updatedPriceDistribution
+        }
+        
+        console.log('Updated price distribution for service:', serviceToUpdate.name, {
+          oldPrice: serviceToUpdate.price,
+          newPrice: newPrice,
+          staffCount: serviceToUpdate.priceDistribution.length,
+          newDistribution: updatedPriceDistribution
+        })
+        
+        toast.success(`Price updated to ${formatCurrency(newPrice, paymentSession.pricing.currency)} and redistributed among ${serviceToUpdate.priceDistribution.length} staff`)
+      } else {
+        // Single staff service - simple price update
+        updatedAdditionalServices[editingService.index] = {
+          ...serviceToUpdate,
+          price: newPrice
+        }
+        
+        toast.success(`Price updated to ${formatCurrency(newPrice, paymentSession.pricing.currency)}`)
       }
+      
       setAdditionalServices(updatedAdditionalServices)
       
       // Recalculate pricing for additional services
@@ -1132,15 +1436,20 @@ function CheckoutContent() {
                                             {getFilteredStaff().map((staff, index) => (
                                               <button
                                                 key={staff.userId}
-                                                onClick={() => setSelectedStaffId(staff.userId)}
-                                                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                                  selectedStaffId === staff.userId
+                                                onClick={() => toggleStaffSelection(staff.userId)}
+                                                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all relative ${
+                                                  selectedStaffIds.includes(staff.userId)
                                                     ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
                                                     : 'border-neutral-200 bg-white hover:border-[#7b1d1d]/30 hover:bg-neutral-50'
                                                 }`}
                                               >
+                                                {selectedStaffIds.includes(staff.userId) && (
+                                                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-[#7b1d1d] rounded-full flex items-center justify-center">
+                                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                                  </div>
+                                                )}
                                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
-                                                  selectedStaffId === staff.userId
+                                                  selectedStaffIds.includes(staff.userId)
                                                     ? 'bg-[#7b1d1d]'
                                                     : 'bg-neutral-400'
                                                 }`}>
@@ -1166,11 +1475,11 @@ function CheckoutContent() {
                                           </Button>
                                           <Button
                                             onClick={handleAddService}
-                                            disabled={!selectedStaffId}
+                                            disabled={selectedStaffIds.length === 0}
                                             className="flex-1 rounded-xl bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
                                           >
                                             <Plus className="h-4 w-4 mr-2" />
-                                            Add Service
+                                            Add Service {selectedStaffIds.length > 0 && `(${selectedStaffIds.length} staff)`}
                                           </Button>
                                         </div>
                                       </div>
@@ -1219,7 +1528,7 @@ function CheckoutContent() {
                               <div key={`additional-${index}`} className="flex items-center justify-between px-4 py-3">
                                 <div>
                                   <div className="text-[14px] font-medium text-neutral-900">{service.name}</div>
-                                  <div className="text-[12px] text-neutral-500">{service.duration} min • {service.staffName}</div>
+                                  <div className="text-[12px] text-neutral-500">{service.duration} min • {service.staffNames?.join(', ') || 'Multiple staff'}</div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(service.price, paymentSession.pricing.currency)}</div>
@@ -1298,53 +1607,253 @@ function CheckoutContent() {
                     </Card>
                   )}
 
+                  {/* Service Price Distribution Card - Full Width */}
+                  {additionalServices.some(service => service.priceDistribution && service.priceDistribution.length > 1) && (
+                    <Card className="rounded-2xl border-neutral-200 shadow-none">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
+                          <Users className="h-5 w-5 text-[#7b1d1d]" />
+                          Service Price Distribution
+                        </CardTitle>
+                        <CardDescription className="text-[13px]">How service prices are distributed among multiple staff members</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {additionalServices
+                            .filter(service => service.priceDistribution && service.priceDistribution.length > 1)
+                            .map((service, serviceIndex) => (
+                              <div key={serviceIndex} className="rounded-xl border border-neutral-200 p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-medium text-neutral-900">{service.name}</h4>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-lg font-semibold text-[#7b1d1d]">
+                                        {formatCurrency(service.price, paymentSession?.pricing.currency || 'CAD')}
+                                      </span>
+                                      <span className="text-xs text-neutral-500 bg-neutral-100 px-2 py-1 rounded-full">
+                                        {service.priceDistribution.length} staff
+                                      </span>
+                                    </div>
+                                  </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                  {service.priceDistribution.map((dist, distIndex) => (
+                                    <div key={distIndex} className="flex items-center justify-between py-3 px-4 bg-neutral-50 rounded-lg border border-neutral-100">
+                                      <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#7b1d1d] to-[#a02929] flex items-center justify-center">
+                                          <span className="text-white text-sm font-semibold">
+                                            {dist.staffName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                          </span>
+                                        </div>
+                                        <span className="text-sm font-medium text-neutral-900">{dist.staffName}</span>
+                                      </div>
+                                      <span className="text-lg font-semibold text-[#7b1d1d]">
+                                        {formatCurrency(dist.amount, paymentSession?.pricing.currency || 'CAD')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Bottom Section: Payment Method + Tip Selection in Two Columns */}
                   <div className="grid gap-6 md:grid-cols-2">
                     {/* Payment Method Card */}
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-[16px] font-semibold flex items-center gap-2">
-                          <Wallet className="h-5 w-5 text-[#7b1d1d]" />
-                          Payment Method
+                        <CardTitle className="text-[16px] font-semibold flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Wallet className="h-5 w-5 text-[#7b1d1d]" />
+                            Payment Method
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowSplitDialog(true)}
+                            className="h-8 px-3 text-[#7b1d1d] hover:bg-[#7b1d1d]/10"
+                          >
+                            <Split className="h-4 w-4 mr-1" />
+                            Split
+                          </Button>
                         </CardTitle>
-                        <CardDescription className="text-[13px]">Choose your preferred payment method</CardDescription>
+        <CardDescription className="text-[13px]">
+          {isSplitPayment ? 'Multiple payment methods selected' : isServiceSplit ? 'Service split enabled - each service paid separately' : 'Choose your preferred payment method'}
+        </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <div className="grid grid-cols-2 gap-2 md:grid-cols-1 lg:grid-cols-2">
-                          {[
-                            { id: 'visa', name: 'Visa', icon: CreditCard },
-                            { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
-                            { id: 'amex', name: 'Amex', icon: CreditCard },
-                            { id: 'debit', name: 'Debit', icon: CreditCard },
-                            { id: 'cash', name: 'Cash', icon: DollarSign }
-                          ].map((method) => {
-                            const IconComponent = method.icon
-                            return (
-                              <button
-                                key={method.id}
-                                onClick={() => setSelectedPaymentMethod(method.id)}
-                                className={`flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 transition-all hover:border-[#7b1d1d]/30 cursor-pointer ${
-                                  selectedPaymentMethod === method.id
-                                    ? 'border-[#7b1d1d] bg-[#7b1d1d]'
-                                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                                }`}
+                        {!isSplitPayment ? (
+                          <div className="grid grid-cols-2 gap-2 md:grid-cols-1 lg:grid-cols-2">
+                            {[
+                              { id: 'visa', name: 'Visa', icon: CreditCard },
+                              { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
+                              { id: 'amex', name: 'Amex', icon: CreditCard },
+                              { id: 'debit', name: 'Debit', icon: CreditCard },
+                              { id: 'cash', name: 'Cash', icon: DollarSign }
+                            ].map((method) => {
+                              const IconComponent = method.icon
+                              return (
+                                <button
+                                  key={method.id}
+                                  onClick={() => setSelectedPaymentMethod(method.id)}
+                                  className={`flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 transition-all hover:border-[#7b1d1d]/30 cursor-pointer ${
+                                    selectedPaymentMethod === method.id
+                                      ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                      : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                                  }`}
+                                >
+                                  <IconComponent className={`h-4 w-4 ${
+                                    selectedPaymentMethod === method.id
+                                      ? 'text-white'
+                                      : 'text-neutral-600'
+                                  }`} />
+                                  <span className={`text-[12px] font-medium ${
+                                    selectedPaymentMethod === method.id
+                                      ? 'text-white'
+                                      : 'text-neutral-900'
+                                  }`}>{method.name}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {splitPayments.map((payment, index) => {
+                              const paymentMethods = [
+                                { id: 'visa', name: 'Visa', icon: CreditCard },
+                                { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
+                                { id: 'amex', name: 'Amex', icon: CreditCard },
+                                { id: 'debit', name: 'Debit', icon: CreditCard },
+                                { id: 'cash', name: 'Cash', icon: DollarSign }
+                              ]
+                              const selectedMethod = paymentMethods.find(m => m.id === payment.method)
+                              const IconComponent = selectedMethod?.icon || CreditCard
+                              
+                              return (
+                                <div key={payment.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                      <Select value={payment.method} onValueChange={(value) => updateSplitPayment(payment.id, 'method', value)}>
+                                        <SelectTrigger className="w-[120px] h-8 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {paymentMethods.map((method) => {
+                                            const MethodIcon = method.icon
+                                            return (
+                                              <SelectItem key={method.id} value={method.id}>
+                                                <div className="flex items-center gap-2">
+                                                  <MethodIcon className="h-3 w-3" />
+                                                  <span>{method.name}</span>
+                                                </div>
+                                              </SelectItem>
+                                            )
+                                          })}
+                                        </SelectContent>
+                                      </Select>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={payment.amount}
+                                        onChange={(e) => updateSplitPayment(payment.id, 'amount', e.target.value)}
+                                        placeholder="0.00"
+                                        className="h-8 text-xs flex-1"
+                                      />
+                                      <span className="text-xs text-neutral-500 min-w-[40px]">
+                                        {payment.percentage.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {splitPayments.length > 1 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => removeSplitPayment(payment.id)}
+                                      className="h-8 w-8 p-0 text-neutral-500 hover:text-red-600"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            
+                            <div className="flex items-center justify-between pt-2 border-t border-neutral-200">
+                              <div className="flex gap-2">
+                                {splitPayments.length < 3 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addSplitPayment}
+                                    className="h-8 px-3 text-xs"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Method
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={autoDistributeRemaining}
+                                  className="h-8 px-3 text-xs text-[#7b1d1d]"
+                                >
+                                  <Calculator className="h-3 w-3 mr-1" />
+                                  Auto Split
+                                </Button>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setIsSplitPayment(false)
+                                  setSplitPayments([{ id: '1', method: 'visa', amount: '', percentage: 100 }])
+                                }}
+                                className="h-8 px-3 text-xs text-neutral-600"
                               >
-                                <IconComponent className={`h-4 w-4 ${
-                                  selectedPaymentMethod === method.id
-                                    ? 'text-white'
-                                    : 'text-neutral-600'
-                                }`} />
-                                <span className={`text-[12px] font-medium ${
-                                  selectedPaymentMethod === method.id
-                                    ? 'text-white'
-                                    : 'text-neutral-900'
-                                }`}>{method.name}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
+                                <X className="h-3 w-3 mr-1" />
+                                Cancel Split
+                              </Button>
+                            </div>
+                            
+                            {paymentSession && (
+                              <div className="bg-white rounded-lg p-3 border border-neutral-200">
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-neutral-600">Total Due:</span>
+                                  <span className="font-semibold text-neutral-900">
+                                    {formatCurrency(getTotalAmount(), paymentSession.pricing.currency)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-neutral-600">Split Total:</span>
+                                  <span className={`font-semibold ${
+                                    Math.abs(getSplitPaymentTotal() - getTotalAmount()) < 0.01 
+                                      ? 'text-green-600' 
+                                      : 'text-red-600'
+                                  }`}>
+                                    {formatCurrency(getSplitPaymentTotal(), paymentSession.pricing.currency)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-neutral-600">Remaining:</span>
+                                  <span className={`font-semibold ${
+                                    Math.abs(getRemainingAmount()) < 0.01 
+                                      ? 'text-green-600' 
+                                      : getRemainingAmount() > 0 
+                                        ? 'text-orange-600' 
+                                        : 'text-red-600'
+                                  }`}>
+                                    {formatCurrency(getRemainingAmount(), paymentSession.pricing.currency)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
+
 
                     {/* Tip Selection Card */}
                     <Card className="rounded-2xl border-neutral-200 shadow-none">
@@ -1414,19 +1923,32 @@ function CheckoutContent() {
                     <CardContent className="pt-6">
                       <Button
                         size="lg"
-                        className="w-full rounded-2xl bg-[#7b1d1d] text-white hover:bg-[#6b1717]"
+                        className={`w-full rounded-2xl ${
+                          isSplitPayment && Math.abs(getRemainingAmount()) > 0.01
+                            ? 'bg-neutral-400 text-white cursor-not-allowed'
+                            : 'bg-[#7b1d1d] text-white hover:bg-[#6b1717]'
+                        }`}
                         onClick={proceedToCheckout}
-                        disabled={processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession}
+                        disabled={processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)}
                       >
                         {processingPayment ? (
                           <>
                             <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                             Processing...
                           </>
+                        ) : isSplitPayment && Math.abs(getRemainingAmount()) > 0.01 ? (
+                          <>
+                            <AlertCircle className="h-5 w-5 mr-2" />
+                            Split amounts must total {paymentSession && formatCurrency(getTotalAmount(), paymentSession.pricing.currency)}
+                          </>
                         ) : (
                           <>
-                            <CreditCard className="h-5 w-5 mr-2" />
-                            Complete
+                            {isSplitPayment ? (
+                              <Split className="h-5 w-5 mr-2" />
+                            ) : (
+                              <CreditCard className="h-5 w-5 mr-2" />
+                            )}
+                            Complete {isSplitPayment ? 'Split ' : ''}Payment
                             {paymentSession && (
                               <span className="ml-2 font-bold">
                                 {formatCurrency(getCurrentSubtotal() + getEffectiveTipAmount() + getCurrentGST(), paymentSession.pricing.currency)}
@@ -1476,6 +1998,448 @@ function CheckoutContent() {
                   <Button onClick={handleSavePrice}>
                     Save Changes
                   </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Split Payment Dialog */}
+          <Dialog open={showSplitDialog} onOpenChange={setShowSplitDialog}>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+                  <Split className="h-5 w-5 text-[#7b1d1d]" />
+                  Split Payment Options
+                </DialogTitle>
+                <DialogDescription>
+                  Choose how you'd like to split this transaction - by payment method or by service.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Split Mode Selection */}
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setSplitMode('payment')}
+                    className={`p-4 rounded-xl border-2 transition-all ${
+                      splitMode === 'payment'
+                        ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                        : 'border-neutral-200 hover:border-[#7b1d1d]/30'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className={`p-3 rounded-full ${
+                        splitMode === 'payment' ? 'bg-[#7b1d1d] text-white' : 'bg-neutral-100 text-neutral-600'
+                      }`}>
+                        <CreditCard className="h-6 w-6" />
+                      </div>
+                      <div className="text-center">
+                        <h3 className="font-semibold text-neutral-900">Split by Payment</h3>
+                        <p className="text-sm text-neutral-600 mt-1">Use multiple payment methods for the total amount</p>
+                      </div>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setSplitMode('service')}
+                    className={`p-4 rounded-xl border-2 transition-all ${
+                      splitMode === 'service'
+                        ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                        : 'border-neutral-200 hover:border-[#7b1d1d]/30'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className={`p-3 rounded-full ${
+                        splitMode === 'service' ? 'bg-[#7b1d1d] text-white' : 'bg-neutral-100 text-neutral-600'
+                      }`}>
+                        <Receipt className="h-6 w-6" />
+                      </div>
+                      <div className="text-center">
+                        <h3 className="font-semibold text-neutral-900">Split by Service</h3>
+                        <p className="text-sm text-neutral-600 mt-1">Separate payment for each service item</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Split Content */}
+                {splitMode === 'payment' ? (
+                  <div className="space-y-4">
+                    <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-200">
+                      <h4 className="font-semibold text-neutral-900 mb-3">Payment Method Split</h4>
+                      <p className="text-sm text-neutral-600 mb-4">
+                        Divide the total amount across multiple payment methods. For example: $100 cash + $50 card.
+                      </p>
+                      
+                      {paymentSession && (
+                        <div className="bg-white rounded-lg p-3 border border-neutral-200 mb-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-neutral-700">Total Amount:</span>
+                            <span className="text-lg font-bold text-[#7b1d1d]">
+                              {formatCurrency(getTotalAmount(), paymentSession.pricing.currency)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium">Payment Methods (up to 3)</Label>
+                        {splitPayments.map((payment, index) => {
+                          const paymentMethods = [
+                            { id: 'visa', name: 'Visa', icon: CreditCard },
+                            { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
+                            { id: 'amex', name: 'Amex', icon: CreditCard },
+                            { id: 'debit', name: 'Debit', icon: CreditCard },
+                            { id: 'cash', name: 'Cash', icon: DollarSign }
+                          ]
+                          const selectedMethod = paymentMethods.find(m => m.id === payment.method)
+                          const IconComponent = selectedMethod?.icon || CreditCard
+                          
+                          return (
+                            <div key={payment.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-neutral-200">
+                              <span className="text-sm font-medium text-neutral-600 min-w-[20px]">#{index + 1}</span>
+                              <Select value={payment.method} onValueChange={(value) => updateSplitPayment(payment.id, 'method', value)}>
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {paymentMethods.map((method) => {
+                                    const MethodIcon = method.icon
+                                    return (
+                                      <SelectItem key={method.id} value={method.id}>
+                                        <div className="flex items-center gap-2">
+                                          <MethodIcon className="h-4 w-4" />
+                                          <span>{method.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    )
+                                  })}
+                                </SelectContent>
+                              </Select>
+                              <div className="flex-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={payment.amount}
+                                  onChange={(e) => updateSplitPayment(payment.id, 'amount', e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-full"
+                                />
+                              </div>
+                              <div className="text-sm text-neutral-500 min-w-[60px] text-right">
+                                {payment.percentage.toFixed(1)}%
+                              </div>
+                              {splitPayments.length > 1 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeSplitPayment(payment.id)}
+                                  className="text-neutral-500 hover:text-red-600"
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          )
+                        })}
+                        
+                        <div className="flex gap-2">
+                          {splitPayments.length < 3 && (
+                            <Button
+                              variant="outline"
+                              onClick={addSplitPayment}
+                              className="flex-1"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Payment Method
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            onClick={autoDistributeRemaining}
+                            className="flex-1 text-[#7b1d1d]"
+                          >
+                            <Calculator className="h-4 w-4 mr-2" />
+                            Auto Distribute
+                          </Button>
+                        </div>
+                      </div>
+
+                      {paymentSession && (
+                        <div className="mt-4 p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div className="text-center">
+                              <div className="text-neutral-600">Total Due</div>
+                              <div className="font-semibold text-neutral-900">
+                                {formatCurrency(getTotalAmount(), paymentSession.pricing.currency)}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-neutral-600">Split Total</div>
+                              <div className={`font-semibold ${
+                                Math.abs(getSplitPaymentTotal() - getTotalAmount()) < 0.01 
+                                  ? 'text-green-600' 
+                                  : 'text-red-600'
+                              }`}>
+                                {formatCurrency(getSplitPaymentTotal(), paymentSession.pricing.currency)}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-neutral-600">Remaining</div>
+                              <div className={`font-semibold ${
+                                Math.abs(getRemainingAmount()) < 0.01 
+                                  ? 'text-green-600' 
+                                  : getRemainingAmount() > 0 
+                                    ? 'text-orange-600' 
+                                    : 'text-red-600'
+                              }`}>
+                                {formatCurrency(getRemainingAmount(), paymentSession.pricing.currency)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-200">
+                      <h4 className="font-semibold text-neutral-900 mb-3">Service Split</h4>
+                      <p className="text-sm text-neutral-600 mb-4">
+                        Pay for each service separately with different payment methods.
+                      </p>
+                      
+                      {paymentSession && (
+                        <div className="bg-white rounded-lg p-3 border border-neutral-200 mb-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-neutral-700">Total Services:</span>
+                            <span className="text-lg font-bold text-[#7b1d1d]">
+                              {serviceSplits.length > 0 ? formatCurrency(getServiceSplitTotal(), paymentSession.pricing.currency) : formatCurrency(getTotalAmount(), paymentSession.pricing.currency)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium">Service Payment Methods</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              initializeServiceSplits()
+                              autoDistributeServicePayments()
+                            }}
+                            className="h-8 px-3 text-xs text-[#7b1d1d]"
+                          >
+                            <Calculator className="h-3 w-3 mr-1" />
+                            Auto Distribute
+                          </Button>
+                        </div>
+                        
+                        {serviceSplits.length === 0 ? (
+                          <>
+                            {paymentSession && paymentSession.appointments.map((appointment, index) => (
+                              <div key={index} className="bg-white rounded-lg p-4 border border-neutral-200">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-neutral-900">{appointment.serviceName}</h5>
+                                    <p className="text-sm text-neutral-600">{appointment.staffName}</p>
+                                  </div>
+                                  <div className="text-lg font-semibold text-[#7b1d1d]">
+                                    {formatCurrency(appointment.servicePrice, paymentSession.pricing.currency)}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <Label className="text-sm text-neutral-600 min-w-[80px]">Pay with:</Label>
+                                  <Select value="visa" onValueChange={() => initializeServiceSplits()}>
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue placeholder="Select payment method" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="visa">
+                                        <div className="flex items-center gap-2">
+                                          <CreditCard className="h-4 w-4" />
+                                          <span>Visa</span>
+                                        </div>
+                                      </SelectItem>
+                                      <SelectItem value="mastercard">
+                                        <div className="flex items-center gap-2">
+                                          <CreditCard className="h-4 w-4" />
+                                          <span>Mastercard</span>
+                                        </div>
+                                      </SelectItem>
+                                      <SelectItem value="cash">
+                                        <div className="flex items-center gap-2">
+                                          <DollarSign className="h-4 w-4" />
+                                          <span>Cash</span>
+                                        </div>
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            ))}
+                            
+                            {additionalServices.map((service, index) => (
+                              <div key={`additional-${index}`} className="bg-white rounded-lg p-4 border border-neutral-200">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-neutral-900">{service.name}</h5>
+                                    <p className="text-sm text-neutral-600">{service.staffNames?.join(', ') || 'Multiple staff'}</p>
+                                  </div>
+                                  <div className="text-lg font-semibold text-[#7b1d1d]">
+                                    {formatCurrency(service.price, paymentSession?.pricing.currency || 'CAD')}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <Label className="text-sm text-neutral-600 min-w-[80px]">Pay with:</Label>
+                                  <Select value="visa" onValueChange={() => initializeServiceSplits()}>
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue placeholder="Select payment method" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="visa">
+                                        <div className="flex items-center gap-2">
+                                          <CreditCard className="h-4 w-4" />
+                                          <span>Visa</span>
+                                        </div>
+                                      </SelectItem>
+                                      <SelectItem value="mastercard">
+                                        <div className="flex items-center gap-2">
+                                          <CreditCard className="h-4 w-4" />
+                                          <span>Mastercard</span>
+                                        </div>
+                                      </SelectItem>
+                                      <SelectItem value="cash">
+                                        <div className="flex items-center gap-2">
+                                          <DollarSign className="h-4 w-4" />
+                                          <span>Cash</span>
+                                        </div>
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          serviceSplits.map((service, index) => {
+                            const paymentMethods = [
+                              { id: 'visa', name: 'Visa', icon: CreditCard },
+                              { id: 'mastercard', name: 'Mastercard', icon: CreditCard },
+                              { id: 'amex', name: 'Amex', icon: CreditCard },
+                              { id: 'debit', name: 'Debit', icon: CreditCard },
+                              { id: 'cash', name: 'Cash', icon: DollarSign }
+                            ]
+                            const selectedMethod = paymentMethods.find(m => m.id === service.paymentMethod)
+                            const IconComponent = selectedMethod?.icon || CreditCard
+                            
+                            return (
+                              <div key={service.id} className="bg-white rounded-lg p-4 border border-neutral-200">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-neutral-900">{service.serviceName}</h5>
+                                    <p className="text-sm text-neutral-600">{service.staffNames.join(', ') || 'Staff member'}</p>
+                                  </div>
+                                  <div className="text-lg font-semibold text-[#7b1d1d]">
+                                    {formatCurrency(service.servicePrice, paymentSession?.pricing.currency || 'CAD')}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <Label className="text-sm text-neutral-600 min-w-[80px]">Pay with:</Label>
+                                  <Select value={service.paymentMethod} onValueChange={(value) => updateServicePaymentMethod(service.id, value)}>
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {paymentMethods.map((method) => {
+                                        const MethodIcon = method.icon
+                                        return (
+                                          <SelectItem key={method.id} value={method.id}>
+                                            <div className="flex items-center gap-2">
+                                              <MethodIcon className="h-4 w-4" />
+                                              <span>{method.name}</span>
+                                            </div>
+                                          </SelectItem>
+                                        )
+                                      })}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                        
+                        {serviceSplits.length > 0 && (
+                          <div className="mt-4 p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div className="text-center">
+                                <div className="text-neutral-600">Total Services</div>
+                                <div className="font-semibold text-neutral-900">
+                                  {serviceSplits.length}
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-neutral-600">Payment Methods</div>
+                                <div className="font-semibold text-[#7b1d1d]">
+                                  {new Set(serviceSplits.map(s => s.paymentMethod)).size}
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-neutral-600">Total Amount</div>
+                                <div className="font-semibold text-green-600">
+                                  {formatCurrency(getServiceSplitTotal(), paymentSession?.pricing.currency || 'CAD')}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dialog Actions */}
+                <div className="flex justify-between pt-4 border-t border-neutral-200">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSplitDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <div className="flex gap-2">
+                    {splitMode === 'payment' && (
+                      <Button
+                        onClick={() => {
+                          setIsSplitPayment(true)
+                          setShowSplitDialog(false)
+                          toast.success('Split payment enabled')
+                        }}
+                        disabled={Math.abs(getRemainingAmount()) > 0.01}
+                        className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                      >
+                        Apply Split Payment
+                      </Button>
+                    )}
+                    {splitMode === 'service' && (
+                      <Button
+                        onClick={() => {
+                          if (serviceSplits.length === 0) {
+                            initializeServiceSplits()
+                          }
+                          setIsServiceSplit(true)
+                          setShowSplitDialog(false)
+                          toast.success('Service split enabled - each service can be paid separately')
+                        }}
+                        className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                      >
+                        Apply Service Split
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </DialogContent>
