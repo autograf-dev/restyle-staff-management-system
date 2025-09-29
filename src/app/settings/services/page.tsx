@@ -29,9 +29,19 @@ import {
   AlertTriangle,
   CheckCircle,
   Star,
-  Sparkles
+  Sparkles,
+  Scissors,
+  Palette,
+  Sparkle,
+  Heart,
+  Zap,
+  Crown,
+  Gem,
+  Wand2,
+  Loader2,
+  AlertCircle
 } from "lucide-react"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -43,6 +53,16 @@ interface Service {
   slotDurationUnit?: 'mins' | 'hours'
   duration?: number // computed from slotDuration + unit
   teamMembers?: { userId: string; name?: string }[]
+  groupId?: string
+  groupName?: string
+}
+
+interface Group {
+  id: string
+  name: string
+  description?: string
+  slug: string
+  isActive: boolean
 }
 
 interface StaffOption {
@@ -69,8 +89,12 @@ type ServiceFormData = {
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([])
+  const [allServices, setAllServices] = useState<Service[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingGroups, setLoadingGroups] = useState(true)
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('all')
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [staffDialogOpen, setStaffDialogOpen] = useState(false)
@@ -98,6 +122,61 @@ export default function ServicesPage() {
   })
 
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([])
+
+  // Group icon mapping function
+  const getGroupIcon = (groupName: string) => {
+    const name = groupName.toLowerCase()
+    if (name.includes('hair') || name.includes('cut') || name.includes('styling')) {
+      return Scissors
+    } else if (name.includes('color') || name.includes('dye') || name.includes('highlight')) {
+      return Palette
+    } else if (name.includes('facial') || name.includes('skin') || name.includes('treatment')) {
+      return Sparkle
+    } else if (name.includes('massage') || name.includes('relax') || name.includes('spa')) {
+      return Heart
+    } else if (name.includes('nail') || name.includes('manicure') || name.includes('pedicure')) {
+      return Gem
+    } else if (name.includes('makeup') || name.includes('beauty') || name.includes('glam')) {
+      return Wand2
+    } else if (name.includes('premium') || name.includes('luxury') || name.includes('vip')) {
+      return Crown
+    } else if (name.includes('quick') || name.includes('express') || name.includes('fast')) {
+      return Zap
+    }
+    return SettingsIcon
+  }
+
+  // Fetch groups
+  const fetchGroups = async () => {
+    try {
+      setLoadingGroups(true)
+      console.log('Fetching groups...')
+      const response = await fetch('/api/groups')
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('Groups API response:', result)
+      
+      if (result.groups && Array.isArray(result.groups)) {
+        console.log('Groups loaded:', result.groups)
+        setGroups(result.groups)
+        toast.success(`Loaded ${result.groups.length} service categories`)
+      } else {
+        console.log('No groups in response:', result)
+        setGroups([])
+        toast.warning('No service categories found')
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error)
+      toast.error('Failed to load service categories')
+      setGroups([])
+    } finally {
+      setLoadingGroups(false)
+    }
+  }
 
   // Fetch available staff for dropdown using new getAvailableStaff endpoint
   const fetchAvailableStaff = async () => {
@@ -143,6 +222,7 @@ export default function ServicesPage() {
           })() : 60
         }))
         
+        setAllServices(transformedServices)
         setServices(transformedServices)
         toast.success(`Loaded ${transformedServices.length} services`)
       } else {
@@ -152,9 +232,28 @@ export default function ServicesPage() {
       console.error('Error fetching services:', error)
       toast.error('Failed to load services')
       setServices([])
+      setAllServices([])
     } finally {
       setLoading(false)
     }
+  }
+
+  // Filter services by selected group
+  const filterServicesByGroup = useCallback((groupId: string) => {
+    if (groupId === 'all') {
+      setServices(allServices)
+    } else {
+      const filteredServices = allServices.filter(service => 
+        service.groupId === groupId || service.groupName === groups.find(g => g.id === groupId)?.name
+      )
+      setServices(filteredServices)
+    }
+  }, [allServices, groups])
+
+  // Handle group selection
+  const handleGroupSelection = (groupId: string) => {
+    setSelectedGroupId(groupId)
+    filterServicesByGroup(groupId)
   }
 
   // Create new service using createFullService endpoint
@@ -403,9 +502,17 @@ export default function ServicesPage() {
   }
 
   useEffect(() => {
+    fetchGroups()
     fetchServices()
     fetchAvailableStaff()
   }, [])
+
+  // Update services when allServices or selectedGroupId changes
+  useEffect(() => {
+    if (allServices.length > 0) {
+      filterServicesByGroup(selectedGroupId)
+    }
+  }, [allServices, selectedGroupId, filterServicesByGroup])
 
   return (
     <RoleGuard>
@@ -431,6 +538,12 @@ export default function ServicesPage() {
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+            {/* Test Banner */}
+            <div className="bg-green-100 border border-green-500 rounded-lg p-4 text-center">
+              <h3 className="text-lg font-semibold text-green-800">✅ Group Filtering System Added!</h3>
+              <p className="text-green-700">Look for the blue &quot;Service Categories&quot; card below</p>
+            </div>
+            
             {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-4">
               <Card>
@@ -495,6 +608,152 @@ export default function ServicesPage() {
               </Card>
             </div>
 
+            {/* Group Filter Tabs */}
+            <Card className="border-2 border-blue-500 bg-blue-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <SettingsIcon className="h-5 w-5 text-primary" />
+                  Service Categories
+                  <Badge variant="destructive" className="ml-2">NEW</Badge>
+                </CardTitle>
+                <CardDescription>
+                  Filter services by category to better organize and manage your offerings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingGroups ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                    <span className="text-lg">Loading categories...</span>
+                  </div>
+                ) : groups.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Debug info */}
+                    <div className="text-xs text-gray-500 mb-2">
+                      Debug: {groups.length} groups loaded, selectedGroupId: {selectedGroupId}
+                    </div>
+                    {/* All Services Tab */}
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      <button
+                        onClick={() => handleGroupSelection('all')}
+                        className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-[#7b1d1d]/30 flex-shrink-0 ${
+                          selectedGroupId === 'all'
+                            ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                            : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                        }`}
+                      >
+                        <SettingsIcon className={`h-5 w-5 ${
+                          selectedGroupId === 'all'
+                            ? 'text-white'
+                            : 'text-neutral-600'
+                        }`} />
+                        <span className={`text-sm font-medium whitespace-nowrap ${
+                          selectedGroupId === 'all'
+                            ? 'text-white'
+                            : 'text-neutral-900'
+                        }`}>All Services</span>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs ${
+                            selectedGroupId === 'all'
+                              ? 'border-white/30 text-white'
+                              : 'border-neutral-300 text-neutral-600'
+                          }`}
+                        >
+                          {allServices.length}
+                        </Badge>
+                      </button>
+
+                      {/* Group Tabs */}
+                      {groups.map((group) => {
+                        const IconComponent = getGroupIcon(group.name)
+                        const groupServiceCount = allServices.filter(service => 
+                          service.groupId === group.id || service.groupName === group.name
+                        ).length
+                        
+                        return (
+                          <button
+                            key={group.id}
+                            onClick={() => handleGroupSelection(group.id)}
+                            className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-[#7b1d1d]/30 flex-shrink-0 ${
+                              selectedGroupId === group.id
+                                ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                            }`}
+                          >
+                            <IconComponent className={`h-5 w-5 ${
+                              selectedGroupId === group.id
+                                ? 'text-white'
+                                : 'text-neutral-600'
+                            }`} />
+                            <span className={`text-sm font-medium whitespace-nowrap ${
+                              selectedGroupId === group.id
+                                ? 'text-white'
+                                : 'text-neutral-900'
+                            }`}>{group.name}</span>
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs ${
+                                selectedGroupId === group.id
+                                  ? 'border-white/30 text-white'
+                                  : 'border-neutral-300 text-neutral-600'
+                              }`}
+                            >
+                              {groupServiceCount}
+                            </Badge>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Selected Group Info */}
+                    {selectedGroupId !== 'all' && (
+                      <div className="bg-[#7b1d1d]/5 border border-[#7b1d1d]/20 rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const selectedGroup = groups.find(g => g.id === selectedGroupId)
+                            const IconComponent = selectedGroup ? getGroupIcon(selectedGroup.name) : SettingsIcon
+                            return <IconComponent className="h-5 w-5 text-[#7b1d1d]" />
+                          })()}
+                          <div>
+                            <h4 className="font-semibold text-[#7b1d1d]">
+                              {groups.find(g => g.id === selectedGroupId)?.name || 'Selected Category'}
+                            </h4>
+                            <p className="text-sm text-neutral-600">
+                              {services.length} service{services.length !== 1 ? 's' : ''} in this category
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                      <AlertCircle className="h-8 w-8 text-neutral-400" />
+                    </div>
+                    <p className="text-lg text-neutral-600">No service categories available</p>
+                    <p className="text-sm text-neutral-500 mt-1">Please try again later</p>
+                    <Button 
+                      onClick={fetchGroups} 
+                      variant="outline" 
+                      className="mt-4"
+                      disabled={loadingGroups}
+                    >
+                      {loadingGroups ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        'Retry Loading Categories'
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Services List */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -502,18 +761,30 @@ export default function ServicesPage() {
                   <CardTitle className="flex items-center gap-2">
                     <Star className="h-5 w-5 text-yellow-500" />
                     Services Overview
+                    {selectedGroupId !== 'all' && (
+                      <Badge variant="outline" className="ml-2">
+                        {groups.find(g => g.id === selectedGroupId)?.name || 'Filtered'}
+                      </Badge>
+                    )}
                   </CardTitle>
                   <CardDescription>
-                    GoHighLevel-style service management with comprehensive staff assignments
+                    {selectedGroupId === 'all' 
+                      ? 'GoHighLevel-style service management with comprehensive staff assignments'
+                      : `Services in ${groups.find(g => g.id === selectedGroupId)?.name || 'selected category'}`
+                    }
                   </CardDescription>
                 </div>
                 <Button 
                   variant="outline" 
-                  onClick={fetchServices} 
-                  disabled={loading}
+                  onClick={() => {
+                    fetchGroups()
+                    fetchServices()
+                    fetchAvailableStaff()
+                  }} 
+                  disabled={loading || loadingGroups}
                 >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  Refresh
+                  <RefreshCw className={`h-4 w-4 mr-2 ${(loading || loadingGroups) ? 'animate-spin' : ''}`} />
+                  Refresh All
                 </Button>
               </CardHeader>
               <CardContent>
