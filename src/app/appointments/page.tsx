@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -22,7 +23,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react"
+import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -52,6 +53,8 @@ type Booking = {
   contactName?: string
   contactPhone?: string
   createdAt?: string
+  durationMinutes?: number
+  price?: number
 }
 
 type RawBooking = {
@@ -93,7 +96,7 @@ function useBookings() {
   const [currentPage, setCurrentPage] = React.useState<number>(1)
   const [totalPages, setTotalPages] = React.useState<number>(1)
   const [total, setTotal] = React.useState<number>(0)
-  const [statusFilter, setStatusFilter] = React.useState<string>("all")
+  const [statusFilter, setStatusFilter] = React.useState<string>("confirmed")
   const [searchTerm, setSearchTerm] = React.useState<string>("")
   const isInitialMount = React.useRef(true)
   const isMounted = React.useRef(false)
@@ -106,235 +109,64 @@ function useBookings() {
     }
   }, [])
 
-  const fetchBookings = React.useCallback(async (forceRefresh: boolean = false) => {
-    if (!isMounted.current) return
-    
-    // Set loading state only if component is still mounted
-    if (isMounted.current) {
-      setLoading(true)
-    }
-    
-    // Try cache first unless forced
-    try {
-      const cached = JSON.parse(localStorage.getItem('restyle.bookings.cache') || 'null') as { data: Booking[]; fetchedAt: number } | null
-      const tenMinutes = 10 * 60 * 1000
-      if (!forceRefresh && cached && Date.now() - cached.fetchedAt < tenMinutes) {
-        setData(cached.data || [])
-        setTotal(cached.data?.length || 0)
-        setTotalPages(Math.ceil((cached.data?.length || 0) / 20))
-        setLastUpdated(cached.fetchedAt)
-        setLoading(false)
-        return
-      }
-    } catch {}
-
-    const controller = new AbortController()
-    const { signal } = controller
-
-    try {
-      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getAllBookings`, { signal })
-      if (!res.ok) throw new Error("Failed to fetch bookings")
-      const json = await res.json()
-      
-      const bookings: RawBooking[] = json.bookings || []
-      
-      // Helper function to delay execution with abort check
-      const delay = (ms: number) => new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          if (signal.aborted) {
-            reject(new Error('Aborted'))
-          } else {
-            resolve(undefined)
-          }
-        }, ms)
-        
-        if (signal.aborted) {
-          clearTimeout(timeout)
-          reject(new Error('Aborted'))
-        }
-      })
-      
-      // Helper function to process bookings in batches with abort checks
-      const processInBatches = async <T,>(items: T[], batchSize: number, processor: (item: T) => Promise<Booking>) => {
-        const results = []
-        for (let i = 0; i < items.length; i += batchSize) {
-          // Check if aborted before processing each batch
-          if (signal.aborted) {
-            throw new Error('Aborted')
-          }
-          
-          const batch = items.slice(i, i + batchSize)
-          const batchResults = await Promise.all(batch.map(processor))
-          results.push(...batchResults)
-          
-          // Small delay between batches with abort check
-          if (i + batchSize < items.length && !signal.aborted) {
-            await delay(100)
-          }
-        }
-        return results
+  const fetchBookings = React.useCallback(
+    async (
+      forceRefresh: boolean = false,
+      params?: { assignedUserId?: string; page?: number; search?: string; appointmentStatus?: string }
+    ) => {
+      if (!isMounted.current) return
+      if (isMounted.current) {
+        setLoading(true)
       }
 
-      // Process bookings in smaller batches (10 at a time)
-      const enrichedBookings = await processInBatches(bookings, 10, async (booking: RawBooking) => {
-        // Check abort status before processing each booking
-        if (signal.aborted) {
-          throw new Error('Aborted')
+      const controller = new AbortController()
+      const { signal } = controller
+
+      try {
+        const pageToUse = params?.page ?? currentPage
+        const qs = new URLSearchParams()
+        qs.set('page', String(pageToUse))
+        qs.set('pageSize', '20')
+        if (params?.assignedUserId) qs.set('assigned_user_id', params.assignedUserId)
+        const searchValue = params?.search ?? searchTerm
+        if (searchValue) qs.set('search', searchValue)
+        const statusValue = params?.appointmentStatus
+        if (statusValue) qs.set('appointment_status', statusValue)
+
+        const res = await fetch(`/api/bookings?${qs.toString()}`, { signal })
+        if (!res.ok) {
+          const errorText = await res.text()
+          console.error('API Error:', res.status, errorText)
+          throw new Error(`Failed to fetch bookings: ${res.status} - ${errorText}`)
         }
+        const json = await res.json()
 
-        const details: Booking = {
-          id: String(booking.id || ""),
-          calendar_id: String(booking.calendar_id || ""),
-          contact_id: String(booking.contact_id || ""),
-          title: booking.title || "",
-          status: booking.status || "",
-          appointment_status: booking.appointment_status || "",
-          assigned_user_id: String(booking.assigned_user_id || ""),
-          address: booking.address || "",
-          is_recurring: booking.is_recurring || false,
-          trace_id: booking.trace_id || "",
-        }
-
-        // Use the existing title as service name
-        details.serviceName = booking.title || 'Untitled Service'
-
-        // Fetch appointment details for times (with error handling and abort check)
-        if (!signal.aborted) {
-          try {
-            const apptRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${booking.id}`, { signal })
-            if (apptRes.ok && !signal.aborted) {
-              const apptData = await apptRes.json()
-              if (apptData.appointment) {
-                details.startTime = apptData.appointment.startTime
-                details.endTime = apptData.appointment.endTime
-                details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
-                details.assigned_user_id = apptData.appointment.assignedUserId || details.assigned_user_id
-                details.groupId = apptData.appointment.groupId || apptData.appointment.group_id
-                // Try to capture created time from API (various possible field names)
-                details.createdAt = apptData.appointment.createdAt 
-                  || apptData.appointment.created_at 
-                  || apptData.appointment.dateCreated 
-                  || apptData.appointment.created
-                  || undefined
-              }
-            }
-          } catch (error) {
-            if (!signal.aborted) {
-              console.warn(`Failed to fetch booking details for ${booking.id}:`, error)
-            }
-          }
-        }
-
-        // Fetch staff details (with error handling and abort check)
-        if (details.assigned_user_id && !signal.aborted) {
-          try {
-            const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${details.assigned_user_id}`, { signal })
-            if (staffRes.ok && !signal.aborted) {
-              const staffData = await staffRes.json()
-              // Derive readable name with robust fallbacks (mirrors supabase.vue)
-              const derivedName = (
-                staffData?.data?.name ||
-                staffData?.name ||
-                staffData?.fullName ||
-                staffData?.displayName ||
-                [staffData?.staff?.firstName, staffData?.staff?.lastName].filter(Boolean).join(' ') ||
-                [staffData?.users?.firstName, staffData?.users?.lastName].filter(Boolean).join(' ') ||
-                [staffData?.firstName, staffData?.lastName].filter(Boolean).join(' ') ||
-                staffData?.user?.name ||
-                ''
-              ) as string
-              if (derivedName) {
-                const parts = String(derivedName).trim().split(/\s+/)
-                details.assignedStaffFirstName = parts[0] || ''
-                details.assignedStaffLastName = parts.slice(1).join(' ') || ''
-              }
-            }
-          } catch (error) {
-            if (!signal.aborted) {
-              console.warn(`Failed to fetch staff details for ${details.assigned_user_id}:`, error)
-            }
-          }
-        }
-
-        // Fetch contact details (with error handling and abort check)
-        if (booking.contact_id && !signal.aborted) {
-          try {
-            const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${booking.contact_id}`, { signal })
-            if (contactRes.ok && !signal.aborted) {
-              const contactData = await contactRes.json()
-              if (contactData.contact) {
-                details.contactName = `${contactData.contact.firstName || ""} ${contactData.contact.lastName || ""}`.trim()
-                details.contactPhone = contactData.contact.phone
-              }
-            }
-          } catch (error) {
-            if (!signal.aborted) {
-              console.warn(`Failed to fetch contact details for ${booking.contact_id}:`, error)
-            }
-          }
-        }
-
-        return details
-      })
-
-      // Only update state if component is still mounted and request wasn't aborted
       if (isMounted.current && !signal.aborted) {
-        // If createdAt missing, fallback to now to maintain stable order within this fetch batch
-        const withCreated = enrichedBookings.map(b => ({ ...b, createdAt: b.createdAt || new Date().toISOString() }))
-        setData(withCreated)
-        setTotal(json.totalBookings || enrichedBookings.length)
-        setTotalPages(Math.ceil((json.totalBookings || enrichedBookings.length) / 20))
-        const nowTs = Date.now()
-        setLastUpdated(nowTs)
-        try { localStorage.setItem('restyle.bookings.cache', JSON.stringify({ data: withCreated, fetchedAt: nowTs })) } catch {}
+          setData((json.bookings || []) as Booking[])
+          setTotal(Number(json.total) || (json.bookings?.length || 0))
+          setTotalPages(Number(json.totalPages) || 1)
+          setLastUpdated(Date.now())
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        // Request was intentionally aborted, don't show error
         return
       } else {
-        console.error("Failed to fetch bookings:", error)
+          console.error('Failed to fetch bookings:', error)
         if (isMounted.current) {
-          toast.error("Failed to load appointments")
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+            toast.error(`Failed to load appointments: ${errorMsg}`)
         }
       }
     } finally {
-      // Only update loading state if component is still mounted
-      if (isMounted.current) {
-        setLoading(false)
-      }
+        if (isMounted.current) setLoading(false)
     }
 
-    // Return cleanup function to abort requests
     return () => {
       controller.abort()
     }
-  }, [])
-
-  React.useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false
-      const cleanup = fetchBookings(false)
-      return () => {
-        // Call cleanup function if it exists
-        if (cleanup && typeof cleanup.then === 'function') {
-          cleanup.then(cleanupFn => {
-            if (typeof cleanupFn === 'function') {
-              cleanupFn()
-            }
-          })
-        }
-      }
-    }
-  }, [fetchBookings])
-
-  // Auto refresh every 10 minutes
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      fetchBookings(true)
-    }, 10 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [fetchBookings])
+    },
+    [currentPage, searchTerm]
+  )
 
   return { 
     data, 
@@ -470,6 +302,10 @@ function BookingsPageInner() {
     setStatusFilter,
     searchTerm,
     setSearchTerm,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    total,
     fetchBookings: fetchBookings,
     lastUpdated
   } = useBookings()
@@ -546,6 +382,21 @@ function BookingsPageInner() {
     }
   }, [searchParams, data])
 
+  // Fetch bookings on mount and when filters change (server-side pagination + filtering)
+  React.useEffect(() => {
+    const assigned = user?.role === 'barber' ? user.ghlId : undefined
+    const appointmentStatus = statusFilter === 'confirmed' ? 'confirmed' : statusFilter === 'cancelled' ? 'cancelled' : undefined
+    fetchBookings(false, { assignedUserId: assigned, page: currentPage, search: searchTerm || undefined, appointmentStatus })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.ghlId, statusFilter, searchTerm, currentPage])
+
+  // Manual refresh helper
+  const refreshBookings = React.useCallback(async () => {
+    const assigned = user?.role === 'barber' ? user.ghlId : undefined
+    const appointmentStatus = statusFilter === 'confirmed' ? 'confirmed' : statusFilter === 'cancelled' ? 'cancelled' : undefined
+    await fetchBookings(true, { assignedUserId: assigned, page: currentPage, search: searchTerm || undefined, appointmentStatus })
+  }, [fetchBookings, user?.role, user?.ghlId, statusFilter, searchTerm, currentPage])
+
   // Keep URL in sync when dialog opens/closes
   React.useEffect(() => {
     if (detailsOpen && selected) {
@@ -598,7 +449,7 @@ function BookingsPageInner() {
       if (!res.ok) throw new Error(data.error || "Cancel failed")
       
       // Refresh appointments
-      await fetchBookings()
+      await refreshBookings()
       toast.success("Appointment cancelled successfully")
       setCancelConfirmOpen(false)
       setBookingToCancel(null)
@@ -631,7 +482,7 @@ function BookingsPageInner() {
       if (!res.ok) throw new Error(data.error || "Delete failed")
       
       // Refresh appointments
-      await fetchBookings()
+      await refreshBookings()
       toast.success("Appointment deleted successfully")
       setDeleteConfirmOpen(false)
       setBookingToDelete(null)
@@ -921,7 +772,7 @@ function BookingsPageInner() {
           } catch {}
           // Invalidate cache and force refresh
           try { localStorage.removeItem('restyle.bookings.cache') } catch {}
-          await fetchBookings(true)
+          await refreshBookings()
         } else {
           throw new Error(data.error || 'Reschedule failed')
         }
@@ -1344,7 +1195,7 @@ function BookingsPageInner() {
       } catch {}
       // Invalidate cache and force refresh
       try { localStorage.removeItem('restyle.bookings.cache') } catch {}
-      await fetchBookings(true)
+      await refreshBookings()
       // Refresh working slots data so the booked time is no longer offered when reopening
       try { await fetchNewAppWorkingSlots() } catch {}
     } catch (error) {
@@ -1369,129 +1220,43 @@ function BookingsPageInner() {
     }
   }, [newAppSelectedStaff])
 
-  // Filter data based on status and search
+  // Just use the data directly - filtering is done server-side now
   const filteredData = React.useMemo(() => {
-    let filtered = data
-
-    // If barber, force filter to own assignments
-    if (user?.role === 'barber' && user.ghlId) {
-      filtered = filtered.filter(a => (a.assigned_user_id || '') === user.ghlId)
-    }
-
-    // If logged in as a barber, only show appointments assigned to their ghl_id
-    if (user?.role === 'barber' && user.ghlId) {
-      filtered = filtered.filter(a => (a.assigned_user_id || '') === user.ghlId)
-    }
-
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(booking => {
-        const appointmentStatus = getBookingStatus(booking)
-        return appointmentStatus === statusFilter
-      })
-    }
-
-    // Filter by search term
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase()
-      filtered = filtered.filter(appointment => 
-        (appointment.serviceName || '').toLowerCase().includes(search) ||
-        (appointment.contactName || '').toLowerCase().includes(search) ||
-        (appointment.assignedStaffFirstName || '').toLowerCase().includes(search) ||
-        (appointment.assignedStaffLastName || '').toLowerCase().includes(search) ||
-        (appointment.contactPhone || '').includes(search)
-      )
-    }
-
-    // Sort by created time (newest first). Fallback: appointment start time.
-    return filtered.sort((a, b) => {
-      const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0
-      const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0
-      const aTime = a.startTime ? new Date(a.startTime).getTime() : 0
-      const bTime = b.startTime ? new Date(b.startTime).getTime() : 0
-      
-      if (aCreated || bCreated) return bCreated - aCreated
-      return bTime - aTime
-    })
-  }, [data, statusFilter, searchTerm])
+    return data
+  }, [data])
 
   const columns: ColumnDef<Booking>[] = [
     {
-      accessorKey: "serviceName",
+      accessorKey: "title",
       header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Service <ArrowUpDown className="ml-2 h-4 w-4" />
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="-ml-4">
+          Booking Details <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => {
         const appointment = row.original
-        const status = getBookingStatus(appointment)
-        const withinTwoHours = isWithinTwoHours(appointment.startTime)
-        const isCancelled = status === 'cancelled'
-        const isPast = status === 'past'
-        
         return (
-          <div className="space-y-1">
-            <div className="font-medium">
-              {appointment.serviceName || appointment.title || 'Untitled Service'}
-            </div>
-            {!isCancelled && !isPast && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot reschedule - appointment starts within 2 hours" : "Reschedule appointment"}
-                  onClick={() => handleRescheduleBooking(appointment)}
-                  className="h-6 px-2 text-xs"
-                >
-                  Reschedule
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot cancel - appointment starts within 2 hours" : "Cancel appointment"}
-                  onClick={() => handleCancelBooking(appointment)}
-                  className="h-6 px-2 text-xs"
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
+          <div className="font-medium text-gray-900">
+            {appointment.title || 'Untitled Booking'}
           </div>
         )
       },
     },
     {
-      accessorKey: "contactName",
-      header: "Customer",
-      cell: ({ row }) => (
-        <div>
-          <div className="font-medium">{row.original.contactName || 'Unknown Customer'}</div>
-          <div className="text-sm text-muted-foreground">{row.original.contactPhone || ''}</div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "startTime",
-      header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Start Time <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => (
-        <div className="text-sm">
-          {formatDateTime(row.original.startTime)}
-        </div>
-      ),
-    },
-    {
       accessorKey: "duration",
       header: "Duration",
       cell: ({ row }) => (
-        <div className="text-sm">
-          {formatDuration(row.original.startTime, row.original.endTime)}
+        <div className="text-sm text-gray-700">
+          {row.original.durationMinutes ? `${row.original.durationMinutes} mins` : '—'}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "price",
+      header: "Price",
+      cell: ({ row }) => (
+        <div className="text-sm font-medium text-gray-900">
+          {row.original.price ? `$${Number(row.original.price).toFixed(2)}` : '—'}
         </div>
       ),
     },
@@ -1502,7 +1267,7 @@ function BookingsPageInner() {
         const staffName = `${row.original.assignedStaffFirstName || ''} ${row.original.assignedStaffLastName || ''}`.trim()
         const fallback = row.original.assigned_user_id ? 'Assigned Staff' : 'Any available staff'
         return (
-          <div className="text-sm">
+          <div className="text-sm text-gray-700">
             {staffName || fallback}
           </div>
         )
@@ -1523,10 +1288,16 @@ function BookingsPageInner() {
     },
     {
       id: "actions",
+      header: "Actions",
       cell: ({ row }) => {
         const appointment = row.original
+        const status = getBookingStatus(appointment)
+        const withinTwoHours = isWithinTwoHours(appointment.startTime)
+        const isCancelled = status === 'cancelled'
+        const isPast = status === 'past'
         
         return (
+          <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -1534,9 +1305,35 @@ function BookingsPageInner() {
               setSelected(appointment)
               setDetailsOpen(true)
             }}
+              className="h-8 px-3 text-xs hover:bg-[#601625] hover:text-white transition-colors"
           >
-            View Details
+              View
           </Button>
+            {!isCancelled && !isPast && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={withinTwoHours}
+                  title={withinTwoHours ? "Cannot reschedule - appointment starts within 2 hours" : "Reschedule appointment"}
+                  onClick={() => handleRescheduleBooking(appointment)}
+                  className="h-8 px-3 text-xs hover:bg-[#601625] hover:text-white transition-colors disabled:opacity-50"
+                >
+                  Reschedule
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={withinTwoHours}
+                  title={withinTwoHours ? "Cannot cancel - appointment starts within 2 hours" : "Cancel appointment"}
+                  onClick={() => handleCancelBooking(appointment)}
+                  className="h-8 px-3 text-xs hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+          </div>
         )
       },
     },
@@ -1549,16 +1346,6 @@ function BookingsPageInner() {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-
-  // Count appointments by status
-  const statusCounts = React.useMemo(() => {
-    const counts = { all: filteredData.length, upcoming: 0, past: 0, cancelled: 0 }
-    filteredData.forEach(booking => {
-      const status = getBookingStatus(booking)
-      counts[status as keyof typeof counts]++
-    })
-    return counts
-  }, [filteredData])
 
   return (
     <RoleGuard>
@@ -1573,10 +1360,18 @@ function BookingsPageInner() {
               <h1 className="text-xl font-semibold">Appointments</h1>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => fetchBookings(true)} title="Refresh (bypass cache)">
+                <Button 
+                  variant="outline" 
+                  onClick={() => refreshBookings()} 
+                  title="Refresh appointments"
+                  className="border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                >
                   <RefreshCcw className="h-4 w-4" />
                 </Button>
-                <Button onClick={() => setNewAppointmentOpen(true)} className="bg-primary text-primary-foreground">
+                <Button 
+                  onClick={() => setNewAppointmentOpen(true)} 
+                  className="bg-[#601625] text-white hover:bg-[#4a1119]"
+                >
                   <Calendar className="h-4 w-4 mr-2" />
                   Add Appointment
                 </Button>
@@ -1585,118 +1380,130 @@ function BookingsPageInner() {
           </header>
           
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <div className="text-2xl font-bold">{statusCounts.all}</div>
-                  )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Upcoming</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <div className="text-2xl font-bold">{statusCounts.upcoming}</div>
-                  )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Past</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <div className="text-2xl font-bold">{statusCounts.past}</div>
-                  )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <div className="text-2xl font-bold">{statusCounts.cancelled}</div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Filters and Search */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Filter Appointments</CardTitle>
-                <CardDescription>Filter and search through all appointments</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by customer, staff, service, or phone..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-8"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
-                      <TabsList>
-                        <TabsTrigger value="all">All ({statusCounts.all})</TabsTrigger>
-                        <TabsTrigger value="upcoming">Upcoming ({statusCounts.upcoming})</TabsTrigger>
-                        <TabsTrigger value="past">Past ({statusCounts.past})</TabsTrigger>
-                        <TabsTrigger value="cancelled">Cancelled ({statusCounts.cancelled})</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-              </div>
-            </div>
+            {/* Search Bar */}
+            <Card className="border-neutral-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by customer, staff, service, or phone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 h-11 border-gray-300 focus:border-[#601625] focus:ring-[#601625]"
+                  />
+                </div>
               </CardContent>
             </Card>
 
+            {/* Status Tabs - Confirmed / Cancelled */}
+            <div className="flex gap-2 border-b border-neutral-200">
+              <button
+                onClick={() => setStatusFilter('confirmed')}
+                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                  statusFilter === 'confirmed'
+                    ? 'border-[#601625] text-[#601625] bg-[#601625]/5'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Confirmed Appointments
+              </button>
+              <button
+                onClick={() => setStatusFilter('cancelled')}
+                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                  statusFilter === 'cancelled'
+                    ? 'border-red-600 text-red-600 bg-red-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelled Appointments
+              </button>
+            </div>
+
             {/* Appointments Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Appointments ({filteredData.length})</CardTitle>
-                <CardDescription>
-                  Manage and view all salon appointments
-                </CardDescription>
+            <Card className="border-neutral-200 shadow-sm">
+              <CardHeader className="bg-white border-b border-neutral-200 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <span>Showing {((currentPage - 1) * 20) + 1}-{Math.min(currentPage * 20, total)} of {total}</span>
+                  </div>
+                  
+                  {/* Top Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      
+                      {/* Page numbers */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+                        
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`h-8 w-8 p-0 ${
+                              currentPage === pageNum 
+                                ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
+                                : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                            }`}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {loading ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 p-6">
                     {[...Array(10)].map((_, i) => (
                       <Skeleton key={i} className="h-12 w-full" />
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-md border">
+                  <>
+                    <div className="rounded-md border-0">
                     <Table>
                       <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
-                          <TableRow key={headerGroup.id}>
-                            {headerGroup.headers.map((header) => (
-                              <TableHead key={header.id}>
+                            <TableRow key={headerGroup.id} className="bg-gray-50 border-b border-gray-200 hover:bg-gray-50">
+                              {headerGroup.headers.map((header, index) => (
+                                <TableHead 
+                                  key={header.id} 
+                                  className={`font-semibold text-gray-700 ${index === 0 ? 'pl-6' : ''}`}
+                                >
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(header.column.columnDef.header, header.getContext())}
@@ -1708,9 +1515,13 @@ function BookingsPageInner() {
                       <TableBody>
                         {table.getRowModel().rows?.length ? (
                           table.getRowModel().rows.map((row) => (
-                            <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                              {row.getVisibleCells().map((cell) => (
-                                <TableCell key={cell.id}>
+                              <TableRow 
+                                key={row.id} 
+                                data-state={row.getIsSelected() && "selected"}
+                                className="border-b border-gray-100 hover:bg-[#601625]/5 transition-colors"
+                              >
+                                {row.getVisibleCells().map((cell, index) => (
+                                  <TableCell key={cell.id} className={`py-4 ${index === 0 ? 'pl-6' : ''}`}>
                                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </TableCell>
                               ))}
@@ -1718,128 +1529,216 @@ function BookingsPageInner() {
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={columns.length} className="h-24 text-center">
-                              No appointments found.
+                              <TableCell colSpan={columns.length} className="h-32 text-center">
+                                <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
+                                  <Calendar className="h-10 w-10 text-gray-400" />
+                                  <p className="text-sm font-medium">No appointments found</p>
+                                  <p className="text-xs">Try adjusting your filters</p>
+                                </div>
                             </TableCell>
                           </TableRow>
                         )}
                       </TableBody>
                     </Table>
+                    </div>
+
+                    {/* Bottom Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center px-6 py-3 border-t border-gray-200 bg-gray-50">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          
+                          {/* Page numbers */}
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum
+                            if (totalPages <= 5) {
+                              pageNum = i + 1
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i
+                            } else {
+                              pageNum = currentPage - 2 + i
+                            }
+                            
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className={`h-8 w-8 p-0 ${
+                                  currentPage === pageNum 
+                                    ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
+                                    : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                                }`}
+                              >
+                                {pageNum}
+                              </Button>
+                            )
+                          })}
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
                   </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Appointment Details Sidebar */}
+          {/* Appointment Details Drawer */}
           <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-lg bg-white">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="text-lg font-semibold text-[#601625]">
-                  {selected?.serviceName || selected?.title || 'Appointment Details'}
-                </SheetTitle>
-                <SheetDescription className="text-gray-600">
-                  View and manage this appointment
-                </SheetDescription>
-              </SheetHeader>
-              
+            <SheetContent side="right" className="w-full sm:max-w-xl bg-gradient-to-br from-white to-gray-50 p-0 overflow-hidden">
               {selected && (
-                <div className="space-y-6">
-                  {/* Appointment Details Card */}
-                  <div className="p-5 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border border-[#601625]/20 rounded-2xl space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Status</label>
-                        <div className="mt-1">
-                          <Badge variant={getStatusBadgeVariant(getBookingStatus(selected))}>
-                            {selected.appointment_status?.charAt(0).toUpperCase() + selected.appointment_status?.slice(1) || 'Unknown'}
-                          </Badge>
+                <div className="flex flex-col h-full">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-[#601625] to-[#751a29] px-6 py-5 text-white">
+                    <SheetHeader>
+                      <SheetTitle className="text-xl font-bold text-white mb-1">
+                        Appointment Details
+                      </SheetTitle>
+                      <SheetDescription className="text-white/80 text-sm">
+                        {selected.title || 'Booking Information'}
+                      </SheetDescription>
+                    </SheetHeader>
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                    {/* Status Badge */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-600">Status</span>
+                      <Badge 
+                        className={`text-xs font-semibold px-3 py-1 ${getStatusBadgeClasses(getBookingStatus(selected))}`}
+                      >
+                        {selected.appointment_status?.charAt(0).toUpperCase() + selected.appointment_status?.slice(1) || 'Unknown'}
+                      </Badge>
+                    </div>
+
+                    <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+
+                    {/* Details Grid */}
+                    <div className="space-y-4">
+                      {/* Service */}
+                      <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Service</label>
+                        <p className="mt-1 text-base font-medium text-gray-900">
+                          {selected.serviceName || selected.title || 'Untitled Service'}
+                        </p>
+                      </div>
+
+                      {/* Customer */}
+                      <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</label>
+                        <p className="mt-1 text-base font-medium text-gray-900">
+                          {selected.contactName || 'Unknown Customer'}
+                        </p>
+                        {selected.contactPhone && (
+                          <p className="text-sm text-gray-600 mt-0.5">{selected.contactPhone}</p>
+                        )}
+                      </div>
+
+                      {/* Staff */}
+                      <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assigned Staff</label>
+                        <p className="mt-1 text-base font-medium text-gray-900">
+                          {`${selected.assignedStaffFirstName || ''} ${selected.assignedStaffLastName || ''}`.trim() || 'Any available staff'}
+                        </p>
+                      </div>
+
+                      {/* Time Details */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Start Time</label>
+                          <p className="mt-1 text-sm font-medium text-[#601625]">
+                            {formatDateTime(selected.startTime)}
+                          </p>
+                        </div>
+                        <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Duration</label>
+                          <p className="mt-1 text-sm font-medium text-gray-900">
+                            {selected.durationMinutes ? `${selected.durationMinutes} mins` : formatDuration(selected.startTime, selected.endTime)}
+                          </p>
                         </div>
                       </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Duration</label>
-                        <p className="mt-1 text-sm">{formatDuration(selected.startTime, selected.endTime)}</p>
-                      </div>
-                    </div>
 
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Start Time</label>
-                      <p className="mt-1 text-sm font-medium text-[#601625]">{formatDateTime(selected.startTime)}</p>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">End Time</label>
-                      <p className="mt-1 text-sm font-medium text-[#601625]">{formatDateTime(selected.endTime)}</p>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Customer</label>
-                      <p className="mt-1 text-sm font-medium text-[#601625]">{selected.contactName || 'Unknown Customer'}</p>
-                      {selected.contactPhone && (
-                        <p className="text-sm text-muted-foreground">{selected.contactPhone}</p>
+                      {/* Price */}
+                      {selected.price && (
+                        <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</label>
+                          <p className="mt-1 text-2xl font-bold text-[#601625]">
+                            ${Number(selected.price).toFixed(2)}
+                          </p>
+                        </div>
                       )}
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Assigned Staff</label>
-                      <p className="mt-1 text-sm font-medium text-[#601625]">
-                        {`${selected.assignedStaffFirstName || ''} ${selected.assignedStaffLastName || ''}`.trim() || (selected.assigned_user_id ? 'Assigned Staff' : 'Any available staff')}
-                      </p>
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="pt-6 border-t">
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-medium text-muted-foreground">Actions</h3>
-                      <div className="flex gap-2">
-                        {/* Cancel Button */}
-                        {getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' && (
-                          <Button
-                            onClick={() => {
-                              setDetailsOpen(false)
-                              handleCancelBooking(selected)
-                            }}
-                            disabled={isWithinTwoHours(selected.startTime)}
-                            className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white border-[#601625]"
-                          >
-                            Cancel
-                          </Button>
-                        )}
-
-                        {/* Reschedule Button */}
-                        {getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' && (
+                  {/* Footer Actions */}
+                  <div className="border-t border-gray-200 bg-white px-6 py-4">
+                    {getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' ? (
+                      <>
+                        <div className="flex gap-3">
                           <Button
                             onClick={() => {
                               setDetailsOpen(false)
                               handleRescheduleBooking(selected)
                             }}
                             disabled={isWithinTwoHours(selected.startTime)}
-                            className="flex-1 bg-[#751a29] hover:bg-[#5e1521] text-white border-[#751a29]"
+                            className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white h-11 font-medium shadow-lg shadow-[#601625]/20"
                           >
+                            <Calendar className="h-4 w-4 mr-2" />
                             Reschedule
                           </Button>
+                          <Button
+                            onClick={() => {
+                              setDetailsOpen(false)
+                              handleCancelBooking(selected)
+                            }}
+                            disabled={isWithinTwoHours(selected.startTime)}
+                            variant="outline"
+                            className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 h-11 font-medium"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Cancel
+                          </Button>
+                        </div>
+                        {isWithinTwoHours(selected.startTime) && (
+                          <p className="text-xs text-gray-500 text-center mt-3">
+                            ⚠️ Actions disabled - appointment starts within 2 hours
+                          </p>
                         )}
-
-                        {/* Delete Button */}
-                        <Button
-                          onClick={() => {
-                            setDetailsOpen(false)
-                            handleDeleteBooking(selected)
-                          }}
-                          className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white border-[#601625]"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-
-                      {/* Disabled state message */}
-                      {isWithinTwoHours(selected.startTime) && getBookingStatus(selected) !== 'cancelled' && getBookingStatus(selected) !== 'past' && (
-                        <p className="text-xs text-muted-foreground text-center pt-2">
-                          Cancel and Reschedule are disabled - appointment starts within 2 hours
-                        </p>
-                      )}
-                    </div>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          setDetailsOpen(false)
+                          handleDeleteBooking(selected)
+                        }}
+                        variant="outline"
+                        className="w-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 h-11 font-medium"
+                      >
+                        Delete Appointment
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
