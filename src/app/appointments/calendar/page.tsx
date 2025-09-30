@@ -33,23 +33,6 @@ import { useUser, type User } from "@/contexts/user-context"
 import { toast } from "sonner"
 
 // Types
-type RawAppointment = {
-  id?: string
-  calendar_id?: string
-  contact_id?: string
-  title?: string
-  status?: string
-  appointment_status?: string
-  assigned_user_id?: string
-  address?: string
-  is_recurring?: boolean
-  trace_id?: string
-  startTime?: string
-  endTime?: string
-  notes?: string
-  customValues?: Record<string, unknown>
-}
-
 type Appointment = {
   id: string
   calendar_id: string
@@ -113,44 +96,14 @@ function useAppointments() {
         
         console.log(`📅 Calendar: Fetched ${bookings.length} bookings from Supabase`)
         
-        // Convert timezone helper function for America/Edmonton
-        const convertToEdmontonTime = (timestampz?: string) => {
-          if (!timestampz) return undefined
-          
-          try {
-            const date = new Date(timestampz)
-            // Convert to America/Edmonton timezone
-            return new Intl.DateTimeFormat('en-CA', {
-              timeZone: 'America/Edmonton',
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: false
-            }).formatToParts(date).reduce((acc, part) => {
-              if (part.type !== 'literal') {
-                acc[part.type] = part.value
-              }
-              return acc
-            }, {} as Record<string, string>)
-          } catch (error) {
-            console.warn(`Failed to convert timezone for ${timestampz}:`, error)
-            return undefined
-          }
-        }
-
+        // Simple timezone conversion for America/Edmonton
         const formatEdmontonTime = (timestampz?: string) => {
           if (!timestampz) return undefined
           
           try {
-            const date = new Date(timestampz)
-            // Format as ISO string but in Edmonton timezone
-            const edmontonDate = new Date(date.toLocaleString("en-US", {timeZone: "America/Edmonton"}))
-            const offset = date.getTime() - edmontonDate.getTime()
-            const edmontonIso = new Date(date.getTime() - offset).toISOString()
-            return edmontonIso
+            // For now, just return the timestampz as-is since Supabase handles timezone conversion
+            // The UI will handle local display formatting
+            return timestampz
           } catch (error) {
             console.warn(`Failed to format Edmonton time for ${timestampz}:`, error)
             return timestampz // fallback to original
@@ -158,26 +111,43 @@ function useAppointments() {
         }
         
         // Map the Supabase data directly to Appointment format
-        const appointments: Appointment[] = bookings.map((booking: any) => ({
+        const appointments: Appointment[] = bookings.map((booking: {
+          id?: string;
+          calendar_id?: string;
+          contact_id?: string;
+          title?: string;
+          service_name?: string;
+          status?: string;
+          appointment_status?: string;
+          assigned_user_id?: string;
+          address?: string;
+          is_recurring?: boolean;
+          trace_id?: string;
+          start_time?: string;
+          end_time?: string;
+          assigned_barber_name?: string;
+          customer_name_?: string;
+          contactPhone?: string;
+        }) => ({
           id: String(booking.id || ""),
           calendar_id: String(booking.calendar_id || ""),
           contact_id: String(booking.contact_id || ""),
-          title: booking.title || booking.serviceName || "",
+          title: booking.title || booking.service_name || "",
           status: booking.status || "",
           appointment_status: booking.appointment_status || "",
           assigned_user_id: String(booking.assigned_user_id || ""),
           address: booking.address || "",
           is_recurring: Boolean(booking.is_recurring || false),
           trace_id: booking.trace_id || "",
-          serviceName: booking.serviceName || booking.title || 'Untitled Service',
-          // Convert timestampz to America/Edmonton time
-          startTime: formatEdmontonTime(booking.startTime),
-          endTime: formatEdmontonTime(booking.endTime),
-          // Use the enriched data from Supabase
-          assignedStaffFirstName: booking.assignedStaffFirstName,
-          assignedStaffLastName: booking.assignedStaffLastName,
-          contactName: booking.contactName,
-          contactPhone: booking.contactPhone,
+          serviceName: booking.service_name || booking.title || 'Untitled Service',
+          // Use the start_time and end_time from Supabase table
+          startTime: formatEdmontonTime(booking.start_time),
+          endTime: formatEdmontonTime(booking.end_time),
+          // Use the enriched data from Supabase table
+          assignedStaffFirstName: booking.assigned_barber_name || "",
+          assignedStaffLastName: "",
+          contactName: booking.customer_name_ || "",
+          contactPhone: booking.contactPhone || "",
           // Payment status can be determined from transactions if needed
           payment_status: 'pending' // Default, can be enhanced later
         }))
