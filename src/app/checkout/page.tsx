@@ -532,17 +532,31 @@ function CheckoutContent() {
       // Get contact details if contact_id is available
       if (booking.contact_id) {
         try {
+          console.log('🔍 Fetching contact details for contact_id:', booking.contact_id)
           const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${booking.contact_id}`)
           const contactData = await contactRes.json()
+          console.log('📞 Contact API Response:', contactData)
           const c = contactData.contact || contactData || {}
+          console.log('📞 Parsed contact object:', c)
           if (c) {
+            const oldCustomerName = customerName
+            const oldCustomerPhone = customerPhone
+            const oldCustomerEmail = customerEmail
+            
             customerName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || customerName
             customerPhone = c.phone || c.phone_e164 || customerPhone
             customerEmail = c.email || c.email_lower || c.emailAddress || customerEmail
+            
+            console.log('📞 Contact details update:')
+            console.log('  Name:', oldCustomerName, '->', customerName)
+            console.log('  Phone:', oldCustomerPhone, '->', customerPhone)
+            console.log('  Email:', oldCustomerEmail, '->', customerEmail)
           }
         } catch (error) {
-          console.warn('Failed to fetch contact details:', error)
+          console.warn('❌ Failed to fetch contact details:', error)
         }
+      } else {
+        console.log('⚠️ No contact_id available in booking:', booking.contact_id)
       }
       
       const details: AppointmentDetails = {
@@ -1169,12 +1183,11 @@ function CheckoutContent() {
 
   // Debug useEffect to monitor checkout button state
   useEffect(() => {
-    const isButtonDisabled = processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)
+    const isButtonDisabled = processingPayment || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)
     
-    // Individual condition checks
+    // Individual condition checks (email removed - phone is sufficient)
     const conditions = {
       processingPayment: processingPayment,
-      noEmail: !customerInfo.email,
       noName: !customerInfo.name,
       noPaymentSession: !paymentSession,
       splitPaymentIssue: isSplitPayment && Math.abs(getRemainingAmount()) > 0.01
@@ -1186,9 +1199,8 @@ function CheckoutContent() {
       isDisabled: isButtonDisabled,
       failingConditions,
       customerInfo: {
-        email: customerInfo.email || 'MISSING',
         name: customerInfo.name || 'MISSING',
-        phone: customerInfo.phone
+        phone: customerInfo.phone || 'MISSING'
       },
       paymentSession: paymentSession ? {
         sessionId: paymentSession.sessionId,
