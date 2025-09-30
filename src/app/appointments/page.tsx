@@ -23,7 +23,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle } from "lucide-react"
+import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -114,15 +114,15 @@ function useBookings() {
       forceRefresh: boolean = false,
       params?: { assignedUserId?: string; page?: number; search?: string; appointmentStatus?: string }
     ) => {
-      if (!isMounted.current) return
-      if (isMounted.current) {
-        setLoading(true)
-      }
+    if (!isMounted.current) return
+    if (isMounted.current) {
+      setLoading(true)
+    }
 
-      const controller = new AbortController()
-      const { signal } = controller
+    const controller = new AbortController()
+    const { signal } = controller
 
-      try {
+    try {
         const pageToUse = params?.page ?? currentPage
         const qs = new URLSearchParams()
         qs.set('page', String(pageToUse))
@@ -312,6 +312,8 @@ function BookingsPageInner() {
 
   const [selected, setSelected] = React.useState<Booking | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [loadingDetails, setLoadingDetails] = React.useState(false)
+  const [ghlBookingDetails, setGhlBookingDetails] = React.useState<Record<string, unknown> | null>(null)
   // (moved) Effects for deep-linking placed after new-booking state
   const [cancelConfirmOpen, setCancelConfirmOpen] = React.useState(false)
   const [bookingToCancel, setBookingToCancel] = React.useState<Booking | null>(null)
@@ -369,6 +371,25 @@ function BookingsPageInner() {
   const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
   const [newAppLoadingSlots, setNewAppLoadingSlots] = React.useState(false)
 
+  // Fetch GHL booking details
+  const fetchGHLBookingDetails = React.useCallback(async (bookingId: string) => {
+    setLoadingDetails(true)
+    setGhlBookingDetails(null)
+    try {
+      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${bookingId}`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch booking details')
+      }
+      const data = await response.json()
+      setGhlBookingDetails(data)
+    } catch (error) {
+      console.error('Error fetching GHL booking details:', error)
+      toast.error('Failed to load full booking details')
+    } finally {
+      setLoadingDetails(false)
+    }
+  }, [])
+
   // Open details dialog or new appointment dialog when query params exist
   React.useEffect(() => {
     const view = searchParams?.get("view")
@@ -378,9 +399,10 @@ function BookingsPageInner() {
       if (found) {
         setSelected(found)
         setDetailsOpen(true)
+        fetchGHLBookingDetails(found.id)
       }
     }
-  }, [searchParams, data])
+  }, [searchParams, data, fetchGHLBookingDetails])
 
   // Fetch bookings on mount and when filters change (server-side pagination + filtering)
   React.useEffect(() => {
@@ -404,15 +426,17 @@ function BookingsPageInner() {
       params.set("view", "details")
       params.set("id", selected.id)
       router.replace(`?${params.toString()}`)
-    } else {
+    } else if (!detailsOpen) {
+      // Clear URL params and reset GHL details when closing
       const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
       params.delete("view")
       params.delete("id")
-      const qs = params.toString()
-      router.replace(qs ? `?${qs}` : "")
+      router.replace(params.toString() ? `?${params.toString()}` : window.location.pathname)
+      setGhlBookingDetails(null)
+      setLoadingDetails(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsOpen, selected, newAppointmentOpen])
+  }, [detailsOpen, selected])
 
   // Helper function to check if appointment is within 2 hours
   const isWithinTwoHours = (startTime?: string) => {
@@ -1183,16 +1207,16 @@ function BookingsPageInner() {
       }
 
       toast.success("Appointment created successfully!")
-      // Close dialog and clear URL param (?view=new)
+      // Close dialog and reset form first
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
-      try {
-        const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
-        params.delete("view")
-        params.delete("id")
-        const qs = params.toString()
-        router.replace(qs ? `?${qs}` : "")
-      } catch {}
+      
+      // Clear search term to prevent phone number from appearing in search field
+      setSearchTerm("")
+      
+      // Clear URL params - navigate to clean appointments page
+      router.replace(window.location.pathname)
+      
       // Invalidate cache and force refresh
       try { localStorage.removeItem('restyle.bookings.cache') } catch {}
       await refreshBookings()
@@ -1304,6 +1328,7 @@ function BookingsPageInner() {
             onClick={() => {
               setSelected(appointment)
               setDetailsOpen(true)
+              fetchGHLBookingDetails(appointment.id)
             }}
               className="h-8 px-3 text-xs hover:bg-[#601625] hover:text-white transition-colors"
           >
@@ -1383,15 +1408,15 @@ function BookingsPageInner() {
             {/* Search Bar */}
             <Card className="border-neutral-200 shadow-sm">
               <CardContent className="pt-6">
-                <div className="relative">
+                    <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search by customer, staff, service, or phone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                      <Input
+                        placeholder="Search by customer, staff, service, or phone..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 h-11 border-gray-300 focus:border-[#601625] focus:ring-[#601625]"
                   />
-                </div>
+            </div>
               </CardContent>
             </Card>
 
@@ -1606,7 +1631,7 @@ function BookingsPageInner() {
 
           {/* Appointment Details Drawer */}
           <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-xl bg-gradient-to-br from-white to-gray-50 p-0 overflow-hidden">
+            <SheetContent side="right" className="w-full sm:max-w-xl bg-gradient-to-br from-white to-gray-50 p-0 overflow-hidden [&>button]:text-white [&>button]:hover:bg-white/20 [&>button]:top-6 [&>button]:right-6">
               {selected && (
                 <div className="flex flex-col h-full">
                   {/* Header */}
@@ -1614,11 +1639,11 @@ function BookingsPageInner() {
                     <SheetHeader>
                       <SheetTitle className="text-xl font-bold text-white mb-1">
                         Appointment Details
-                      </SheetTitle>
+                </SheetTitle>
                       <SheetDescription className="text-white/80 text-sm">
                         {selected.title || 'Booking Information'}
-                      </SheetDescription>
-                    </SheetHeader>
+                </SheetDescription>
+              </SheetHeader>
                   </div>
 
                   {/* Content */}
@@ -1629,8 +1654,8 @@ function BookingsPageInner() {
                       <Badge 
                         className={`text-xs font-semibold px-3 py-1 ${getStatusBadgeClasses(getBookingStatus(selected))}`}
                       >
-                        {selected.appointment_status?.charAt(0).toUpperCase() + selected.appointment_status?.slice(1) || 'Unknown'}
-                      </Badge>
+                            {selected.appointment_status?.charAt(0).toUpperCase() + selected.appointment_status?.slice(1) || 'Unknown'}
+                          </Badge>
                     </div>
 
                     <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
@@ -1643,7 +1668,7 @@ function BookingsPageInner() {
                         <p className="mt-1 text-base font-medium text-gray-900">
                           {selected.serviceName || selected.title || 'Untitled Service'}
                         </p>
-                      </div>
+                    </div>
 
                       {/* Customer */}
                       <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
@@ -1651,10 +1676,10 @@ function BookingsPageInner() {
                         <p className="mt-1 text-base font-medium text-gray-900">
                           {selected.contactName || 'Unknown Customer'}
                         </p>
-                        {selected.contactPhone && (
+                      {selected.contactPhone && (
                           <p className="text-sm text-gray-600 mt-0.5">{selected.contactPhone}</p>
-                        )}
-                      </div>
+                      )}
+                    </div>
 
                       {/* Staff */}
                       <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
@@ -1668,17 +1693,23 @@ function BookingsPageInner() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
                           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Start Time</label>
-                          <p className="mt-1 text-sm font-medium text-[#601625]">
-                            {formatDateTime(selected.startTime)}
-                          </p>
+                          {loadingDetails ? (
+                            <Skeleton className="h-5 w-32 mt-1" />
+                          ) : (
+                      <p className="mt-1 text-sm font-medium text-[#601625]">
+                              {ghlBookingDetails?.appointment && (ghlBookingDetails.appointment as Record<string, unknown>).startTime 
+                                ? formatDateTime(String((ghlBookingDetails.appointment as Record<string, unknown>).startTime)) 
+                                : formatDateTime(selected.startTime)}
+                            </p>
+                          )}
                         </div>
                         <div className="group hover:bg-white hover:shadow-sm rounded-lg p-3 transition-all">
                           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Duration</label>
                           <p className="mt-1 text-sm font-medium text-gray-900">
                             {selected.durationMinutes ? `${selected.durationMinutes} mins` : formatDuration(selected.startTime, selected.endTime)}
-                          </p>
-                        </div>
-                      </div>
+                      </p>
+                    </div>
+                  </div>
 
                       {/* Price */}
                       {selected.price && (
@@ -1728,16 +1759,16 @@ function BookingsPageInner() {
                         )}
                       </>
                     ) : (
-                      <Button
-                        onClick={() => {
-                          setDetailsOpen(false)
-                          handleDeleteBooking(selected)
-                        }}
+                        <Button
+                          onClick={() => {
+                            setDetailsOpen(false)
+                            handleDeleteBooking(selected)
+                          }}
                         variant="outline"
                         className="w-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 h-11 font-medium"
-                      >
+                        >
                         Delete Appointment
-                      </Button>
+                        </Button>
                     )}
                   </div>
                 </div>
@@ -1996,47 +2027,50 @@ function BookingsPageInner() {
               resetNewAppointmentForm()
             }
           }}>
-            <ConfirmContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <ConfirmHeader>
-                <ConfirmTitle>Create New Booking</ConfirmTitle>
+            <ConfirmContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
+              <ConfirmHeader className="pb-6">
+                <ConfirmTitle className="text-2xl font-semibold">Create New Appointment</ConfirmTitle>
+                <p className="text-base text-muted-foreground mt-2">
+                  Book a new appointment by selecting a service category, service, staff member, and time slot.
+                </p>
               </ConfirmHeader>
               
-              <div className="space-y-6">
+              <div className="space-y-6 overflow-hidden">
                 {/* Step 1: Department Selection */}
                 {newAppCurrentStep === 1 && (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold mb-2">Choose Department</h3>
-                      <p className="text-sm text-muted-foreground">Select the service category</p>
-                    </div>
-                    
+                  <div className="w-full">
                     {newAppLoadingDepts ? (
-                      <div className="space-y-3">
-                        {[...Array(4)].map((_, i) => (
-                          <Skeleton key={i} className="h-16 w-full" />
-                        ))}
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+                        <span className="text-lg">Loading service categories...</span>
                       </div>
                     ) : (
-                      <div className="grid gap-3">
-                        {newAppDepartments.map((dept) => (
-                          <div
+                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-neutral-300 scrollbar-track-neutral-100">
+                        {newAppDepartments.map((dept) => {
+                          const IconComponent = User
+                          return (
+                            <button
                             key={dept.value || dept.id || dept.name || Math.random().toString(36)}
                             onClick={() => handleNewAppDepartmentSelect(dept.value || dept.id || '')}
-                            className={`p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
+                              className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-primary/30 flex-shrink-0 ${
                               newAppSelectedDepartment === (dept.value || dept.id)
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <User className="h-5 w-5 text-primary" />
-                              <div>
-                                <div className="font-medium">{dept.label || dept.name}</div>
-                                <div className="text-sm text-muted-foreground">{dept.description || ''}</div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                                  ? 'border-primary bg-primary'
+                                  : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                              }`}
+                            >
+                              <IconComponent className={`h-5 w-5 ${
+                                newAppSelectedDepartment === (dept.value || dept.id)
+                                  ? 'text-white'
+                                  : 'text-neutral-600'
+                              }`} />
+                              <span className={`text-sm font-medium whitespace-nowrap ${
+                                newAppSelectedDepartment === (dept.value || dept.id)
+                                  ? 'text-white'
+                                  : 'text-neutral-900'
+                              }`}>{dept.label || dept.name}</span>
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -2044,124 +2078,160 @@ function BookingsPageInner() {
 
                 {/* Step 2: Service Selection */}
                 {newAppCurrentStep === 2 && (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold mb-2">Select Service</h3>
-                      <p className="text-sm text-muted-foreground">Choose the specific service</p>
+                  <div className="w-full">
+                    <div className="flex items-center gap-3 mb-6">
+                      <button
+                        onClick={goToPrevNewAppStep}
+                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+                      >
+                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                      </button>
+                      <div>
+                        <h3 className="text-lg font-semibold text-neutral-900">Select Service</h3>
+                        <p className="text-sm text-neutral-600">Choose the specific service from your selected category</p>
+                      </div>
                     </div>
                     
                     {newAppLoadingServices ? (
-                      <div className="space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                          <Skeleton key={i} className="h-16 w-full" />
-                        ))}
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+                        <span className="text-lg">Loading services...</span>
                       </div>
                     ) : (
-                      <div className="grid gap-3">
+                      <div className="max-h-[60vh] overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {newAppServices.map((service) => (
                           <div
                             key={service.value || service.id || Math.random().toString(36)}
                             onClick={() => handleNewAppServiceSelect(service.value || service.id || '')}
-                            className={`p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                              newAppSelectedService === (service.value || service.id)
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-primary" />
-                              <div>
-                                <div className="font-medium">{service.label || service.name}</div>
-                                <div className="text-sm text-muted-foreground">{service.description || ''}</div>
+                              className="group p-6 border-2 border-neutral-200 rounded-2xl hover:border-primary/30 hover:bg-primary/5 cursor-pointer transition-all"
+                            >
+                              <div className="flex items-start gap-4">
+                                <div className="p-3 rounded-xl bg-neutral-100">
+                                  <Calendar className="h-6 w-6 text-neutral-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-base text-neutral-900 group-hover:text-primary transition-colors">
+                                    {service.label || service.name}
+                                  </h4>
+                                  {service.description && (
+                                    <p className="text-sm text-neutral-600 mt-1">
+                                      {service.description}
+                                    </p>
+                                  )}
                               </div>
                             </div>
                           </div>
                         ))}
+                        </div>
                       </div>
                     )}
-                    
-                    <Button variant="outline" onClick={goToPrevNewAppStep}>
-                      <ChevronLeft className="h-4 w-4 mr-2" />
-                      Back
-                    </Button>
                   </div>
                 )}
 
                 {/* Step 3: Staff Selection */}
                 {newAppCurrentStep === 3 && (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold mb-2">Choose Staff</h3>
-                      <p className="text-sm text-muted-foreground">Select your preferred staff member</p>
+                  <div className="w-full">
+                    <div className="flex items-center gap-3 mb-6">
+                      <button
+                        onClick={goToPrevNewAppStep}
+                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+                      >
+                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                      </button>
+                      <div>
+                        <h3 className="text-lg font-semibold text-neutral-900">Choose Staff</h3>
+                        <p className="text-sm text-neutral-600">Select your preferred staff member for this service</p>
+                      </div>
                     </div>
                     
                     {newAppLoadingStaff ? (
-                      <div className="space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                          <Skeleton key={i} className="h-16 w-full" />
-                        ))}
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+                        <span className="text-lg">Loading staff members...</span>
                       </div>
                     ) : (
-                      <div className="grid gap-3">
-                        {newAppStaff.map((staff) => (
-                          <div
+                      <div className="grid grid-cols-5 gap-4">
+                        {newAppStaff.map((staff) => {
+                          const isSelected = newAppSelectedStaff === (staff.value || staff.id)
+                          const getInitials = (name: string) => {
+                            const parts = name.split(' ')
+                            if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`
+                            return parts[0][0]
+                          }
+                          
+                          return (
+                            <button
                             key={staff.value || staff.id || staff.email || Math.random().toString(36)}
                             onClick={() => handleNewAppStaffSelect(staff.value || staff.id || '')}
-                            className={`p-4 border rounded-lg cursor-pointer transition-all hover:border-primary ${
-                              newAppSelectedStaff === (staff.value || staff.id)
+                              className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all relative ${
+                                isSelected
                                 ? 'border-primary bg-primary/5'
-                                : 'border-border'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <User className="h-5 w-5 text-primary" />
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{staff.label || staff.name || staff.email}</span>
+                                  : 'border-neutral-200 bg-white hover:border-primary/30 hover:bg-neutral-50'
+                              }`}
+                            >
+                              {isSelected && (
+                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                  <CheckCircle className="h-4 w-4 text-white" />
+                                </div>
+                              )}
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
+                                isSelected ? 'bg-primary' : 'bg-neutral-400'
+                              }`}>
+                                {getInitials(staff.label || staff.name || staff.email || '')}
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-medium text-neutral-900">
+                                  {staff.label || staff.name || staff.email}
+                                </p>
                                 {staff.badge && (
-                                  <Badge variant="secondary" className="text-xs">
+                                  <Badge variant="secondary" className="text-xs mt-1">
                                     {staff.badge}
                                   </Badge>
                                 )}
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
-                    
-                    <Button variant="outline" onClick={goToPrevNewAppStep}>
-                      <ChevronLeft className="h-4 w-4 mr-2" />
-                      Back
-                    </Button>
                   </div>
                 )}
 
                 {/* Step 4: Date & Time Selection */}
                 {newAppCurrentStep === 4 && (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold mb-2">Select Date & Time</h3>
-                      <p className="text-sm text-muted-foreground">Choose your preferred appointment slot</p>
+                  <div className="w-full">
+                    <div className="flex items-center gap-3 mb-6">
+                      <button
+                        onClick={goToPrevNewAppStep}
+                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+                      >
+                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                      </button>
+                      <div>
+                        <h3 className="text-lg font-semibold text-neutral-900">Select Date & Time</h3>
+                        <p className="text-sm text-neutral-600">Choose your preferred appointment slot</p>
+                      </div>
                     </div>
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* Date Selection */}
                       <div className="space-y-3">
-                        <Label className="text-sm font-medium">Select Date</Label>
+                        <Label className="text-sm font-semibold text-neutral-700">Select Date</Label>
                         {newAppLoadingSlots ? (
-                          <div className="h-60 rounded-lg bg-gray-100 animate-pulse" />
+                          <div className="h-60 rounded-xl bg-neutral-100 animate-pulse" />
                         ) : (
-                          <div className="h-60 overflow-y-auto border rounded-lg p-2">
-                            <div className="grid grid-cols-1 gap-1">
+                          <div className="h-60 overflow-y-auto border-2 border-neutral-200 rounded-xl p-3">
+                            <div className="grid grid-cols-1 gap-2">
                               {newAppDates.map((dateInfo) => (
                                 <Button
                                   key={dateInfo.dateString}
-                                  variant={newAppSelectedDate === dateInfo.dateString ? "default" : "ghost"}
+                                  variant="ghost"
                                   size="sm"
-                                  className={`justify-start text-left h-auto p-2 ${
+                                  className={`justify-start text-left h-auto p-3 rounded-lg ${
                                     newAppSelectedDate === dateInfo.dateString 
-                                      ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                                      : "hover:bg-gray-100"
+                                      ? "bg-primary text-white hover:bg-primary/90" 
+                                      : "hover:bg-neutral-100"
                                   }`}
                                   onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
                                 >
@@ -2182,19 +2252,19 @@ function BookingsPageInner() {
 
                       {/* Time Selection */}
                       <div className="space-y-3">
-                        <Label className="text-sm font-medium">Select Time</Label>
+                        <Label className="text-sm font-semibold text-neutral-700">Select Time</Label>
                         {newAppSelectedDate ? (
-                          <div className="h-60 overflow-y-auto border rounded-lg p-2">
+                          <div className="h-60 overflow-y-auto border-2 border-neutral-200 rounded-xl p-3">
                             <div className="grid grid-cols-2 gap-2">
                               {newAppSlots.map((slot) => (
                                 <Button
                                   key={slot.time}
-                                  variant={newAppSelectedTime === slot.time ? "default" : "outline"}
+                                  variant="outline"
                                   size="sm"
-                                  className={`text-xs ${
+                                  className={`text-xs rounded-lg ${
                                     newAppSelectedTime === slot.time 
-                                      ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                                      : "hover:bg-gray-50"
+                                      ? "bg-primary text-white border-primary hover:bg-primary/90" 
+                                      : "border-neutral-300 hover:bg-neutral-50"
                                   }`}
                                   onClick={() => handleNewAppTimeSelect(slot.time)}
                                 >
@@ -2204,93 +2274,113 @@ function BookingsPageInner() {
                             </div>
                           </div>
                         ) : (
-                          <div className="h-60 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-500">
-                            Select a date first
+                          <div className="h-60 rounded-xl border-2 border-dashed border-neutral-300 flex items-center justify-center text-neutral-500">
+                            <div className="text-center">
+                              <Calendar className="h-8 w-8 mx-auto mb-2 text-neutral-400" />
+                              <p>Select a date first</p>
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
-                    
-                    <Button variant="outline" onClick={goToPrevNewAppStep}>
-                      <ChevronLeft className="h-4 w-4 mr-2" />
-                      Back
-                    </Button>
                   </div>
                 )}
 
                 {/* Step 5: Contact Information */}
                 {newAppCurrentStep === 5 && (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold mb-2">Contact Information</h3>
-                      <p className="text-sm text-muted-foreground">Enter customer details</p>
+                  <div className="w-full">
+                    <div className="flex items-center gap-3 mb-6">
+                      <button
+                        onClick={goToPrevNewAppStep}
+                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+                      >
+                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                      </button>
+                      <div>
+                        <h3 className="text-lg font-semibold text-neutral-900">Contact Information</h3>
+                        <p className="text-sm text-neutral-600">Enter customer details to complete the booking</p>
+                      </div>
                     </div>
                     
+                    <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="newapp-firstname">First Name *</Label>
+                          <Label htmlFor="newapp-firstname" className="text-sm font-semibold text-neutral-700">First Name *</Label>
                         <Input
                           id="newapp-firstname"
                           value={newAppContactForm.firstName}
                           onChange={(e) => setNewAppContactForm(prev => ({ ...prev, firstName: e.target.value }))}
-                          placeholder="First Name"
+                            placeholder="Enter first name"
+                            className="mt-1.5 h-11 border-neutral-300 focus:border-primary focus:ring-primary"
                           required
                         />
                       </div>
                       <div>
-                        <Label htmlFor="newapp-lastname">Last Name *</Label>
+                          <Label htmlFor="newapp-lastname" className="text-sm font-semibold text-neutral-700">Last Name *</Label>
                         <Input
                           id="newapp-lastname"
                           value={newAppContactForm.lastName}
                           onChange={(e) => setNewAppContactForm(prev => ({ ...prev, lastName: e.target.value }))}
-                          placeholder="Last Name"
+                            placeholder="Enter last name"
+                            className="mt-1.5 h-11 border-neutral-300 focus:border-primary focus:ring-primary"
                           required
                         />
                       </div>
                     </div>
                     
                     <div>
-                      <Label htmlFor="newapp-phone">Phone Number *</Label>
+                        <Label htmlFor="newapp-phone" className="text-sm font-semibold text-neutral-700">Phone Number *</Label>
                       <Input
                         id="newapp-phone"
                         value={newAppContactForm.phone}
                         onChange={(e) => setNewAppContactForm(prev => ({ ...prev, phone: e.target.value }))}
                         placeholder="+1 (555) 123-4567"
+                          className="mt-1.5 h-11 border-neutral-300 focus:border-[#7b1d1d] focus:ring-[#7b1d1d]"
                         required
                       />
                     </div>
 
                     {/* Appointment Summary */}
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium mb-3">Appointment Summary</h4>
+                      <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20 rounded-2xl">
+                        <h4 className="font-semibold text-lg mb-4 text-primary">Appointment Summary</h4>
                       <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">Service:</span> {newAppServices.find(s => s.value === newAppSelectedService)?.label}
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Service</span>
+                            <span className="font-medium text-neutral-900">{newAppServices.find(s => s.value === newAppSelectedService)?.label}</span>
                         </div>
-                        <div>
-                          <span className="font-medium">Staff:</span> {newAppStaff.find(s => s.value === newAppSelectedStaff)?.label}
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Staff</span>
+                            <span className="font-medium text-neutral-900">{newAppStaff.find(s => s.value === newAppSelectedStaff)?.label}</span>
                         </div>
-                        <div>
-                          <span className="font-medium">Date:</span> {newAppSelectedDate}
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Date</span>
+                            <span className="font-medium text-neutral-900">{newAppSelectedDate}</span>
                         </div>
-                        <div>
-                          <span className="font-medium">Time:</span> {newAppSelectedTime}
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Time</span>
+                            <span className="font-medium text-neutral-900">{newAppSelectedTime}</span>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={goToPrevNewAppStep} className="flex-1">
+                      <div className="flex gap-3 pt-2">
+                        <Button variant="outline" onClick={goToPrevNewAppStep} className="flex-1 h-11 rounded-xl">
                         <ChevronLeft className="h-4 w-4 mr-2" />
                         Back
                       </Button>
                       <Button 
                         onClick={submitNewAppointment}
                         disabled={!newAppContactForm.firstName || !newAppContactForm.lastName || !newAppContactForm.phone || newAppLoading}
-                        className="flex-1 bg-primary"
-                      >
-                        {newAppLoading ? 'Creating...' : 'Create Booking'}
+                          className="flex-1 h-11 rounded-xl bg-primary hover:bg-primary/90 text-white"
+                        >
+                          {newAppLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Creating...
+                            </>
+                          ) : 'Create Booking'}
                       </Button>
+                      </div>
                     </div>
                   </div>
                 )}
