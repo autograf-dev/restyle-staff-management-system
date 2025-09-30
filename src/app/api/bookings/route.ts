@@ -128,4 +128,61 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// PATCH /api/bookings - Update booking status and payment details
+export async function PATCH(req: NextRequest) {
+  try {
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Supabase environment variables are not configured')
+      return NextResponse.json({ 
+        error: "Supabase is not configured. Please check environment variables." 
+      }, { status: 500 })
+    }
+
+    const body = await req.json()
+    const { id, status, booking_price, tax_amount, tip_amount, total_paid, payment_method, payment_date } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "Booking ID is required" }, { status: 400 })
+    }
+
+    console.log('Updating booking status:', { id, status, booking_price, tax_amount, tip_amount, total_paid, payment_method })
+
+    // Prepare update data - only include fields that are provided
+    const updateData: Record<string, unknown> = {}
+    
+    if (status !== undefined) updateData.status = status
+    if (booking_price !== undefined) updateData.booking_price = booking_price
+    if (tax_amount !== undefined) updateData.tax_amount = tax_amount
+    if (tip_amount !== undefined) updateData.tip_amount = tip_amount
+    if (total_paid !== undefined) updateData.total_paid = total_paid
+    if (payment_method !== undefined) updateData.payment_method = payment_method
+    if (payment_date !== undefined) updateData.payment_date = payment_date
+
+    const { data, error } = await supabaseAdmin
+      .from("restyle_bookings")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+
+    if (error) {
+      console.error('Supabase update error:', error)
+      return NextResponse.json({ error: error.message, details: error }, { status: 500 })
+    }
+
+    console.log('✅ Booking updated successfully:', data)
+
+    return NextResponse.json({ 
+      success: true, 
+      booking: data?.[0] || null,
+      message: `Booking ${id} updated successfully`
+    })
+
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error"
+    console.error('Error updating booking:', errorMessage)
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
+  }
+}
+
 

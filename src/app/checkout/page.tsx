@@ -721,6 +721,12 @@ function CheckoutContent() {
 
   // Create checkout session and redirect
   const proceedToCheckout = async () => {
+    // Prevent double-clicks
+    if (processingPayment) {
+      console.log('🔄 Payment already in progress, ignoring click')
+      return
+    }
+
     if (!paymentSession || !customerInfo.name) {
       toast.error('Please complete all required fields')
       return
@@ -747,6 +753,8 @@ function CheckoutContent() {
     }
     
     setProcessingPayment(true)
+    console.log('🔄 Starting payment process...')
+    
     try {
       // 1) Persist to Supabase first - Use consistent subtotal calculation
       const subtotal = getCurrentSubtotal()  // Use same calculation as tip and UI
@@ -889,11 +897,44 @@ function CheckoutContent() {
         throw new Error(err.error || 'Failed to persist transaction')
       }
 
+      console.log('✅ Transaction created successfully:', transactionId)
+
+      // Update appointment status to 'paid' in Supabase
+      if (appointmentDetails?.id) {
+        try {
+          console.log('🔄 Updating appointment status to paid for:', appointmentDetails.id)
+          const updateRes = await fetch(`/api/bookings`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: appointmentDetails.id,
+              status: 'paid',
+              booking_price: subtotal,
+              tax_amount: gst,
+              tip_amount: tip,
+              total_paid: totalPaid,
+              payment_method: selectedPaymentMethod,
+              payment_date: new Date().toISOString()
+            }),
+          })
+          if (updateRes.ok) {
+            console.log('✅ Appointment status updated to paid')
+          } else {
+            console.warn('⚠️ Failed to update appointment status:', await updateRes.text())
+          }
+        } catch (updateError) {
+          console.warn('⚠️ Error updating appointment status:', updateError)
+        }
+      }
+
       // Cache for success page fallback (in case Supabase read is blocked)
       try {
         sessionStorage.setItem(`tx:${transactionId}`, JSON.stringify(payload))
       } catch {}
 
+      console.log('🎉 Payment completed successfully, redirecting...')
+      toast.success('Payment completed successfully!')
+      
       // 2) Skip external payment; redirect to local success page
       window.location.href = `/checkout/success?id=${transactionId}`
     } catch (error) {
