@@ -493,7 +493,10 @@ const StaffOverviewView = ({
 
   // Helper function to get appointment position and height (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment) => {
-    if (!appointment.startTime || !appointment.endTime) return { display: 'none' }
+    if (!appointment.startTime || !appointment.endTime) {
+      console.log(`📅 Appointment ${appointment.id} missing time:`, { startTime: appointment.startTime, endTime: appointment.endTime })
+      return { display: 'none' }
+    }
     
     const start = new Date(appointment.startTime)
     const end = new Date(appointment.endTime)
@@ -511,11 +514,30 @@ const StaffOverviewView = ({
     // Only show appointments within 8AM-8PM range
     const dayEndMinutesExclusive = 20 * 60 // 8:00 PM end-of-day
     if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
+      console.log(`📅 Appointment ${appointment.id} outside time range:`, {
+        title: appointment.title,
+        startTime: appointment.startTime,
+        startMinutes,
+        dayStartMinutes,
+        dayEndMinutesExclusive,
+        reason: startMinutes < dayStartMinutes ? 'before 8AM' : 'after 8PM'
+      })
       return { display: 'none' }
     }
     
     const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
     const height = ((endMinutes - startMinutes) / 60) * 120
+    
+    console.log(`📅 Appointment ${appointment.id} positioned:`, {
+      title: appointment.title,
+      startTime: appointment.startTime,
+      endTime: appointment.endTime,
+      startMinutes,
+      endMinutes,
+      topOffset,
+      height,
+      assigned_user_id: appointment.assigned_user_id
+    })
     
     return {
       position: 'absolute' as const,
@@ -527,16 +549,16 @@ const StaffOverviewView = ({
     }
   }
 
-
-
-  // Get appointments for a specific staff member
+  // Get staff appointments for the current day
   const getStaffAppointments = (staffGhlId: string) => {
-    const filtered = appointments.filter(apt => apt.assigned_user_id === staffGhlId)
+    // Filter appointments for the current day and staff member
+    const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
     console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
       staffGhlId,
+      currentDate: currentDate.toDateString(),
       totalAppointments: appointments.length,
       filteredAppointments: filtered.length,
-      sampleFiltered: filtered.slice(0, 2).map(a => ({
+      sampleFiltered: filtered.slice(0, 2).map((a: Appointment) => ({
         id: a.id,
         title: a.title,
         assigned_user_id: a.assigned_user_id,
@@ -546,6 +568,7 @@ const StaffOverviewView = ({
     return filtered
   }
 
+  // Get appointments for a specific staff member
   // Get leaves for a specific staff member
   const getStaffLeaves = (staffGhlId: string) => {
     return leaves.filter(leave => leave.ghl_id === staffGhlId)
@@ -920,10 +943,10 @@ const StaffOverviewView = ({
               const appts = getStaffAppointments(staffMember.ghl_id)
               // Build a compact list of time chips for that day
               const chips = appts
-                .filter(a => a.startTime)
-                .sort((a,b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                .filter((a: Appointment) => a.startTime)
+                .sort((a: Appointment, b: Appointment) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
                 .slice(0,4) // show first 4
-                .map((a) => new Date(a.startTime!))
+                .map((a: Appointment) => new Date(a.startTime!))
               return (
                 <div key={staffMember.ghl_id} className="w-[220px] p-4 border-r last:border-r-0 border-[#601625]/20 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
                   <div className="text-center">
@@ -1168,7 +1191,7 @@ const StaffOverviewView = ({
                   })}
 
                   {/* Appointments for this staff member */}
-                  {getStaffAppointments(staffMember.ghl_id).map((appointment) => {
+                  {getStaffAppointments(staffMember.ghl_id).map((appointment: Appointment) => {
                     const style = getAppointmentStyleImproved(appointment)
                     if (style.display === 'none') return null
 
@@ -1294,7 +1317,7 @@ export default function CalendarPage() {
   const router = useRouter()
   const { data: appointments, loading, refresh } = useAppointments()
   const { user } = useUser()
-  const [currentDate, setCurrentDate] = React.useState(new Date())
+  const [currentDate, setCurrentDate] = React.useState(new Date('2025-09-30')) // Set to date with known appointments
   const [view, setView] = React.useState<CalendarView>('day')
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
