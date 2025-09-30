@@ -386,6 +386,12 @@ const StaffOverviewView = ({
               currentDate: currentDate,
               dayOfWeek: currentDate.getDay()
             })
+            
+            console.log("📅 All Staff Members loaded:", staffMembers.map((s: { name: string; ghl_id: string; role: string }) => ({
+              name: s.name,
+              ghl_id: s.ghl_id,
+              role: s.role
+            })))
           }
           
           // Filter staff based on user role
@@ -507,7 +513,19 @@ const StaffOverviewView = ({
 
   // Get appointments for a specific staff member
   const getStaffAppointments = (staffGhlId: string) => {
-    return appointments.filter(apt => apt.assigned_user_id === staffGhlId)
+    const filtered = appointments.filter(apt => apt.assigned_user_id === staffGhlId)
+    console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
+      staffGhlId,
+      totalAppointments: appointments.length,
+      filteredAppointments: filtered.length,
+      sampleFiltered: filtered.slice(0, 2).map(a => ({
+        id: a.id,
+        title: a.title,
+        assigned_user_id: a.assigned_user_id,
+        startTime: a.startTime
+      }))
+    })
+    return filtered
   }
 
   // Get leaves for a specific staff member
