@@ -92,32 +92,32 @@ export async function GET(req: NextRequest) {
     // Get all booking IDs to check for transactions
     const bookingIds = (data || []).map(row => row.id).filter(Boolean)
     
-    // Fetch ALL paid transactions and create a simple lookup
+    // Fetch ONLY paid transactions for these specific booking IDs
     const paidBookingIds = new Set<string>()
     
     if (bookingIds.length > 0) {
-      console.log('🔍 Fetching all paid transactions to find booking matches...')
+      console.log('🔍 Checking transactions for booking IDs:', bookingIds.slice(0, 3))
       
-      const { data: allTransactions, error: transactionError } = await supabaseAdmin
+      const { data: paidTransactions, error: transactionError } = await supabaseAdmin
         .from("restyle_transactions")
-        .select("*")
+        .select(`"Booking/ID", "Payment/Status"`)
+        .eq("Payment/Status", "Paid")
+        .in("Booking/ID", bookingIds)
 
       if (transactionError) {
         console.warn('❌ Error fetching transactions:', transactionError)
       } else {
-        console.log(`✅ Found ${allTransactions?.length || 0} total transactions`)
+        console.log(`✅ Found ${paidTransactions?.length || 0} paid transactions for these bookings`)
         
-        // Find paid transactions and extract booking IDs
-        allTransactions?.forEach(transaction => {
-          const paymentStatus = transaction["Payment/Status"]
+        // Add paid booking IDs to Set
+        paidTransactions?.forEach(transaction => {
           const bookingId = transaction["Booking/ID"]
-          
-          if (paymentStatus === "Paid" && bookingId) {
+          if (bookingId) {
             paidBookingIds.add(String(bookingId))
           }
         })
         
-        console.log(`🎯 Found ${paidBookingIds.size} paid booking IDs:`, Array.from(paidBookingIds).slice(0, 5))
+        console.log(`🎯 Paid booking IDs:`, Array.from(paidBookingIds))
       }
     }
 
