@@ -1405,18 +1405,102 @@ function BookingsPageInner() {
           </header>
           
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            {/* Search Bar */}
-            <Card className="border-neutral-200 shadow-sm">
-              <CardContent className="pt-6">
-                    <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Search by customer, staff, service, or phone..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-11 border-gray-300 focus:border-[#601625] focus:ring-[#601625]"
-                  />
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Total Bookings */}
+              <Card className="border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-600">Total Bookings</p>
+                      <p className="text-2xl font-bold text-neutral-900 mt-1">{total}</p>
+                    </div>
+                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Calendar className="h-6 w-6 text-blue-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Confirmed */}
+              <Card className="border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-600">Confirmed</p>
+                      <p className="text-2xl font-bold text-green-600 mt-1">
+                        {statusFilter === 'confirmed' ? total : '—'}
+                      </p>
+                    </div>
+                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Cancelled */}
+              <Card className="border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-600">Cancelled</p>
+                      <p className="text-2xl font-bold text-red-600 mt-1">
+                        {statusFilter === 'cancelled' ? total : '—'}
+                      </p>
+                    </div>
+                    <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                      <XCircle className="h-6 w-6 text-red-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Total Revenue */}
+              <Card className="border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-600">Total Revenue</p>
+                      <p className="text-2xl font-bold text-primary mt-1">
+                        ${data.reduce((sum, b) => sum + (Number(b.price) || 0), 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <svg className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
+
+            {/* Search Bar and Status Tabs */}
+            <Card className="border-neutral-200 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search by customer, staff, service, or phone..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 h-11 border-gray-300 focus:border-primary focus:ring-primary"
+                    />
+                  </div>
+                  {searchTerm && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSearchTerm("")}
+                      className="h-11 px-4 border-gray-300 hover:bg-primary hover:text-white"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -1450,8 +1534,8 @@ function BookingsPageInner() {
             <Card className="border-neutral-200 shadow-sm">
               <CardHeader className="bg-white border-b border-neutral-200 py-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-neutral-600">
-                    <span>Showing {((currentPage - 1) * 20) + 1}-{Math.min(currentPage * 20, total)} of {total}</span>
+                  <div className="text-sm font-medium text-neutral-900">
+                    Appointments List
                   </div>
                   
                   {/* Top Pagination */}
@@ -1567,9 +1651,12 @@ function BookingsPageInner() {
                     </Table>
                     </div>
 
-                    {/* Bottom Pagination */}
+                    {/* Bottom Pagination with Info */}
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-center px-6 py-3 border-t border-gray-200 bg-gray-50">
+                      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+                        <div className="flex items-center gap-2 text-sm text-neutral-600">
+                          <span>Showing {((currentPage - 1) * 20) + 1}-{Math.min(currentPage * 20, total)} of {total}</span>
+                        </div>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
