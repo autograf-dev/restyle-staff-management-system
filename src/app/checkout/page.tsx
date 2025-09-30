@@ -899,43 +899,34 @@ function CheckoutContent() {
 
       console.log('✅ Transaction created successfully:', transactionId)
 
-      // Update appointment status to 'paid' in Supabase
+      // IMMEDIATELY update payment status to 'paid' - this is critical for the calendar
       if (appointmentDetails?.id) {
+        console.log('🔄 IMMEDIATELY updating payment status to paid for:', appointmentDetails.id)
+        
         try {
-          console.log('🔄 Updating appointment status to paid for:', appointmentDetails.id)
-          const updateRes = await fetch(`/api/bookings`, {
+          const response = await fetch('/api/bookings', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+            },
             body: JSON.stringify({
               id: appointmentDetails.id,
-              status: 'paid',
-              payment_status: 'paid',
-              booking_price: subtotal,
-              tax_amount: gst,
-              tip_amount: tip,
-              total_paid: totalPaid,
-              payment_method: selectedPaymentMethod,
-              payment_date: new Date().toISOString()
-            }),
+              payment_status: 'paid'
+            })
           })
-          
-          console.log('📊 Update response status:', updateRes.status)
-          const responseText = await updateRes.text()
-          console.log('📊 Update response body:', responseText)
-          
-          if (updateRes.ok) {
-            console.log('✅ Appointment status updated to paid successfully')
-            toast.success('Payment status updated successfully!')
+
+          if (response.ok) {
+            const result = await response.json()
+            console.log('✅ SUCCESS: Payment status updated to paid:', result)
           } else {
-            console.error('❌ Failed to update appointment status:', responseText)
-            toast.error('Warning: Payment processed but status update failed')
+            const errorText = await response.text()
+            console.error('❌ FAILED to update payment status. Status:', response.status, 'Error:', errorText)
           }
-        } catch (updateError) {
-          console.error('❌ Error updating appointment status:', updateError)
-          toast.error('Warning: Payment processed but status update failed')
+        } catch (error) {
+          console.error('❌ NETWORK ERROR updating payment status:', error)
         }
       } else {
-        console.warn('⚠️ No appointment ID found, cannot update payment status')
+        console.error('❌ NO APPOINTMENT ID - cannot update payment status')
       }
 
       // Cache for success page fallback (in case Supabase read is blocked)
