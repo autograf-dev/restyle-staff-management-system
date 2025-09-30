@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
     // Map to the Booking shape used on the frontend where possible
     const bookings = (data || []).map((row: Record<string, unknown>) => {
       const bookingId = String(row.id ?? "")
-      const paymentStatus = paidBookingIds.has(bookingId) ? 'paid' : 'pending'
+      const payment_status = paidBookingIds.has(bookingId) ? 'paid' : 'pending'
       
       return {
         id: bookingId,
@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
         durationMinutes: row.booking_duration ? Number(row.booking_duration) : undefined,
         price: row.booking_price ? Number(row.booking_price) : undefined,
         // Payment status determined from transactions table
-        payment_status: paymentStatus,
+        payment_status: payment_status,
       }
     })
 
