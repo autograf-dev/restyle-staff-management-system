@@ -116,37 +116,38 @@ function useAppointments() {
           calendar_id?: string;
           contact_id?: string;
           title?: string;
-          service_name?: string;
+          serviceName?: string;
           status?: string;
           appointment_status?: string;
           assigned_user_id?: string;
           address?: string;
           is_recurring?: boolean;
           trace_id?: string;
-          start_time?: string;
-          end_time?: string;
-          assigned_barber_name?: string;
-          customer_name_?: string;
+          startTime?: string;
+          endTime?: string;
+          assignedStaffFirstName?: string;
+          assignedStaffLastName?: string;
+          contactName?: string;
           contactPhone?: string;
         }) => ({
           id: String(booking.id || ""),
           calendar_id: String(booking.calendar_id || ""),
           contact_id: String(booking.contact_id || ""),
-          title: booking.title || booking.service_name || "",
+          title: booking.title || booking.serviceName || "",
           status: booking.status || "",
           appointment_status: booking.appointment_status || "",
           assigned_user_id: String(booking.assigned_user_id || ""),
           address: booking.address || "",
           is_recurring: Boolean(booking.is_recurring || false),
           trace_id: booking.trace_id || "",
-          serviceName: booking.service_name || booking.title || 'Untitled Service',
-          // Use the start_time and end_time from Supabase table
-          startTime: formatEdmontonTime(booking.start_time),
-          endTime: formatEdmontonTime(booking.end_time),
-          // Use the enriched data from Supabase table
-          assignedStaffFirstName: booking.assigned_barber_name || "",
-          assignedStaffLastName: "",
-          contactName: booking.customer_name_ || "",
+          serviceName: booking.serviceName || booking.title || 'Untitled Service',
+          // Use the already converted times from the API
+          startTime: formatEdmontonTime(booking.startTime),
+          endTime: formatEdmontonTime(booking.endTime),
+          // Use the enriched data from the API response
+          assignedStaffFirstName: booking.assignedStaffFirstName || "",
+          assignedStaffLastName: booking.assignedStaffLastName || "",
+          contactName: booking.contactName || "",
           contactPhone: booking.contactPhone || "",
           // Payment status can be determined from transactions if needed
           payment_status: 'pending' // Default, can be enhanced later
