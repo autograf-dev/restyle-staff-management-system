@@ -128,29 +128,40 @@ function useAppointments() {
           assignedStaffLastName?: string;
           contactName?: string;
           contactPhone?: string;
-        }) => ({
-          id: String(booking.id || ""),
-          calendar_id: String(booking.calendar_id || ""),
-          contact_id: String(booking.contact_id || ""),
-          title: booking.title || booking.serviceName || "",
-          status: booking.status || "",
-          appointment_status: booking.appointment_status || "",
-          assigned_user_id: String(booking.assigned_user_id || ""),
-          address: booking.address || "",
-          is_recurring: Boolean(booking.is_recurring || false),
-          trace_id: booking.trace_id || "",
-          serviceName: booking.serviceName || booking.title || 'Untitled Service',
-          // Use the startTime and endTime fields from the API (which map from start_time/end_time)
-          startTime: booking.startTime, // No conversion needed - API handles this
-          endTime: booking.endTime,     // No conversion needed - API handles this
-          // Use the enriched staff data from the API
-          assignedStaffFirstName: booking.assignedStaffFirstName || "",
-          assignedStaffLastName: booking.assignedStaffLastName || "",
-          contactName: booking.contactName || "",
-          contactPhone: booking.contactPhone || "",
-          // Payment status can be determined from transactions if needed
-          payment_status: 'pending' // Default, can be enhanced later
-        }))
+          durationMinutes?: number;
+        }) => {
+          // Calculate endTime from startTime + durationMinutes if endTime is missing
+          let calculatedEndTime = booking.endTime
+          if (!calculatedEndTime && booking.startTime && booking.durationMinutes) {
+            const startDate = new Date(booking.startTime)
+            const endDate = new Date(startDate.getTime() + booking.durationMinutes * 60 * 1000)
+            calculatedEndTime = endDate.toISOString()
+          }
+          
+          return {
+            id: String(booking.id || ""),
+            calendar_id: String(booking.calendar_id || ""),
+            contact_id: String(booking.contact_id || ""),
+            title: booking.title || booking.serviceName || "",
+            status: booking.status || "",
+            appointment_status: booking.appointment_status || "",
+            assigned_user_id: String(booking.assigned_user_id || ""),
+            address: booking.address || "",
+            is_recurring: Boolean(booking.is_recurring || false),
+            trace_id: booking.trace_id || "",
+            serviceName: booking.serviceName || booking.title || 'Untitled Service',
+            // Use the startTime and calculated endTime
+            startTime: booking.startTime,
+            endTime: calculatedEndTime,
+            // Use the enriched staff data from the API
+            assignedStaffFirstName: booking.assignedStaffFirstName || "",
+            assignedStaffLastName: booking.assignedStaffLastName || "",
+            contactName: booking.contactName || "",
+            contactPhone: booking.contactPhone || "",
+            // Payment status can be determined from transactions if needed
+            payment_status: 'pending' // Default, can be enhanced later
+          }
+        })
         
         console.log(`📅 Calendar: Mapped ${appointments.length} appointments`)
         
