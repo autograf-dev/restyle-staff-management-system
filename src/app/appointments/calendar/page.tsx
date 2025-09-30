@@ -1896,6 +1896,20 @@ export default function CalendarPage() {
 
   // Day view appointments
   const dayAppointments = appointmentsByDate[currentDate.toDateString()] || []
+  
+  // Debug day appointments
+  console.log(`📅 Calendar Day View Debug:`, {
+    currentDate: currentDate.toDateString(),
+    availableDates: Object.keys(appointmentsByDate).slice(0, 10),
+    dayAppointments: dayAppointments.length,
+    totalAppointments: scopedAppointments.length,
+    sampleDayAppointments: dayAppointments.slice(0, 3).map(a => ({
+      id: a.id,
+      title: a.title,
+      startTime: a.startTime,
+      assigned_user_id: a.assigned_user_id
+    }))
+  })
 
   // Effect to fetch staff when reschedule dialog opens
   React.useEffect(() => {
