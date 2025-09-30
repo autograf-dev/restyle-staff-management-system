@@ -104,92 +104,96 @@ function useAppointments() {
           }
         } catch {}
 
-        const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getAllBookings")
+        // Use the same /api/bookings endpoint as the appointments tab
+        // Fetch a larger page size to get more historical data for calendar view
+        const res = await fetch("/api/bookings?pageSize=100&page=1")
         if (!res.ok) throw new Error("Failed to fetch appointments")
         const json = await res.json()
         const bookings = json?.bookings || []
         
-        // Process appointments with enrichment for contact and staff
-        const enrichedBookings = await Promise.all(
-          bookings.slice(0, 50).map(async (booking: RawAppointment) => {
-            const details: Appointment = {
-              id: String(booking.id || ""),
-              calendar_id: String(booking.calendar_id || ""),
-              contact_id: String(booking.contact_id || ""),
-              title: booking.title || "",
-              status: booking.status || "",
-              appointment_status: booking.appointment_status || "",
-              assigned_user_id: String(booking.assigned_user_id || ""),
-              address: booking.address || "",
-              is_recurring: booking.is_recurring || false,
-              trace_id: booking.trace_id || "",
-              serviceName: booking.title || 'Untitled Service',
-            }
-
-            // Fetch appointment details for time
-            try {
-              const apptRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${booking.id}`)
-              if (apptRes.ok) {
-                const apptData = await apptRes.json()
-                if (apptData.appointment) {
-                  details.startTime = apptData.appointment.startTime
-                  details.endTime = apptData.appointment.endTime
-                  details.appointment_status = apptData.appointment.appointmentStatus || details.appointment_status
-                }
-              }
-            } catch {
-              console.warn(`Failed to fetch details for booking ${booking.id}`)
-            }
-
-            // Check payment status by looking up transactions with proper paid status
-            try {
-              const transactionRes = await fetch(`/api/transactions?appointmentId=${booking.id}&limit=1`)
-              console.log(`🔍 Payment check for ${booking.id}: API Status ${transactionRes.status}`)
-              if (transactionRes.ok) {
-                const transactionData = await transactionRes.json()
-                console.log(`📊 Transaction data for ${booking.id}:`, transactionData)
-                if (transactionData.ok && transactionData.data && transactionData.data.length > 0) {
-                  const transaction = transactionData.data[0]
-                  console.log(`💳 Transaction details:`, {
-                    id: transaction.id,
-                    status: transaction.status,
-                    paymentStatus: transaction.paymentStatus,
-                    paid: transaction.paid,
-                    bookingId: transaction.bookingId
-                  })
-                  // Check if transaction has paid status
-                  if (transaction.status === 'Paid' || transaction.paymentStatus === 'Paid' || transaction.paid === true || transaction.paid === 'Yes') {
-                    details.payment_status = 'paid'
-                    console.log(`✅ MARKED AS PAID: ${booking.id}`)
-                  } else {
-                    details.payment_status = 'pending'
-                    console.log(`⏳ MARKED AS PENDING: ${booking.id}`)
-                  }
-                } else {
-                  // No transaction found - still pending payment
-                  details.payment_status = 'pending'
-                  console.log(`❌ NO TRANSACTION FOUND: ${booking.id}`)
-                }
-              } else {
-                details.payment_status = 'pending'
-                console.log(`❌ API FAILED: ${booking.id} - Status ${transactionRes.status}`)
-              }
-            } catch (error) {
-              console.warn(`Failed to check payment status for booking ${booking.id}:`, error)
-              details.payment_status = 'pending'
-            }
-
-            // Contact and staff detail fetches are skipped here to improve performance.
-
-            return details
-          })
-        )
+        console.log(`📅 Calendar: Fetched ${bookings.length} bookings from Supabase`)
         
-        const filtered = enrichedBookings.filter(apt => apt.startTime)
+        // Convert timezone helper function for America/Edmonton
+        const convertToEdmontonTime = (timestampz?: string) => {
+          if (!timestampz) return undefined
+          
+          try {
+            const date = new Date(timestampz)
+            // Convert to America/Edmonton timezone
+            return new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'America/Edmonton',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+              if (part.type !== 'literal') {
+                acc[part.type] = part.value
+              }
+              return acc
+            }, {} as Record<string, string>)
+          } catch (error) {
+            console.warn(`Failed to convert timezone for ${timestampz}:`, error)
+            return undefined
+          }
+        }
+
+        const formatEdmontonTime = (timestampz?: string) => {
+          if (!timestampz) return undefined
+          
+          try {
+            const date = new Date(timestampz)
+            // Format as ISO string but in Edmonton timezone
+            const edmontonDate = new Date(date.toLocaleString("en-US", {timeZone: "America/Edmonton"}))
+            const offset = date.getTime() - edmontonDate.getTime()
+            const edmontonIso = new Date(date.getTime() - offset).toISOString()
+            return edmontonIso
+          } catch (error) {
+            console.warn(`Failed to format Edmonton time for ${timestampz}:`, error)
+            return timestampz // fallback to original
+          }
+        }
+        
+        // Map the Supabase data directly to Appointment format
+        const appointments: Appointment[] = bookings.map((booking: any) => ({
+          id: String(booking.id || ""),
+          calendar_id: String(booking.calendar_id || ""),
+          contact_id: String(booking.contact_id || ""),
+          title: booking.title || booking.serviceName || "",
+          status: booking.status || "",
+          appointment_status: booking.appointment_status || "",
+          assigned_user_id: String(booking.assigned_user_id || ""),
+          address: booking.address || "",
+          is_recurring: Boolean(booking.is_recurring || false),
+          trace_id: booking.trace_id || "",
+          serviceName: booking.serviceName || booking.title || 'Untitled Service',
+          // Convert timestampz to America/Edmonton time
+          startTime: formatEdmontonTime(booking.startTime),
+          endTime: formatEdmontonTime(booking.endTime),
+          // Use the enriched data from Supabase
+          assignedStaffFirstName: booking.assignedStaffFirstName,
+          assignedStaffLastName: booking.assignedStaffLastName,
+          contactName: booking.contactName,
+          contactPhone: booking.contactPhone,
+          // Payment status can be determined from transactions if needed
+          payment_status: 'pending' // Default, can be enhanced later
+        }))
+        
+        // Filter appointments with valid start times
+        const filtered = appointments.filter(apt => apt.startTime)
+        
+        console.log(`📅 Calendar: Processed ${filtered.length} appointments with times`)
+        console.log(`📅 Calendar: Date range: ${filtered.length > 0 ? `${new Date(Math.min(...filtered.map(a => new Date(a.startTime!).getTime()))).toLocaleDateString()} to ${new Date(Math.max(...filtered.map(a => new Date(a.startTime!).getTime()))).toLocaleDateString()}` : 'No appointments'}`)
+        
         setData(filtered)
         const nowTs = Date.now()
         setLastUpdated(nowTs)
-        try { localStorage.setItem('restyle.calendar.appointments', JSON.stringify({ data: filtered, fetchedAt: nowTs })) } catch {}
+        try { 
+          localStorage.setItem('restyle.calendar.appointments', JSON.stringify({ data: filtered, fetchedAt: nowTs })) 
+        } catch {}
       } catch (error) {
         console.error("Failed to fetch appointments:", error)
         toast.error("Failed to load appointments")
