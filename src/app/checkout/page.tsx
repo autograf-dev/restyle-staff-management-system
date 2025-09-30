@@ -489,18 +489,24 @@ function CheckoutContent() {
     }
 
     try {
-      // First, try to fetch from Supabase bookings API
-      const response = await fetch(`/api/bookings?pageSize=5000`)
+      // First, try to fetch the specific booking by ID using the new API parameter
+      console.log('🔍 Fetching appointment details for ID:', appointmentId)
+      
+      const response = await fetch(`/api/bookings?id=${appointmentId}&pageSize=1`)
       if (!response.ok) throw new Error('Failed to fetch booking details')
       const data = await response.json()
       
-      // Find the specific appointment
-      const booking = data.bookings?.find((b: { id: string }) => b.id === appointmentId)
+      console.log('📊 API Response for specific booking:', data)
+      
+      // Check if we found the booking
+      const booking = data.bookings?.[0]
       if (!booking) {
-        throw new Error('Appointment not found')
+        console.error('❌ Appointment not found with ID:', appointmentId)
+        throw new Error(`Appointment not found with ID: ${appointmentId}`)
       }
       
-      console.log('💰 Found booking with price:', booking.price, 'for appointment:', appointmentId)
+      console.log('✅ Found booking:', booking)
+      console.log('💰 Booking price from API:', booking.price)
       
       let customerName = booking.contactName || 'Unknown Customer'
       let customerPhone = ''
@@ -567,9 +573,9 @@ function CheckoutContent() {
       }))
       
       // Store the price from Supabase for the payment session
-      if (booking.price) {
-        setBookingPrice(booking.price)
-      }
+      const price = booking.price || 0 // Use actual price from booking_price field, including 0 for free services
+      console.log('✅ Setting booking price from Supabase:', price)
+      setBookingPrice(price)
       
     } catch (error) {
       console.error('Error fetching appointment details:', error)
@@ -580,12 +586,12 @@ function CheckoutContent() {
 
   // Initialize / refresh pricing using Supabase booking price
   const initializePayment = async () => {
-    if (!appointmentDetails || bookingPrice === 0) return
+    if (!appointmentDetails) return
     
     try {
       console.log('💰 Initializing payment with booking price:', bookingPrice)
       
-      // Create payment session directly using Supabase data
+      // Create payment session using actual Supabase price (including 0 for free services)
       const servicePrice = bookingPrice
       const tipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (servicePrice * tipPercentage) / 100
       const gstAmount = servicePrice * 0.05 // 5% GST
@@ -1105,8 +1111,20 @@ function CheckoutContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentId, calendarId, staffIdParam])
 
-  useEffect(() => { // price whenever dependencies change
-    if (appointmentDetails && bookingPrice > 0 && !paymentSession) { 
+  useEffect(() => { // Initialize payment session when appointment details are loaded
+    console.log('🔍 Payment session check:', {
+      hasAppointmentDetails: !!appointmentDetails,
+      bookingPrice,
+      hasPaymentSession: !!paymentSession,
+      tipPercentage,
+      customTipAmount,
+      useCustomTip
+    })
+    
+    // Initialize payment session when we have appointment details and haven't created a session yet
+    // Allow any price including 0 for free services
+    if (appointmentDetails && bookingPrice >= 0 && !paymentSession) { 
+      console.log('💰 Initializing payment session with price:', bookingPrice)
       void initializePayment() 
     } else if (paymentSession && (tipPercentage || customTipAmount || useCustomTip)) {
       // Only recalculate tip and totals, don't reset service prices
@@ -1961,7 +1979,18 @@ function CheckoutContent() {
                             ? 'bg-neutral-400 text-white cursor-not-allowed'
                             : 'bg-[#7b1d1d] text-white hover:bg-[#6b1717]'
                         }`}
-                        onClick={proceedToCheckout}
+                        onClick={() => {
+                          // Debug log before checkout
+                          console.log('🔘 Checkout button clicked:', {
+                            processingPayment,
+                            customerEmail: customerInfo.email,
+                            customerName: customerInfo.name,
+                            hasPaymentSession: !!paymentSession,
+                            isSplitPayment,
+                            remainingAmount: isSplitPayment ? Math.abs(getRemainingAmount()) : 0
+                          })
+                          proceedToCheckout()
+                        }}
                         disabled={processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)}
                       >
                         {processingPayment ? (

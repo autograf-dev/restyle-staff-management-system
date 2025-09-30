@@ -20,8 +20,9 @@ export async function GET(req: NextRequest) {
     const assignedUserId = searchParams.get("assigned_user_id") || undefined
     const startDate = searchParams.get("startDate") || undefined
     const endDate = searchParams.get("endDate") || undefined
+    const bookingId = searchParams.get("id") || undefined
 
-    console.log('Fetching bookings with params:', { page, pageSize, appointmentStatus, search, assignedUserId, startDate, endDate })
+    console.log('Fetching bookings with params:', { page, pageSize, appointmentStatus, search, assignedUserId, startDate, endDate, bookingId })
 
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
@@ -29,6 +30,11 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from("restyle_bookings")
       .select("*", { count: "exact" })
+
+    // If searching for a specific booking ID, filter by it first
+    if (bookingId) {
+      query = query.eq("id", bookingId)
+    }
 
     // Apply date range filtering
     if (startDate && endDate) {
