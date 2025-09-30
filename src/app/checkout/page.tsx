@@ -918,14 +918,24 @@ function CheckoutContent() {
               payment_date: new Date().toISOString()
             }),
           })
+          
+          console.log('📊 Update response status:', updateRes.status)
+          const responseText = await updateRes.text()
+          console.log('📊 Update response body:', responseText)
+          
           if (updateRes.ok) {
-            console.log('✅ Appointment status updated to paid')
+            console.log('✅ Appointment status updated to paid successfully')
+            toast.success('Payment status updated successfully!')
           } else {
-            console.warn('⚠️ Failed to update appointment status:', await updateRes.text())
+            console.error('❌ Failed to update appointment status:', responseText)
+            toast.error('Warning: Payment processed but status update failed')
           }
         } catch (updateError) {
-          console.warn('⚠️ Error updating appointment status:', updateError)
+          console.error('❌ Error updating appointment status:', updateError)
+          toast.error('Warning: Payment processed but status update failed')
         }
+      } else {
+        console.warn('⚠️ No appointment ID found, cannot update payment status')
       }
 
       // Cache for success page fallback (in case Supabase read is blocked)
