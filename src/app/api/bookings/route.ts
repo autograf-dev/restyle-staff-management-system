@@ -169,6 +169,8 @@ export async function PATCH(req: NextRequest) {
     if (payment_method !== undefined) updateData.payment_method = payment_method
     if (payment_date !== undefined) updateData.payment_date = payment_date
 
+    console.log('🔄 Update data being sent to Supabase:', updateData)
+
     const { data, error } = await supabaseAdmin
       .from("restyle_bookings")
       .update(updateData)
@@ -176,7 +178,7 @@ export async function PATCH(req: NextRequest) {
       .select()
 
     if (error) {
-      console.error('Supabase update error:', error)
+      console.error('❌ Supabase update error:', error)
       return NextResponse.json({ error: error.message, details: error }, { status: 500 })
     }
 
