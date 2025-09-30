@@ -721,7 +721,7 @@ function CheckoutContent() {
 
   // Create checkout session and redirect
   const proceedToCheckout = async () => {
-    if (!paymentSession || !customerInfo.email) {
+    if (!paymentSession || !customerInfo.name) {
       toast.error('Please complete all required fields')
       return
     }
