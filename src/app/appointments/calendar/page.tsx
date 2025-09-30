@@ -551,7 +551,7 @@ const StaffOverviewView = ({
 
   // Get staff appointments for the current day
   const getStaffAppointments = (staffGhlId: string) => {
-    // Filter appointments for the current day and staff member
+    // Filter from the appointments prop (already filtered to current day)
     const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
     console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
       staffGhlId,
@@ -1317,7 +1317,7 @@ export default function CalendarPage() {
   const router = useRouter()
   const { data: appointments, loading, refresh } = useAppointments()
   const { user } = useUser()
-  const [currentDate, setCurrentDate] = React.useState(new Date('2025-09-30')) // Set to date with known appointments
+  const [currentDate, setCurrentDate] = React.useState(new Date()) // Set to date with known appointments
   const [view, setView] = React.useState<CalendarView>('day')
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
@@ -1953,8 +1953,15 @@ export default function CalendarPage() {
     return items
   }
 
-  // Day view appointments
-  const dayAppointments = appointmentsByDate[currentDate.toDateString()] || []
+  // Day view appointments - use all appointments for calendar display, filtering happens in the UI
+  const dayAppointments = React.useMemo(() => {
+    const dateKey = currentDate.toDateString()
+    return appointments.filter(appointment => {
+      if (!appointment.startTime) return false
+      const appointmentDate = new Date(appointment.startTime).toDateString()
+      return appointmentDate === dateKey
+    })
+  }, [appointments, currentDate])
   
   // Debug day appointments
   console.log(`📅 Calendar Day View Debug:`, {
