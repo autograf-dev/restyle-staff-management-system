@@ -89,36 +89,48 @@ export async function GET(req: NextRequest) {
 
     console.log(`Found ${count} bookings, returning ${data?.length || 0} results for page ${page}`)
 
-    // Get all booking IDs to check for transactions
-    const bookingIds = (data || []).map(row => row.id).filter(Boolean)
-    
-    // Fetch ONLY paid transactions for these specific booking IDs
-    const paidBookingIds = new Set<string>()
-    
-    if (bookingIds.length > 0) {
-      console.log('🔍 Checking transactions for booking IDs:', bookingIds.slice(0, 3))
-      
-      const { data: paidTransactions, error: transactionError } = await supabaseAdmin
-        .from("restyle_transactions")
-        .select(`"Booking/ID", "Payment/Status"`)
-        .eq("Payment/Status", "Paid")
-        .in("Booking/ID", bookingIds)
+    // Get all booking IDs from this page
+    const bookingIds = (data || []).map(row => row.id).filter(Boolean);
 
-      if (transactionError) {
-        console.warn('❌ Error fetching transactions:', transactionError)
+    // Build set of paid booking ids from transactions table
+    const paidBookingIds = new Set<string>();
+
+    if (bookingIds.length > 0) {
+      console.log('🔍 Checking transactions for booking IDs:', bookingIds.slice(0, 3));
+
+      const { data: trx, error: trxErr } = await supabaseAdmin
+        .from("restyle_transactions")
+        .select(`"Booking/ID","Payment/Status","Transaction/Paid"`)
+        .in("Booking/ID", bookingIds);
+
+      if (trxErr) {
+        console.warn('❌ Error fetching transactions:', trxErr);
       } else {
-        console.log(`✅ Found ${paidTransactions?.length || 0} paid transactions for these bookings`)
-        
-        // Add paid booking IDs to Set
-        paidTransactions?.forEach(transaction => {
-          const bookingId = transaction["Booking/ID"]
-          if (bookingId) {
-            paidBookingIds.add(String(bookingId))
-          }
-        })
-        
-        console.log(`🎯 Paid booking IDs:`, Array.from(paidBookingIds))
+        (trx || []).forEach(t => {
+          const paidStatus = String(t["Payment/Status"] ?? "").trim().toLowerCase();
+          const paidFlag   = String(t["Transaction/Paid"] ?? "").trim().toLowerCase();
+          const isPaid = paidStatus === "paid" || paidFlag === "yes";
+
+          const bId = t["Booking/ID"];
+          if (isPaid && bId) paidBookingIds.add(String(bId));
+        });
+
+        console.log(`✅ Found ${paidBookingIds.size} paid bookings via transactions`);
       }
+    }
+
+    // (Optional) Persist the flag in restyle_bookings to keep DB truth in sync
+    if (paidBookingIds.size > 0) {
+      const ids = Array.from(paidBookingIds);
+      // Only flip ones not already marked to avoid unnecessary writes
+      const { error: syncErr } = await supabaseAdmin
+        .from("restyle_bookings")
+        .update({ payment_status: "paid" })
+        .in("id", ids)
+        .neq("payment_status", "paid");
+
+      if (syncErr) console.warn("⚠️ Failed to persist paid flags:", syncErr);
+      else console.log(`🔄 Synced payment_status for ${ids.length} bookings`);
     }
 
     console.log(`Found ${paidBookingIds.size} paid bookings from ${bookingIds.length} total bookings`)
@@ -127,7 +139,8 @@ export async function GET(req: NextRequest) {
     // Map to the Booking shape used on the frontend where possible
     const bookings = (data || []).map((row: Record<string, unknown>) => {
       const bookingId = String(row.id ?? "")
-      const payment_status = paidBookingIds.has(bookingId) ? 'paid' : 'pending'
+      const payment_status: 'paid' | 'pending' =
+        paidBookingIds.has(bookingId) ? 'paid' : 'pending';
       
       return {
         id: bookingId,
@@ -152,8 +165,8 @@ export async function GET(req: NextRequest) {
         // duration and price if present in numeric/string
         durationMinutes: row.booking_duration ? Number(row.booking_duration) : undefined,
         price: row.booking_price ? Number(row.booking_price) : undefined,
-        // Payment status determined from transactions table
-        payment_status: payment_status,
+        // 👉 drives the PAID pill + disables Checkout in your UI
+        payment_status,
       }
     })
 
