@@ -95,16 +95,33 @@ export async function GET(req: NextRequest) {
     // Fetch transactions for these bookings to determine payment status
     let transactionData: Record<string, unknown>[] = []
     if (bookingIds.length > 0) {
+      console.log('🔍 Looking up transactions for booking IDs:', bookingIds.slice(0, 5))
+      
       const { data: transactions, error: transactionError } = await supabaseAdmin
         .from("restyle_transactions")
         .select("*")
-        .in("Booking/ID", bookingIds)
         .eq("Payment/Status", "Paid")
 
       if (transactionError) {
-        console.warn('Error fetching transactions:', transactionError)
+        console.warn('❌ Error fetching transactions:', transactionError)
       } else {
-        transactionData = transactions || []
+        console.log(`✅ Found ${transactions?.length || 0} total paid transactions`)
+        
+        // Filter transactions that match our booking IDs (handle both string and null values)
+        transactionData = (transactions || []).filter(transaction => {
+          const bookingId = transaction["Booking/ID"]
+          if (!bookingId) return false // Skip null/undefined booking IDs
+          return bookingIds.includes(String(bookingId))
+        })
+        
+        console.log(`🎯 Filtered to ${transactionData.length} transactions matching our booking IDs`)
+        if (transactionData.length > 0) {
+          console.log('Sample matching transaction:', {
+            bookingId: transactionData[0]["Booking/ID"],
+            paymentStatus: transactionData[0]["Payment/Status"],
+            amount: transactionData[0]["Transaction/Total Paid"]
+          })
+        }
       }
     }
 
@@ -113,11 +130,14 @@ export async function GET(req: NextRequest) {
     transactionData.forEach(transaction => {
       const bookingId = transaction["Booking/ID"]
       if (bookingId) {
-        paymentStatusMap.set(bookingId, 'paid')
+        paymentStatusMap.set(String(bookingId), 'paid')
       }
     })
 
     console.log(`Found ${transactionData.length} paid transactions for ${bookingIds.length} bookings`)
+    console.log('Sample booking IDs:', bookingIds.slice(0, 3))
+    console.log('Sample transaction:', transactionData[0])
+    console.log('Payment status map:', Array.from(paymentStatusMap.entries()).slice(0, 3))
 
     // Map to the Booking shape used on the frontend where possible
     const bookings = (data || []).map((row: Record<string, unknown>) => {
