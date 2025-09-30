@@ -97,7 +97,25 @@ function useAppointments() {
         console.log(`📅 Calendar: Fetched ${bookings.length} bookings from Supabase`)
         
         // Map the actual Supabase data structure to Appointment format
-        const appointments: Appointment[] = bookings.map((booking: any) => ({
+        const appointments: Appointment[] = bookings.map((booking: {
+          id?: string;
+          calendar_id?: string;
+          contact_id?: string;
+          title?: string;
+          status?: string;
+          appointment_status?: string;
+          assigned_user_id?: string;
+          address?: string;
+          is_recurring?: boolean;
+          trace_id?: string;
+          serviceName?: string;
+          startTime?: string;
+          endTime?: string;
+          assignedStaffFirstName?: string;
+          assignedStaffLastName?: string;
+          contactName?: string;
+          contactPhone?: string;
+        }) => ({
           id: String(booking.id || ""),
           calendar_id: String(booking.calendar_id || ""),
           contact_id: String(booking.contact_id || ""),
