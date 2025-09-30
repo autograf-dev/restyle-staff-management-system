@@ -159,6 +159,7 @@ export default function WalkInPage() {
   
   // Form state
   const [customerSearch, setCustomerSearch] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(true)
   const [tipPercentage, setTipPercentage] = useState(18)
   const [customTipAmount, setCustomTipAmount] = useState('')
   const [useCustomTip, setUseCustomTip] = useState(false)
@@ -774,6 +775,7 @@ export default function WalkInPage() {
       // Add to customers list and select
       setCustomers(prev => [newCustomer, ...prev])
       setSelectedCustomer(newCustomer)
+      setShowSuggestions(false)
       
       // Reset form and close dialog
       setNewCustomerForm({ firstName: '', lastName: '', phone: '' })
@@ -812,6 +814,7 @@ export default function WalkInPage() {
     
     setSelectedCustomer(guestCustomer)
     setIsGuestCheckout(true)
+    setShowSuggestions(false)
     setGuestDialogOpen(false)
     
     toast.success(`Guest checkout set up for ${name}`)
@@ -1099,13 +1102,88 @@ export default function WalkInPage() {
                     <Input
                       placeholder="Search customers..."
                       value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value)
+                        if (e.target.value.trim() && !showSuggestions) {
+                          setShowSuggestions(true)
+                        }
+                      }}
                       className="pl-10 rounded-xl border-neutral-200 focus:border-[#7b1d1d] focus:ring-[#7b1d1d]"
                     />
                   </div>
                   
+                  {/* Selected Customer Display (when suggestions are hidden) */}
+                  {selectedCustomer && !showSuggestions && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-neutral-700">Selected Customer</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowSuggestions(true)}
+                          className="rounded-lg border-neutral-300 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-all"
+                        >
+                          <Search className="h-4 w-4 mr-2" />
+                          Show Suggestions
+                        </Button>
+                      </div>
+                      
+                      <div className="p-4 rounded-xl border-2 border-[#7b1d1d] bg-gradient-to-r from-[#7b1d1d]/8 to-[#7b1d1d]/4 shadow-sm">
+                        <div className="flex items-center gap-4">
+                          {/* Selected Customer Avatar */}
+                          <div className="w-12 h-12 rounded-xl bg-[#7b1d1d] flex items-center justify-center font-semibold text-white shadow-lg">
+                            {(selectedCustomer.firstName?.[0] || '') + (selectedCustomer.lastName?.[0] || '') || selectedCustomer.fullName?.[0]?.toUpperCase() || 'C'}
+                          </div>
+                          
+                          {/* Selected Customer Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-lg text-[#7b1d1d]">
+                              {selectedCustomer.fullName}
+                            </div>
+                            
+                            <div className="flex flex-col gap-1.5 mt-2">
+                              {selectedCustomer.email && (
+                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                  <div className="p-1 rounded-md bg-[#7b1d1d]/10">
+                                    <Mail className="h-3.5 w-3.5 text-[#7b1d1d]" />
+                                  </div>
+                                  <span className="font-medium">{selectedCustomer.email}</span>
+                                </div>
+                              )}
+                              
+                              {selectedCustomer.phone && (
+                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                  <div className="p-1 rounded-md bg-[#7b1d1d]/10">
+                                    <Phone className="h-3.5 w-3.5 text-[#7b1d1d]" />
+                                  </div>
+                                  <span className="font-medium">{selectedCustomer.phone}</span>
+                                </div>
+                              )}
+                              
+                              {!selectedCustomer.email && !selectedCustomer.phone && (
+                                <div className="flex items-center gap-2 text-sm text-neutral-500">
+                                  <div className="p-1 rounded-md bg-neutral-100">
+                                    <UserIcon className="h-3.5 w-3.5 text-neutral-400" />
+                                  </div>
+                                  <span className="italic">No contact information</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Selection Badge */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
+                              <CheckCircle2 className="h-5 w-5 text-white" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Loading State */}
-                  {loadingCustomers && (
+                  {loadingCustomers && showSuggestions && (
                     <div className="flex flex-col items-center justify-center py-12 px-4">
                       <div className="relative">
                         <div className="w-12 h-12 rounded-full border-4 border-neutral-200 border-t-[#7b1d1d] animate-spin"></div>
@@ -1118,8 +1196,8 @@ export default function WalkInPage() {
                     </div>
                   )}
                   
-                  {/* Customer Results */}
-                  {customers.length > 0 && !loadingCustomers && (
+                  {/* Customer Results (when showing suggestions) */}
+                  {customers.length > 0 && !loadingCustomers && showSuggestions && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-sm font-medium text-neutral-700">
@@ -1136,9 +1214,12 @@ export default function WalkInPage() {
                           const initials = (customer.firstName?.[0] || '') + (customer.lastName?.[0] || '') || customer.fullName?.[0]?.toUpperCase() || 'C'
                           
                           return (
-                            <div
-                              key={customer.id}
-                              onClick={() => setSelectedCustomer(customer)}
+                        <div
+                          key={customer.id}
+                          onClick={() => {
+                            setSelectedCustomer(customer)
+                            setShowSuggestions(false)
+                          }}
                               className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 ${
                                 isSelected
                                   ? 'bg-[#7b1d1d]/5 border border-[#7b1d1d] shadow-sm'
@@ -1211,7 +1292,7 @@ export default function WalkInPage() {
                   )}
                   
                   {/* Enhanced Empty State */}
-                  {customerSearch && customers.length === 0 && !loadingCustomers && (
+                  {customerSearch && customers.length === 0 && !loadingCustomers && showSuggestions && (
                     <div className="text-center py-12 px-4">
                       <div className="relative mb-6">
                         <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-neutral-100 to-neutral-200 mx-auto flex items-center justify-center shadow-inner">
@@ -1595,7 +1676,7 @@ export default function WalkInPage() {
                       <div className="text-center py-8 text-neutral-500">
                         <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         <p>No services added yet</p>
-                            <p className="text-sm">Click &quot;Add Service&quot; to get started</p>
+                        <p className="text-sm">Click &quot;Add Service&quot; to get started</p>
                           </div>
                         )}
                       </div>
