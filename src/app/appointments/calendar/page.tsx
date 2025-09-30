@@ -92,25 +92,60 @@ function useAppointments() {
         } catch {}
 
         // Use the same /api/bookings endpoint as the appointments tab
-        // Fetch a much larger page size to get more historical data for calendar view
-        console.log('📅 Calendar: Fetching appointments from /api/bookings...')
-        const res = await fetch("/api/bookings?pageSize=2000&page=1")
-        if (!res.ok) {
-          const errorText = await res.text()
-          console.error('📅 Calendar: API Error:', res.status, errorText)
-          throw new Error(`Failed to fetch appointments: ${res.status} - ${errorText}`)
-        }
+        // Fetch ALL appointments using pagination to ensure we get everything
+        console.log('📅 Calendar: Fetching ALL appointments from /api/bookings...')
         
-        const json = await res.json()
-        const bookings = json?.bookings || []
-        const total = json?.total || 0
+        let allBookings: Array<{
+          id?: string;
+          calendar_id?: string;
+          contact_id?: string;
+          title?: string;
+          status?: string;
+          appointment_status?: string;
+          assigned_user_id?: string;
+          address?: string;
+          is_recurring?: boolean;
+          trace_id?: string;
+          serviceName?: string;
+          startTime?: string;
+          endTime?: string;
+          assignedStaffFirstName?: string;
+          assignedStaffLastName?: string;
+          contactName?: string;
+          contactPhone?: string;
+          durationMinutes?: number;
+        }> = []
+        let currentPage = 1
+        let totalAppointments = 0
+        const pageSize = 5000 // Use maximum page size for efficiency
         
-        console.log(`📅 Calendar: API Response - Total: ${total}, Page: ${json?.page}, PageSize: ${json?.pageSize}`)
-        console.log(`📅 Calendar: Fetched ${bookings.length} bookings from API`)
-        console.log('📅 Calendar: Sample booking:', bookings[0])
+        do {
+          console.log(`📅 Calendar: Fetching page ${currentPage} with pageSize ${pageSize}`)
+          const res = await fetch(`/api/bookings?pageSize=${pageSize}&page=${currentPage}`)
+          
+          if (!res.ok) {
+            const errorText = await res.text()
+            console.error('📅 Calendar: API Error:', res.status, errorText)
+            throw new Error(`Failed to fetch appointments: ${res.status} - ${errorText}`)
+          }
+          
+          const json = await res.json()
+          const bookings = json?.bookings || []
+          totalAppointments = json?.total || 0
+          
+          console.log(`📅 Calendar: Page ${currentPage} - Got ${bookings.length} bookings, Total in DB: ${totalAppointments}`)
+          
+          allBookings = [...allBookings, ...bookings]
+          currentPage++
+          
+          // Continue until we've fetched all pages
+        } while (allBookings.length < totalAppointments && allBookings.length > 0)
+        
+        console.log(`📅 Calendar: ✅ FETCHED ALL APPOINTMENTS - Total: ${allBookings.length} of ${totalAppointments}`)
+        console.log('📅 Calendar: Sample booking:', allBookings[0])
         
         // Map the API response data to Appointment format
-        const appointments: Appointment[] = bookings.map((booking: {
+        const appointments: Appointment[] = allBookings.map((booking: {
           id?: string;
           calendar_id?: string;
           contact_id?: string;
@@ -192,7 +227,7 @@ function useAppointments() {
           })))
         } else {
           console.warn('📅 Calendar: No appointments with valid start times found!')
-          console.log('📅 Calendar: Sample raw bookings:', bookings.slice(0, 3))
+          console.log('📅 Calendar: Sample raw bookings:', allBookings.slice(0, 3))
         }
         
         setData(filtered)

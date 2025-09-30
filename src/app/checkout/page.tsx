@@ -140,6 +140,7 @@ function CheckoutContent() {
   const [paymentSession, setPaymentSession] = useState<PaymentSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [bookingPrice, setBookingPrice] = useState<number>(0)
   
   // Form state (email auto-filled from contact so checkout can proceed)
   const [customerInfo, setCustomerInfo] = useState({
@@ -488,69 +489,88 @@ function CheckoutContent() {
     }
 
     try {
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${appointmentId}`)
-      if (!response.ok) throw new Error('Failed to fetch appointment details')
+      // First, try to fetch from Supabase bookings API
+      const response = await fetch(`/api/bookings?pageSize=5000`)
+      if (!response.ok) throw new Error('Failed to fetch booking details')
       const data = await response.json()
-      if (data.appointment) {
-        const apt = data.appointment
-        // Contact details
-        let customerName = 'Unknown Customer'
-        let customerPhone = ''
-        let customerEmail = ''
-        if (apt.contactId) {
-          try {
-            const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${apt.contactId}`)
-            const contactData = await contactRes.json()
-            const c = contactData.contact || contactData || {}
-            if (c) {
-              customerName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || customerName
-              customerPhone = c.phone || c.phone_e164 || customerPhone
-              customerEmail = c.email || c.email_lower || c.emailAddress || customerEmail
-            }
-          } catch (error) {
-            console.warn('Failed to fetch contact details:', error)
-          }
-        }
-        // Staff details — use staffId param fallback
-        let staffName = 'Staff Member'
-        const assignedId = staffIdParam || apt.assignedUserId || ''
-        if (assignedId) {
-          try {
-            const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${assignedId}`)
-            const staffData = await staffRes.json()
-            const sname = staffData.name || staffData.user?.name || staffData.staff?.name
-            if (sname) staffName = sname
-          } catch (error) {
-            console.warn('Failed to fetch staff details:', error)
-          }
-        }
-        const details: AppointmentDetails = {
-          id: appointmentId,
-          serviceName: apt.title || 'Service',
-          startTime: apt.startTime || '',
-          endTime: apt.endTime || '',
-          customerName,
-          customerFirstName: (customerName.split(' ')[0] || '').trim() || undefined,
-          customerPhone,
-          staffName,
-          address: apt.address,
-          calendar_id: calendarId || apt.calendarId || '',
-          assigned_user_id: assignedId,
-          contact_id: apt.contactId || undefined
-        }
-        if (apt.startTime && apt.endTime) {
-          const start = new Date(apt.startTime)
-          const end = new Date(apt.endTime)
-          details.duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60))
-        }
-        setAppointmentDetails(details)
-        setCustomerInfo(prev => ({
-          ...prev,
-          name: customerName !== 'Unknown Customer' ? customerName : prev.name,
-          phone: customerPhone || prev.phone,
-          email: customerEmail || prev.email,
-        }))
+      
+      // Find the specific appointment
+      const booking = data.bookings?.find((b: { id: string }) => b.id === appointmentId)
+      if (!booking) {
+        throw new Error('Appointment not found')
       }
+      
+      console.log('💰 Found booking with price:', booking.price, 'for appointment:', appointmentId)
+      
+      let customerName = booking.contactName || 'Unknown Customer'
+      let customerPhone = ''
+      let customerEmail = ''
+      
+      // Get staff name from booking data or fetch from staff API
+      let staffName = booking.assignedStaffFirstName && booking.assignedStaffLastName 
+        ? `${booking.assignedStaffFirstName} ${booking.assignedStaffLastName}`.trim()
+        : 'Staff Member'
+      
+      const assignedId = staffIdParam || booking.assigned_user_id || ''
+      if (assignedId && staffName === 'Staff Member') {
+        try {
+          const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${assignedId}`)
+          const staffData = await staffRes.json()
+          const sname = staffData.name || staffData.user?.name || staffData.staff?.name
+          if (sname) staffName = sname
+        } catch (error) {
+          console.warn('Failed to fetch staff details:', error)
+        }
+      }
+      
+      // Get contact details if contact_id is available
+      if (booking.contact_id) {
+        try {
+          const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${booking.contact_id}`)
+          const contactData = await contactRes.json()
+          const c = contactData.contact || contactData || {}
+          if (c) {
+            customerName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || customerName
+            customerPhone = c.phone || c.phone_e164 || customerPhone
+            customerEmail = c.email || c.email_lower || c.emailAddress || customerEmail
+          }
+        } catch (error) {
+          console.warn('Failed to fetch contact details:', error)
+        }
+      }
+      
+      const details: AppointmentDetails = {
+        id: appointmentId,
+        serviceName: booking.serviceName || booking.title || 'Service',
+        startTime: booking.startTime || '',
+        endTime: booking.endTime || '',
+        customerName,
+        customerFirstName: (customerName.split(' ')[0] || '').trim() || undefined,
+        customerPhone,
+        staffName,
+        address: booking.address,
+        calendar_id: calendarId || booking.calendar_id || '',
+        assigned_user_id: assignedId,
+        contact_id: booking.contact_id || undefined
+      }
+      
+      if (booking.durationMinutes) {
+        details.duration = booking.durationMinutes
+      }
+      
+      setAppointmentDetails(details)
+      setCustomerInfo(prev => ({
+        ...prev,
+        name: customerName !== 'Unknown Customer' ? customerName : prev.name,
+        phone: customerPhone || prev.phone,
+        email: customerEmail || prev.email,
+      }))
+      
+      // Store the price from Supabase for the payment session
+      if (booking.price) {
+        setBookingPrice(booking.price)
+      }
+      
     } catch (error) {
       console.error('Error fetching appointment details:', error)
       toast.error('Failed to load appointment details')
@@ -558,36 +578,49 @@ function CheckoutContent() {
     }
   }
 
-  // Initialize / refresh pricing (no dependency on email; backend can price without it)
+  // Initialize / refresh pricing using Supabase booking price
   const initializePayment = async () => {
-    if (!appointmentDetails) return
+    if (!appointmentDetails || bookingPrice === 0) return
+    
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/initializePayment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentData: [{
-            calendarId: appointmentDetails.calendar_id,
-            staffId: appointmentDetails.assigned_user_id,
-            appointmentId: appointmentDetails.id
-          }],
-          customerInfo: {
-            email: customerInfo.email || '',
-            name: customerInfo.name || appointmentDetails.customerName,
-            phone: customerInfo.phone || appointmentDetails.customerPhone || ''
+      console.log('💰 Initializing payment with booking price:', bookingPrice)
+      
+      // Create payment session directly using Supabase data
+      const servicePrice = bookingPrice
+      const tipAmount = useCustomTip ? parseFloat(customTipAmount) || 0 : (servicePrice * tipPercentage) / 100
+      const gstAmount = servicePrice * 0.05 // 5% GST
+      const totalAmount = servicePrice + tipAmount + gstAmount
+      
+      const paymentSession: PaymentSession = {
+        sessionId: `checkout_${appointmentDetails.id}_${Date.now()}`,
+        appointments: [{
+          serviceName: appointmentDetails.serviceName,
+          servicePrice: servicePrice,
+          staffName: appointmentDetails.staffName,
+          duration: appointmentDetails.duration ? `${appointmentDetails.duration}m` : '60m'
+        }],
+        pricing: {
+          subtotal: servicePrice,
+          tipAmount: tipAmount,
+          taxes: {
+            gst: { rate: 5, amount: gstAmount },
+            totalTax: gstAmount
           },
-          tipPercentage: useCustomTip ? 0 : tipPercentage,
-          customTipAmount: useCustomTip ? parseFloat(customTipAmount) || 0 : undefined,
-          locationId: "7LYI93XFo8j4nZfswlaz"
-        })
-      })
-      if (!response.ok) throw new Error('Failed to initialize payment')
-      const result = await response.json()
-      if (result.success && result.paymentSession) {
-        setPaymentSession(result.paymentSession)
-      } else {
-        throw new Error(result.error || 'Payment initialization failed')
+          totalAmount: totalAmount,
+          currency: 'CAD'
+        },
+        tipDistribution: [{
+          staffName: appointmentDetails.staffName,
+          servicePrice: servicePrice,
+          sharePercentage: 100,
+          tipAmount: tipAmount,
+          totalEarning: servicePrice + tipAmount
+        }]
       }
+      
+      setPaymentSession(paymentSession)
+      console.log('✅ Payment session created with Supabase pricing:', paymentSession)
+      
     } catch (error) {
       console.error('Error initializing payment:', error)
       toast.error('Failed to calculate pricing')
@@ -1073,7 +1106,7 @@ function CheckoutContent() {
   }, [appointmentId, calendarId, staffIdParam])
 
   useEffect(() => { // price whenever dependencies change
-    if (appointmentDetails && !paymentSession) { 
+    if (appointmentDetails && bookingPrice > 0 && !paymentSession) { 
       void initializePayment() 
     } else if (paymentSession && (tipPercentage || customTipAmount || useCustomTip)) {
       // Only recalculate tip and totals, don't reset service prices
@@ -1097,7 +1130,7 @@ function CheckoutContent() {
       } : null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointmentDetails, tipPercentage, customTipAmount, useCustomTip])
+  }, [appointmentDetails, bookingPrice, tipPercentage, customTipAmount, useCustomTip])
 
   useEffect(() => { // fetch groups and staff data on page load
     void fetchGroups()
