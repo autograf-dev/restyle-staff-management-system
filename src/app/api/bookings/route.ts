@@ -89,31 +89,68 @@ export async function GET(req: NextRequest) {
 
     console.log(`Found ${count} bookings, returning ${data?.length || 0} results for page ${page}`)
 
+    // Get all booking IDs to check for transactions
+    const bookingIds = (data || []).map(row => row.id).filter(Boolean)
+    
+    // Fetch transactions for these bookings to determine payment status
+    let transactionData: Record<string, unknown>[] = []
+    if (bookingIds.length > 0) {
+      const { data: transactions, error: transactionError } = await supabaseAdmin
+        .from("restyle_transactions")
+        .select("*")
+        .in("Booking/ID", bookingIds)
+        .eq("Payment/Status", "Paid")
+
+      if (transactionError) {
+        console.warn('Error fetching transactions:', transactionError)
+      } else {
+        transactionData = transactions || []
+      }
+    }
+
+    // Create a map of booking ID to payment status
+    const paymentStatusMap = new Map()
+    transactionData.forEach(transaction => {
+      const bookingId = transaction["Booking/ID"]
+      if (bookingId) {
+        paymentStatusMap.set(bookingId, 'paid')
+      }
+    })
+
+    console.log(`Found ${transactionData.length} paid transactions for ${bookingIds.length} bookings`)
+
     // Map to the Booking shape used on the frontend where possible
-    const bookings = (data || []).map((row: Record<string, unknown>) => ({
-      id: String(row.id ?? ""),
-      calendar_id: String(row.calendar_id ?? ""),
-      contact_id: String(row.contact_id ?? ""),
-      title: row.title ?? "",
-      status: row.status ?? "",
-      appointment_status: row.appointment_status ?? "",
-      assigned_user_id: String(row.assigned_user_id ?? ""),
-      address: row.address ?? "",
-      is_recurring: Boolean(row.is_recurring ?? false),
-      trace_id: row.trace_id ?? "",
-      // Enriched fields that now exist in the table
-      serviceName: (row.service_name as string) ?? (row.title as string) ?? "",
-      assignedStaffFirstName: (String(row.assigned_barber_name || "")).split(/\s+/)[0] || undefined,
-      assignedStaffLastName: ((String(row.assigned_barber_name || "")).split(/\s+/).slice(1).join(" ")) || undefined,
-      contactName: (row.customer_name_ as string) ?? undefined,
-      createdAt: undefined, // not present; frontend sorts by startTime fallback
-      // Optional extras provided by your schema
-      startTime: row.start_time ?? undefined,
-      endTime: row.end_time ?? undefined,
-      // duration and price if present in numeric/string
-      durationMinutes: row.booking_duration ? Number(row.booking_duration) : undefined,
-      price: row.booking_price ? Number(row.booking_price) : undefined,
-    }))
+    const bookings = (data || []).map((row: Record<string, unknown>) => {
+      const bookingId = String(row.id ?? "")
+      const paymentStatus = paymentStatusMap.get(bookingId) || 'pending'
+      
+      return {
+        id: bookingId,
+        calendar_id: String(row.calendar_id ?? ""),
+        contact_id: String(row.contact_id ?? ""),
+        title: row.title ?? "",
+        status: row.status ?? "",
+        appointment_status: row.appointment_status ?? "",
+        assigned_user_id: String(row.assigned_user_id ?? ""),
+        address: row.address ?? "",
+        is_recurring: Boolean(row.is_recurring ?? false),
+        trace_id: row.trace_id ?? "",
+        // Enriched fields that now exist in the table
+        serviceName: (row.service_name as string) ?? (row.title as string) ?? "",
+        assignedStaffFirstName: (String(row.assigned_barber_name || "")).split(/\s+/)[0] || undefined,
+        assignedStaffLastName: ((String(row.assigned_barber_name || "")).split(/\s+/).slice(1).join(" ")) || undefined,
+        contactName: (row.customer_name_ as string) ?? undefined,
+        createdAt: undefined, // not present; frontend sorts by startTime fallback
+        // Optional extras provided by your schema
+        startTime: row.start_time ?? undefined,
+        endTime: row.end_time ?? undefined,
+        // duration and price if present in numeric/string
+        durationMinutes: row.booking_duration ? Number(row.booking_duration) : undefined,
+        price: row.booking_price ? Number(row.booking_price) : undefined,
+        // Payment status determined from transactions table
+        payment_status: paymentStatus,
+      }
+    })
 
     return NextResponse.json({
       bookings,
@@ -140,18 +177,19 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { id, status, booking_price, tax_amount, tip_amount, total_paid, payment_method, payment_date } = body
+    const { id, status, payment_status, booking_price, tax_amount, tip_amount, total_paid, payment_method, payment_date } = body
 
     if (!id) {
       return NextResponse.json({ error: "Booking ID is required" }, { status: 400 })
     }
 
-    console.log('Updating booking status:', { id, status, booking_price, tax_amount, tip_amount, total_paid, payment_method })
+    console.log('Updating booking status:', { id, status, payment_status, booking_price, tax_amount, tip_amount, total_paid, payment_method })
 
     // Prepare update data - only include fields that are provided
     const updateData: Record<string, unknown> = {}
     
     if (status !== undefined) updateData.status = status
+    if (payment_status !== undefined) updateData.payment_status = payment_status
     if (booking_price !== undefined) updateData.booking_price = booking_price
     if (tax_amount !== undefined) updateData.tax_amount = tax_amount
     if (tip_amount !== undefined) updateData.tip_amount = tip_amount

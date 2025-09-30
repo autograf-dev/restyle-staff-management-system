@@ -169,6 +169,7 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           contactName?: string;
           contactPhone?: string;
           durationMinutes?: number;
+          payment_status?: string;
         }) => {
           // Calculate endTime from startTime + durationMinutes if endTime is missing
           let calculatedEndTime = booking.endTime
@@ -198,8 +199,8 @@ function useAppointments(view: CalendarView, currentDate: Date) {
             assignedStaffLastName: booking.assignedStaffLastName || "",
             contactName: booking.contactName || "",
             contactPhone: booking.contactPhone || "",
-            // Payment status can be determined from transactions if needed
-            payment_status: 'pending' // Default, can be enhanced later
+            // Payment status from API response or default to pending
+            payment_status: booking.payment_status || 'pending'
           }
         })
         

@@ -909,6 +909,7 @@ function CheckoutContent() {
             body: JSON.stringify({
               id: appointmentDetails.id,
               status: 'paid',
+              payment_status: 'paid',
               booking_price: subtotal,
               tax_amount: gst,
               tip_amount: tip,
