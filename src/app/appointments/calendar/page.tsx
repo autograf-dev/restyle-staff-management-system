@@ -89,51 +89,19 @@ function useAppointments() {
 
         // Use the same /api/bookings endpoint as the appointments tab
         // Fetch a larger page size to get more historical data for calendar view
-        const res = await fetch("/api/bookings?pageSize=100&page=1")
+        const res = await fetch("/api/bookings?pageSize=1000&page=1")
         if (!res.ok) throw new Error("Failed to fetch appointments")
         const json = await res.json()
         const bookings = json?.bookings || []
         
         console.log(`📅 Calendar: Fetched ${bookings.length} bookings from Supabase`)
         
-        // Simple timezone conversion for America/Edmonton
-        const formatEdmontonTime = (timestampz?: string) => {
-          if (!timestampz) return undefined
-          
-          try {
-            // For now, just return the timestampz as-is since Supabase handles timezone conversion
-            // The UI will handle local display formatting
-            return timestampz
-          } catch (error) {
-            console.warn(`Failed to format Edmonton time for ${timestampz}:`, error)
-            return timestampz // fallback to original
-          }
-        }
-        
-        // Map the Supabase data directly to Appointment format
-        const appointments: Appointment[] = bookings.map((booking: {
-          id?: string;
-          calendar_id?: string;
-          contact_id?: string;
-          title?: string;
-          serviceName?: string;
-          status?: string;
-          appointment_status?: string;
-          assigned_user_id?: string;
-          address?: string;
-          is_recurring?: boolean;
-          trace_id?: string;
-          startTime?: string;
-          endTime?: string;
-          assignedStaffFirstName?: string;
-          assignedStaffLastName?: string;
-          contactName?: string;
-          contactPhone?: string;
-        }) => ({
+        // Map the actual Supabase data structure to Appointment format
+        const appointments: Appointment[] = bookings.map((booking: any) => ({
           id: String(booking.id || ""),
           calendar_id: String(booking.calendar_id || ""),
           contact_id: String(booking.contact_id || ""),
-          title: booking.title || booking.serviceName || "",
+          title: booking.title || "",
           status: booking.status || "",
           appointment_status: booking.appointment_status || "",
           assigned_user_id: String(booking.assigned_user_id || ""),
@@ -141,10 +109,10 @@ function useAppointments() {
           is_recurring: Boolean(booking.is_recurring || false),
           trace_id: booking.trace_id || "",
           serviceName: booking.serviceName || booking.title || 'Untitled Service',
-          // Use the already converted times from the API
-          startTime: formatEdmontonTime(booking.startTime),
-          endTime: formatEdmontonTime(booking.endTime),
-          // Use the enriched data from the API response
+          // Use the actual start_time and end_time from Supabase
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          // Use the enriched data that's already processed by the API
           assignedStaffFirstName: booking.assignedStaffFirstName || "",
           assignedStaffLastName: booking.assignedStaffLastName || "",
           contactName: booking.contactName || "",
