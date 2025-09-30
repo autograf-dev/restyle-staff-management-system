@@ -1167,6 +1167,55 @@ function CheckoutContent() {
     }
   }, [addServiceDialogOpen, staffData.length])
 
+  // Debug useEffect to monitor checkout button state
+  useEffect(() => {
+    const isButtonDisabled = processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)
+    
+    // Individual condition checks
+    const conditions = {
+      processingPayment: processingPayment,
+      noEmail: !customerInfo.email,
+      noName: !customerInfo.name,
+      noPaymentSession: !paymentSession,
+      splitPaymentIssue: isSplitPayment && Math.abs(getRemainingAmount()) > 0.01
+    }
+    
+    const failingConditions = Object.entries(conditions).filter(([key, value]) => value).map(([key]) => key)
+    
+    console.log('🔘 Complete Payment Button Debug:', {
+      isDisabled: isButtonDisabled,
+      failingConditions,
+      customerInfo: {
+        email: customerInfo.email || 'MISSING',
+        name: customerInfo.name || 'MISSING',
+        phone: customerInfo.phone
+      },
+      paymentSession: paymentSession ? {
+        sessionId: paymentSession.sessionId,
+        appointmentsCount: paymentSession.appointments?.length,
+        totalAmount: paymentSession.pricing?.totalAmount,
+        currency: paymentSession.pricing?.currency
+      } : 'MISSING PAYMENT SESSION',
+      processingPayment,
+      isSplitPayment,
+      remainingAmount: isSplitPayment ? Math.abs(getRemainingAmount()) : 'N/A',
+      bookingPrice,
+      appointmentDetails: appointmentDetails ? {
+        id: appointmentDetails.id,
+        serviceName: appointmentDetails.serviceName,
+        staffName: appointmentDetails.staffName,
+        customerName: appointmentDetails.customerName
+      } : 'MISSING APPOINTMENT DETAILS'
+    })
+    
+    // If the button is disabled, let's identify exactly why
+    if (isButtonDisabled) {
+      console.error('❌ Complete Payment Button DISABLED due to:', failingConditions.join(', '))
+    } else {
+      console.log('✅ Complete Payment Button should be ENABLED')
+    }
+  }, [processingPayment, customerInfo.email, customerInfo.name, paymentSession, isSplitPayment, bookingPrice, appointmentDetails])
+
   if (!appointmentId || !calendarId) {
     return (
       <RoleGuard>
