@@ -1823,9 +1823,19 @@ export default function CalendarPage() {
 
   // Scope to barber's own appointments if barber
   const scopedAppointments = React.useMemo(() => {
+    console.log(`📅 Scoping appointments:`, {
+      totalAppointments: appointments.length,
+      userRole: user?.role,
+      userGhlId: user?.ghlId,
+      sampleAssignedUserIds: appointments.slice(0, 5).map(a => a.assigned_user_id)
+    })
+    
     if (user?.role === 'barber' && user.ghlId) {
-      return appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
+      const filtered = appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
+      console.log(`📅 Barber filter: ${filtered.length} appointments match ghlId ${user.ghlId}`)
+      return filtered
     }
+    console.log(`📅 No barber filter applied, returning all ${appointments.length} appointments`)
     return appointments
   }, [appointments, user?.role, user?.ghlId])
 
@@ -1953,14 +1963,28 @@ export default function CalendarPage() {
     return items
   }
 
-  // Day view appointments - use all appointments for calendar display, filtering happens in the UI
+  // Day view appointments - bypass all filtering for debugging
   const dayAppointments = React.useMemo(() => {
     const dateKey = currentDate.toDateString()
-    return appointments.filter(appointment => {
+    // Use appointments directly like the appointments tab
+    const todaysAppointments = appointments.filter(appointment => {
       if (!appointment.startTime) return false
       const appointmentDate = new Date(appointment.startTime).toDateString()
       return appointmentDate === dateKey
     })
+    
+    console.log(`📅 DIRECT filter debug:`, {
+      currentDate: dateKey,
+      totalAppointments: appointments.length,
+      todaysAppointments: todaysAppointments.length,
+      sampleAppointments: appointments.slice(0, 3).map(a => ({
+        id: a.id,
+        startTime: a.startTime,
+        assigned_user_id: a.assigned_user_id
+      }))
+    })
+    
+    return todaysAppointments
   }, [appointments, currentDate])
   
   // Debug day appointments
