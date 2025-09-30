@@ -66,39 +66,75 @@ type CalendarDay = {
 }
 
 // Custom hooks
-function useAppointments() {
+function useAppointments(view: CalendarView, currentDate: Date) {
   const [data, setData] = React.useState<Appointment[]>([])
   const [loading, setLoading] = React.useState<boolean>(true)
   const [lastUpdated, setLastUpdated] = React.useState<number>(0)
 
-
   const fetchAppointments = React.useCallback(async (forceRefresh: boolean = false) => {
       setLoading(true)
       try {
+        // Calculate date range based on view
+        let startDate: string | undefined
+        let endDate: string | undefined
+        
+        if (view === 'day') {
+          // For daily view, fetch all appointments for the specific day
+          const start = new Date(currentDate)
+          start.setHours(0, 0, 0, 0)
+          const end = new Date(currentDate)
+          end.setHours(23, 59, 59, 999)
+          
+          startDate = start.toISOString()
+          endDate = end.toISOString()
+        } else if (view === 'month') {
+          // For monthly view, fetch all appointments for the month
+          const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+          const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999)
+          
+          startDate = start.toISOString()
+          endDate = end.toISOString()
+        }
+        // For year view, don't use date filtering - fetch recent 1000 appointments
+        
+        // Cache key includes view and date for proper cache separation
+        const cacheKey = `restyle.calendar.appointments.${view}.${currentDate.toDateString()}`
+        
         // Cache read (10 min TTL) - temporarily disabled for debugging
         try {
-          const cached = JSON.parse(localStorage.getItem('restyle.calendar.appointments') || 'null') as { data: Appointment[]; fetchedAt: number } | null
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null') as { data: Appointment[]; fetchedAt: number } | null
           const ttl = 10 * 60 * 1000
           // Force refresh to bypass cache during debugging
           if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl && false) {
             setData(cached?.data || [])
             setLastUpdated(cached?.fetchedAt || Date.now())
             setLoading(false)
-            console.log(`📅 Calendar: Using cached data (${cached?.data?.length || 0} appointments)`)
+            console.log(`📅 Calendar ${view}: Using cached data (${cached?.data?.length || 0} appointments)`)
             return
           } else if (cached) {
-            console.log(`📅 Calendar: Bypassing cache (had ${cached.data?.length || 0} appointments, age: ${Math.round((Date.now() - cached.fetchedAt) / 60000)} min)`)
+            console.log(`📅 Calendar ${view}: Bypassing cache (had ${cached.data?.length || 0} appointments, age: ${Math.round((Date.now() - cached.fetchedAt) / 60000)} min)`)
           }
         } catch {}
 
-        // Use the same /api/bookings endpoint as the appointments tab
-        // Fetch appointments efficiently for calendar view
-        // TODO: Implement date-range filtering to only fetch appointments for visible period
-        // For now, fetch recent 1000 appointments which covers most use cases
-        console.log('📅 Calendar: Fetching appointments from /api/bookings...')
+        // Build API URL with date filtering for daily/monthly views
+        let apiUrl = '/api/bookings?'
+        const params = new URLSearchParams()
         
-        const pageSize = 1000 // Reasonable size for calendar view - much better than 5652!
-        const res = await fetch(`/api/bookings?pageSize=${pageSize}&page=1`)
+        if (startDate && endDate) {
+          params.append('startDate', startDate)
+          params.append('endDate', endDate)
+          params.append('pageSize', '5000') // High limit for date-filtered queries
+          console.log(`📅 Calendar ${view}: Fetching appointments for date range ${startDate} to ${endDate}`)
+        } else {
+          params.append('pageSize', '1000') // Reasonable size for yearly view
+          console.log(`📅 Calendar ${view}: Fetching recent 1000 appointments`)
+        }
+        params.append('page', '1')
+        
+        apiUrl += params.toString()
+        
+        console.log(`📅 Calendar ${view}: Fetching from ${apiUrl}`)
+        const res = await fetch(apiUrl)
         
         if (!res.ok) {
           const errorText = await res.text()
@@ -203,15 +239,15 @@ function useAppointments() {
         const nowTs = Date.now()
         setLastUpdated(nowTs)
         try { 
-          localStorage.setItem('restyle.calendar.appointments', JSON.stringify({ data: filtered, fetchedAt: nowTs })) 
+          localStorage.setItem(cacheKey, JSON.stringify({ data: filtered, fetchedAt: nowTs })) 
         } catch {}
       } catch (error) {
-        console.error("📅 Calendar: Failed to fetch appointments:", error)
+        console.error(`📅 Calendar ${view}: Failed to fetch appointments:`, error)
         toast.error(`Failed to load appointments: ${error instanceof Error ? error.message : 'Unknown error'}`)
       } finally {
         setLoading(false)
       }
-    }, [])
+    }, [view, currentDate])
 
     React.useEffect(() => {
       fetchAppointments()
@@ -221,7 +257,9 @@ function useAppointments() {
 
   const refresh = async () => { 
     try { 
-      localStorage.removeItem('restyle.calendar.appointments') 
+      // Clear cache for all views/dates
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('restyle.calendar.appointments.'))
+      keys.forEach(key => localStorage.removeItem(key))
       await fetchAppointments(true) // Force refetch
     } catch (error) {
       console.error('Error refreshing appointments:', error)
@@ -1330,10 +1368,10 @@ function getYearMonths(year: number) {
 
 export default function CalendarPage() {
   const router = useRouter()
-  const { data: appointments, loading, refresh } = useAppointments()
-  const { user } = useUser()
   const [currentDate, setCurrentDate] = React.useState(new Date()) // Set to date with known appointments
   const [view, setView] = React.useState<CalendarView>('day')
+  const { data: appointments, loading, refresh } = useAppointments(view, currentDate)
+  const { user } = useUser()
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
   const [staffView, setStaffView] = React.useState(true) // Default to staff view only

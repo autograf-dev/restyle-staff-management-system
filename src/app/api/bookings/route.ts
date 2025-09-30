@@ -18,8 +18,10 @@ export async function GET(req: NextRequest) {
     const appointmentStatus = searchParams.get("appointment_status") || undefined
     const search = searchParams.get("search")?.trim() || ""
     const assignedUserId = searchParams.get("assigned_user_id") || undefined
+    const startDate = searchParams.get("startDate") || undefined
+    const endDate = searchParams.get("endDate") || undefined
 
-    console.log('Fetching bookings with params:', { page, pageSize, appointmentStatus, search, assignedUserId })
+    console.log('Fetching bookings with params:', { page, pageSize, appointmentStatus, search, assignedUserId, startDate, endDate })
 
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
@@ -27,6 +29,17 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from("restyle_bookings")
       .select("*", { count: "exact" })
+
+    // Apply date range filtering
+    if (startDate && endDate) {
+      query = query
+        .gte("start_time", startDate)
+        .lte("start_time", endDate)
+    } else if (startDate) {
+      query = query.gte("start_time", startDate)
+    } else if (endDate) {
+      query = query.lte("start_time", endDate)
+    }
 
     if (appointmentStatus) {
       query = query.eq("appointment_status", appointmentStatus)
@@ -55,8 +68,12 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // Order by id desc as a proxy for recency when createdAt is missing
-    query = query.order("id", { ascending: false })
+    // Order by start_time when date filtering is used, otherwise by id for general queries
+    if (startDate || endDate) {
+      query = query.order("start_time", { ascending: false })
+    } else {
+      query = query.order("id", { ascending: false })
+    }
 
     const { data, error, count } = await query.range(from, to)
     if (error) {
