@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
     const bookingIds = (data || []).map(row => row.id).filter(Boolean)
     
     // Fetch ALL paid transactions and create a simple lookup
-    let paidBookingIds = new Set<string>()
+    const paidBookingIds = new Set<string>()
     
     if (bookingIds.length > 0) {
       console.log('🔍 Fetching all paid transactions to find booking matches...')
