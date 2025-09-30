@@ -392,6 +392,24 @@ const StaffOverviewView = ({
               ghl_id: s.ghl_id,
               role: s.role
             })))
+            
+            // Debug staff IDs vs appointment IDs for today
+            const todayAppointments = appointments.filter(apt => {
+              if (!apt.startTime) return false
+              const aptDate = new Date(apt.startTime).toDateString()
+              return aptDate === currentDate.toDateString()
+            })
+            
+            if (todayAppointments.length > 0) {
+              const appointmentStaffIds = todayAppointments.map((a: Appointment) => a.assigned_user_id)
+              const staffGhlIds = staffMembers.map((s: { ghl_id: string }) => s.ghl_id)
+              console.log("📅 Staff ID Matching Debug:", {
+                appointmentStaffIds,
+                staffGhlIds,
+                matchingIds: appointmentStaffIds.filter((id: string) => staffGhlIds.includes(id)),
+                missingStaffIds: appointmentStaffIds.filter((id: string) => !staffGhlIds.includes(id))
+              })
+            }
           }
           
           // Filter staff based on user role
@@ -1928,6 +1946,11 @@ export default function CalendarPage() {
       assigned_user_id: a.assigned_user_id
     }))
   })
+  
+  // Debug today's appointment assigned_user_ids
+  if (dayAppointments.length > 0) {
+    console.log(`📅 Today's appointments staff IDs:`, dayAppointments.map(a => a.assigned_user_id))
+  }
 
   // Effect to fetch staff when reschedule dialog opens
   React.useEffect(() => {
