@@ -2052,7 +2052,7 @@ function CheckoutContent() {
                           })
                           proceedToCheckout()
                         }}
-                        disabled={processingPayment || !customerInfo.email || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)}
+                        disabled={processingPayment || !customerInfo.name || !paymentSession || (isSplitPayment && Math.abs(getRemainingAmount()) > 0.01)}
                       >
                         {processingPayment ? (
                           <>
