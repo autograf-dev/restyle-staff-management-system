@@ -75,16 +75,19 @@ function useAppointments() {
   const fetchAppointments = React.useCallback(async (forceRefresh: boolean = false) => {
       setLoading(true)
       try {
-        // Cache read (10 min TTL)
+        // Cache read (10 min TTL) - temporarily disabled for debugging
         try {
           const cached = JSON.parse(localStorage.getItem('restyle.calendar.appointments') || 'null') as { data: Appointment[]; fetchedAt: number } | null
           const ttl = 10 * 60 * 1000
-          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
-            setData(cached.data || [])
-            setLastUpdated(cached.fetchedAt)
+          // Force refresh to bypass cache during debugging
+          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl && false) {
+            setData(cached?.data || [])
+            setLastUpdated(cached?.fetchedAt || Date.now())
             setLoading(false)
-            console.log(`📅 Calendar: Using cached data (${cached.data?.length || 0} appointments)`)
+            console.log(`📅 Calendar: Using cached data (${cached?.data?.length || 0} appointments)`)
             return
+          } else if (cached) {
+            console.log(`📅 Calendar: Bypassing cache (had ${cached.data?.length || 0} appointments, age: ${Math.round((Date.now() - cached.fetchedAt) / 60000)} min)`)
           }
         } catch {}
 
