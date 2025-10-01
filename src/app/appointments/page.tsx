@@ -23,7 +23,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2, ArrowLeft, CheckCircle2, AlertCircle, Scissors } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -151,7 +151,7 @@ function useBookings() {
         } else {
           // For status-based filtering (confirmed/cancelled)
           const statusValue = params?.appointmentStatus ?? (statusFilter === 'confirmed' ? 'confirmed' : 'cancelled')
-          if (statusValue) qs.set('appointment_status', statusValue)
+        if (statusValue) qs.set('appointment_status', statusValue)
         }
 
         const res = await fetch(`/api/bookings?${qs.toString()}`, { signal })
@@ -387,7 +387,7 @@ function BookingsPageInner() {
   const [newAppCurrentStep, setNewAppCurrentStep] = React.useState(1)
   const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id?: string; name?: string; label?: string; value?: string; description?: string; icon?: string }>>([])
   const [newAppSelectedDepartment, setNewAppSelectedDepartment] = React.useState<string>("")
-  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; label?: string; value?: string; description?: string }>>([])
+  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; price?: number; label?: string; value?: string; description?: string }>>([])
   const [newAppSelectedService, setNewAppSelectedService] = React.useState<string>("")
   const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id?: string; name?: string; email?: string; label?: string; value?: string; badge?: string; icon?: string }>>([])
   const [newAppSelectedStaff, setNewAppSelectedStaff] = React.useState<string>("")
@@ -908,7 +908,7 @@ function BookingsPageInner() {
   const fetchNewAppDepartments = async () => {
     setNewAppLoadingDepts(true)
     try {
-      const res = await fetch('https://restyle-api.netlify.app/.netlify/functions/supabasegroups')
+      const res = await fetch('https://restyle-backend.netlify.app/.netlify/functions/supabasegroups')
       const data = await res.json()
       
       const departments = data.groups.map((group: { id: string; name: string; description?: string }) => ({
@@ -933,14 +933,29 @@ function BookingsPageInner() {
     
     setNewAppLoadingServices(true)
     try {
-      const res = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${departmentId}`)
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
       
-      const services = (data.calendars || []).map((service: { id: string; name: string; duration?: number; slotDuration?: number; teamMembers?: Array<{ userId: string; name: string }> }) => ({
-        label: service.name,
-        value: service.id,
-        description: `Duration: ${service.slotDuration} mins | Staff: ${service.teamMembers?.length ?? 0}`
-      }))
+      const services = (data.calendars || []).map((service: { id: string; name: string; duration?: number; slotDuration?: number; teamMembers?: Array<{ userId: string; name: string }>; description?: string }) => {
+        const durationInMins = service.slotDuration || service.duration || 0
+        
+        // Extract price from description HTML (like supabase.vue)
+        let price = 0
+        if (service.description) {
+          const priceMatch = service.description.match(/CA\$(\d+\.?\d*)/i)
+          if (priceMatch) {
+            price = parseFloat(priceMatch[1])
+          }
+        }
+        
+        return {
+          label: service.name,
+          value: service.id,
+          duration: durationInMins, // Store as number
+          price: price, // Store price
+          description: `Duration: ${durationInMins} mins | Staff: ${service.teamMembers?.length ?? 0}`
+        }
+      })
       
       setNewAppServices(services)
     } catch {
@@ -957,7 +972,7 @@ function BookingsPageInner() {
     
     setNewAppLoadingStaff(true)
     try {
-      const res = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
       const data = await res.json()
       
       const serviceObj = (data.calendars || []).find((s: { id: string; teamMembers?: Array<{ userId: string; name: string }> }) => s.id === serviceId)
@@ -972,16 +987,33 @@ function BookingsPageInner() {
 
       const staffPromises = teamMembers.map(async (member: { userId: string; name: string; email?: string }) => {
         try {
-          const staffRes = await fetch(`https://restyle-api.netlify.app/.netlify/functions/Staff?id=${member.userId}`)
+          const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${member.userId}`)
           const staffData = await staffRes.json()
+          
+          console.log('👤 Staff API response for member:', member.userId, staffData)
+          
+          // Comprehensive name derivation like Vue.js supabase.vue
+          const derivedName =
+            staffData?.data?.name ||
+            staffData?.name ||
+            staffData?.fullName ||
+            staffData?.displayName ||
+            [staffData?.staff?.firstName, staffData?.staff?.lastName].filter(Boolean).join(' ') ||
+            [staffData?.users?.firstName, staffData?.users?.lastName].filter(Boolean).join(' ') ||
+            [staffData?.firstName, staffData?.lastName].filter(Boolean).join(' ') ||
+            staffData?.user?.name ||
+            'Staff'
+          
+          console.log('✅ Derived staff name:', derivedName, 'for userId:', member.userId)
+          
           return {
-            label: staffData.name,
+            label: derivedName,
             value: member.userId, // Use member.userId like Vue.js
-            originalStaffId: staffData.id,
+            originalStaffId: staffData?.id,
             icon: 'user'
           }
-        } catch {
-          console.warn('Failed to fetch staff details for:', member.userId)
+        } catch (error) {
+          console.warn('❌ Failed to fetch staff details for:', member.userId, error)
           return null
         }
       })
@@ -1012,7 +1044,7 @@ function BookingsPageInner() {
     const userId = newAppSelectedStaff && newAppSelectedStaff !== 'any' ? newAppSelectedStaff : null
 
     try {
-      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${serviceId}`
+      let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/staffSlots?calendarId=${serviceId}`
       if (userId) {
         apiUrl += `&userId=${userId}`
       }
@@ -1052,16 +1084,34 @@ function BookingsPageInner() {
       const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
       const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       
+      let label = ''
+      if (dateString === todayDateString) {
+        label = 'TODAY'
+      } else {
+        const diffTime = new Date(dateString + 'T00:00:00').getTime() - today.getTime()
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        if (diffDays === 1) label = 'TOMORROW'
+        else if (diffDays <= 7) label = 'THIS WEEK'
+        else label = 'NEXT WEEK'
+      }
+      
       return {
         dateString,
         dayName,
         dateDisplay,
-        label: '', // Remove labels for cleaner UI
+        label,
         date
       }
     })
     
     setNewAppDates(dates)
+    
+    // Auto-select first date and fetch slots for it
+    if (dates.length > 0 && !newAppSelectedDate) {
+      const firstDate = dates[0].dateString
+      setNewAppSelectedDate(firstDate)
+      fetchNewAppSlotsForDate(firstDate)
+    }
   }
 
   // Fetch slots for selected date
@@ -1124,37 +1174,37 @@ function BookingsPageInner() {
     setNewAppWorkingSlots({})
   }
 
-  // Step navigation functions
+  // Step navigation functions (Updated for 4-step flow)
   const goToNextNewAppStep = () => {
-    setNewAppCurrentStep(prev => Math.min(prev + 1, 5))
+    setNewAppCurrentStep(prev => Math.min(prev + 1, 4))
   }
 
   const goToPrevNewAppStep = () => {
     setNewAppCurrentStep(prev => Math.max(prev - 1, 1))
   }
 
-  // Handle department selection
+  // Handle department selection - only fetch services, don't auto-advance
   const handleNewAppDepartmentSelect = (departmentId: string) => {
     setNewAppSelectedDepartment(departmentId)
     setNewAppSelectedService("")
     setNewAppSelectedStaff("")
     fetchNewAppServices(departmentId)
-    goToNextNewAppStep()
+    // Don't auto-advance - stay on Step 1 to show services
   }
 
-  // Handle service selection
+  // Handle service selection - advance to staff selection
   const handleNewAppServiceSelect = (serviceId: string) => {
     setNewAppSelectedService(serviceId)
     setNewAppSelectedStaff("")
     fetchNewAppStaff(serviceId)
-    goToNextNewAppStep()
+    goToNextNewAppStep() // Go to Step 2 (Staff)
   }
 
-  // Handle staff selection
+  // Handle staff selection - advance to date/time
   const handleNewAppStaffSelect = (staffId: string) => {
     setNewAppSelectedStaff(staffId)
     fetchNewAppWorkingSlots()
-    goToNextNewAppStep()
+    // Don't auto-advance - let user click Continue button
   }
 
   // Handle date selection
@@ -1184,7 +1234,7 @@ function BookingsPageInner() {
       })
 
       const contactRes = await fetch(
-        `https://restyle-api.netlify.app/.netlify/functions/customer?${params.toString()}`
+        `https://restyle-backend.netlify.app/.netlify/functions/customer?${params.toString()}`
       )
       const contactData = await contactRes.json()
 
@@ -1215,10 +1265,9 @@ function BookingsPageInner() {
       jsDate.setHours(hour, minute, 0, 0)
       const localStartTime = jsDate
 
-      // Get service duration
+      // Get service duration - use the duration property directly
       const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
-      const durationMatch = selectedServiceObj?.description?.match(/Duration: (\d+) mins/)
-      const duration = durationMatch ? parseInt(durationMatch[1]) : 120
+      const duration = selectedServiceObj?.duration || 120 // Use duration property directly
       const localEndTime = new Date(localStartTime.getTime() + duration * 60 * 1000)
 
       // Convert America/Denver wall time to UTC ISO (mirror Vue logic)
@@ -1246,14 +1295,41 @@ function BookingsPageInner() {
       }
 
       const serviceName = selectedServiceObj?.label || 'Service'
+      const servicePrice = selectedServiceObj?.price || 0
       const contactName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
       const title = `${serviceName} - ${contactName}`
       
-      let bookUrl = `https://restyle-api.netlify.app/.netlify/functions/Apointment?contactId=${contactId}&calendarId=${newAppSelectedService}&startTime=${startTime}&endTime=${endTime}&title=${encodeURIComponent(title)}`
+      // Get staff name
+      const staffObj = newAppStaff.find(s => s.value === assignedUserId)
+      const staffName = staffObj?.label || 'Any available staff'
+      
+      // Build booking URL with all required parameters (matching supabase.vue)
+      let bookUrl = `https://restyle-backend.netlify.app/.netlify/functions/Apointment?contactId=${contactId}&calendarId=${newAppSelectedService}&startTime=${startTime}&endTime=${endTime}&title=${encodeURIComponent(title)}`
       if (assignedUserId) bookUrl += `&assignedUserId=${assignedUserId}`
+      
+      // Add enhanced data parameters (matching supabase.vue)
+      bookUrl += `&serviceName=${encodeURIComponent(serviceName)}`
+      bookUrl += `&servicePrice=${servicePrice}`
+      bookUrl += `&serviceDuration=${duration}`
+      bookUrl += `&staffName=${encodeURIComponent(staffName)}`
+      bookUrl += `&customerFirstName=${encodeURIComponent(newAppContactForm.firstName)}`
+      bookUrl += `&customerLastName=${encodeURIComponent(newAppContactForm.lastName)}`
+
+      // Log enhanced booking data
+      console.log('📊 Enhanced Booking Data:')
+      console.log('Service Name:', serviceName)
+      console.log('Service Price:', servicePrice)
+      console.log('Service Duration:', duration, 'minutes')
+      console.log('Staff Name:', staffName)
+      console.log('Staff ID:', assignedUserId)
+      console.log('Customer Name:', `${newAppContactForm.firstName} ${newAppContactForm.lastName}`)
+      console.log('Start Time (UTC):', startTime)
+      console.log('End Time (UTC):', endTime)
+      console.log('📡 Booking URL:', bookUrl)
 
       const bookRes = await fetch(bookUrl)
       const bookData = await bookRes.json()
+      console.log('✅ Booking Response:', bookData)
 
       if (!bookData.response?.id) {
         throw new Error(bookData.error || 'Booking failed')
@@ -1361,8 +1437,8 @@ function BookingsPageInner() {
 				</span>
 			  )}
 			</span>
-		  </div>
-		)
+          </div>
+        )
       },
     },
     {
@@ -1688,10 +1764,10 @@ function BookingsPageInner() {
                     if (tabTotalPages <= 1) return null
                     
                     return (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
                           onClick={() => {
                             const newPage = Math.max(1, tabCurrentPage - 1)
                             setPaginationState(prev => ({
@@ -1700,49 +1776,49 @@ function BookingsPageInner() {
                             }))
                           }}
                           disabled={tabCurrentPage === 1}
-                          className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        
-                        {/* Page numbers */}
+                        className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      
+                      {/* Page numbers */}
                         {Array.from({ length: Math.min(5, tabTotalPages) }, (_, i) => {
-                          let pageNum
+                        let pageNum
                           if (tabTotalPages <= 5) {
-                            pageNum = i + 1
+                          pageNum = i + 1
                           } else if (tabCurrentPage <= 3) {
-                            pageNum = i + 1
+                          pageNum = i + 1
                           } else if (tabCurrentPage >= tabTotalPages - 2) {
                             pageNum = tabTotalPages - 4 + i
-                          } else {
+                        } else {
                             pageNum = tabCurrentPage - 2 + i
-                          }
-                          
-                          return (
-                            <Button
-                              key={pageNum}
+                        }
+                        
+                        return (
+                          <Button
+                            key={pageNum}
                               variant={tabCurrentPage === pageNum ? "default" : "outline"}
-                              size="sm"
+                            size="sm"
                               onClick={() => {
                                 setPaginationState(prev => ({
                                   ...prev,
                                   [statusFilter]: { ...prev[statusFilter], page: pageNum }
                                 }))
                               }}
-                              className={`h-8 w-8 p-0 ${
+                            className={`h-8 w-8 p-0 ${
                                 tabCurrentPage === pageNum 
-                                  ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
-                                  : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
-                              }`}
-                            >
-                              {pageNum}
-                            </Button>
-                          )
-                        })}
+                                ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
+                                : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                            }`}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
+                      <Button
+                        variant="outline"
+                        size="sm"
                           onClick={() => {
                             const newPage = Math.min(tabTotalPages, tabCurrentPage + 1)
                             setPaginationState(prev => ({
@@ -1751,11 +1827,11 @@ function BookingsPageInner() {
                             }))
                           }}
                           disabled={tabCurrentPage === tabTotalPages}
-                          className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                     )
                   })()}
                 </div>
@@ -1827,14 +1903,14 @@ function BookingsPageInner() {
                       if (tabTotalPages <= 1) return null
                       
                       return (
-                        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
-                          <div className="flex items-center gap-2 text-sm text-neutral-600">
+                      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+                        <div className="flex items-center gap-2 text-sm text-neutral-600">
                             <span>Showing {((tabCurrentPage - 1) * 20) + 1}-{Math.min(tabCurrentPage * 20, tabTotal)} of {tabTotal}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
                               onClick={() => {
                                 const newPage = Math.max(1, tabCurrentPage - 1)
                                 setPaginationState(prev => ({
@@ -1843,49 +1919,49 @@ function BookingsPageInner() {
                                 }))
                               }}
                               disabled={tabCurrentPage === 1}
-                              className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                            >
-                              <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            
-                            {/* Page numbers */}
+                            className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          
+                          {/* Page numbers */}
                             {Array.from({ length: Math.min(5, tabTotalPages) }, (_, i) => {
-                              let pageNum
+                            let pageNum
                               if (tabTotalPages <= 5) {
-                                pageNum = i + 1
+                              pageNum = i + 1
                               } else if (tabCurrentPage <= 3) {
-                                pageNum = i + 1
+                              pageNum = i + 1
                               } else if (tabCurrentPage >= tabTotalPages - 2) {
                                 pageNum = tabTotalPages - 4 + i
-                              } else {
+                            } else {
                                 pageNum = tabCurrentPage - 2 + i
-                              }
-                              
-                              return (
-                                <Button
-                                  key={pageNum}
+                            }
+                            
+                            return (
+                              <Button
+                                key={pageNum}
                                   variant={tabCurrentPage === pageNum ? "default" : "outline"}
-                                  size="sm"
+                                size="sm"
                                   onClick={() => {
                                     setPaginationState(prev => ({
                                       ...prev,
                                       [statusFilter]: { ...prev[statusFilter], page: pageNum }
                                     }))
                                   }}
-                                  className={`h-8 w-8 p-0 ${
+                                className={`h-8 w-8 p-0 ${
                                     tabCurrentPage === pageNum 
-                                      ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
-                                      : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
-                                  }`}
-                                >
-                                  {pageNum}
-                                </Button>
-                              )
-                            })}
+                                    ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
+                                    : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                                }`}
+                              >
+                                {pageNum}
+                              </Button>
+                            )
+                          })}
 
-                            <Button
-                              variant="outline"
-                              size="sm"
+                          <Button
+                            variant="outline"
+                            size="sm"
                               onClick={() => {
                                 const newPage = Math.min(tabTotalPages, tabCurrentPage + 1)
                                 setPaginationState(prev => ({
@@ -1894,12 +1970,12 @@ function BookingsPageInner() {
                                 }))
                               }}
                               disabled={tabCurrentPage === tabTotalPages}
-                              className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                            >
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
-                          </div>
+                            className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
                         </div>
+                  </div>
                       )
                     })()}
                   </>
@@ -2309,53 +2385,121 @@ function BookingsPageInner() {
             <ConfirmContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
               <ConfirmHeader className="pb-6">
                 <ConfirmTitle className="text-2xl font-semibold">Create New Appointment</ConfirmTitle>
-                <p className="text-base text-muted-foreground mt-2">
+                <p className="text-base text-gray-600 mt-2">
                   Book a new appointment by selecting a service category, service, staff member, and time slot.
                 </p>
               </ConfirmHeader>
               
               <div className="space-y-6 overflow-hidden">
-                {/* Step 1: Department Selection */}
+                {/* Step 1: Combined Department & Service Selection (Like Checkout Page) */}
                 {newAppCurrentStep === 1 && (
                   <div className="w-full">
                     {newAppLoadingDepts ? (
                       <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+                        <Loader2 className="h-8 w-8 animate-spin mr-3" />
                         <span className="text-lg">Loading service categories...</span>
                       </div>
+                    ) : newAppDepartments.length > 0 ? (
+                      <Tabs value={newAppSelectedDepartment} onValueChange={(value) => {
+                        setNewAppSelectedDepartment(value)
+                        handleNewAppDepartmentSelect(value)
+                      }} className="w-full">
+                        {/* Department Tabs */}
+                        <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
+                          {newAppDepartments.map((dept) => {
+                            const isSelected = newAppSelectedDepartment === (dept.value || dept.id)
+                            return (
+                              <button
+                                key={dept.value || dept.id}
+                                onClick={() => {
+                                  const deptId = dept.value || dept.id || ''
+                                  setNewAppSelectedDepartment(deptId)
+                                  handleNewAppDepartmentSelect(deptId)
+                                }}
+                                className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-[#7b1d1d]/30 flex-shrink-0 ${
+                                  isSelected
+                                    ? 'border-[#7b1d1d] bg-[#7b1d1d]'
+                                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                                }`}
+                              >
+                                <User className={`h-5 w-5 ${
+                                  isSelected ? 'text-white' : 'text-neutral-600'
+                                }`} />
+                                <span className={`text-sm font-medium whitespace-nowrap ${
+                                  isSelected ? 'text-white' : 'text-neutral-900'
+                                }`}>{dept.label || dept.name}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Service Grid for Selected Department */}
+                        {newAppDepartments.map((dept) => (
+                          <TabsContent key={dept.value || dept.id} value={dept.value || dept.id || ''} className="mt-0">
+                            <div className="max-h-[60vh] overflow-y-auto">
+                              {newAppLoadingServices ? (
+                                <div className="flex items-center justify-center py-12">
+                                  <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                                  <span className="text-lg">Loading services...</span>
+                                </div>
+                              ) : newAppServices.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {newAppServices.map((service) => {
+                                    const serviceName = service.label || service.name || 'Service'
+                                    const serviceDuration = service.duration || 0
+                                    
+                                    return (
+                                      <div
+                                        key={service.value || service.id}
+                                        onClick={() => handleNewAppServiceSelect(service.value || service.id || '')}
+                                        className="group p-6 border-2 border-neutral-200 rounded-2xl hover:border-[#7b1d1d]/30 hover:bg-[#7b1d1d]/5 cursor-pointer transition-all"
+                                      >
+                                        <div className="flex items-start gap-4">
+                                          <div className="p-3 rounded-xl bg-[#7b1d1d]/10">
+                                            <Scissors className="h-6 w-6 text-[#7b1d1d]" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <h4 className="font-semibold text-base text-neutral-900 group-hover:text-[#7b1d1d] transition-colors">
+                                              {serviceName}
+                                            </h4>
+                                            <div className="flex items-center gap-2 mt-2">
+                                              <Clock className="h-4 w-4 text-neutral-500" />
+                                              <span className="text-sm text-neutral-600">
+                                                {serviceDuration} min
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-center py-12">
+                                  <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                                    <AlertCircle className="h-8 w-8 text-neutral-400" />
+                                  </div>
+                                  <p className="text-lg text-neutral-600">No services available in this category</p>
+                                  <p className="text-sm text-neutral-500 mt-1">Try selecting a different category</p>
+                                </div>
+                              )}
+                            </div>
+                          </TabsContent>
+                        ))}
+                      </Tabs>
                     ) : (
-                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-neutral-300 scrollbar-track-neutral-100">
-                        {newAppDepartments.map((dept) => {
-                          const IconComponent = User
-                          return (
-                            <button
-                            key={dept.value || dept.id || dept.name || Math.random().toString(36)}
-                            onClick={() => handleNewAppDepartmentSelect(dept.value || dept.id || '')}
-                              className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all hover:border-primary/30 flex-shrink-0 ${
-                              newAppSelectedDepartment === (dept.value || dept.id)
-                                  ? 'border-primary bg-primary'
-                                  : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                              }`}
-                            >
-                              <IconComponent className={`h-5 w-5 ${
-                                newAppSelectedDepartment === (dept.value || dept.id)
-                                  ? 'text-white'
-                                  : 'text-neutral-600'
-                              }`} />
-                              <span className={`text-sm font-medium whitespace-nowrap ${
-                                newAppSelectedDepartment === (dept.value || dept.id)
-                                  ? 'text-white'
-                                  : 'text-neutral-900'
-                              }`}>{dept.label || dept.name}</span>
-                            </button>
-                          )
-                        })}
+                      <div className="text-center py-12">
+                        <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                          <AlertCircle className="h-8 w-8 text-neutral-400" />
+                        </div>
+                        <p className="text-lg text-neutral-600">No service categories available</p>
+                        <p className="text-sm text-neutral-500 mt-1">Please try again later</p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Step 2: Service Selection */}
+                {/* Step 2: Staff Selection (Matching Checkout Page UI) */}
                 {newAppCurrentStep === 2 && (
                   <div className="w-full">
                     <div className="flex items-center gap-3 mb-6">
@@ -2363,52 +2507,95 @@ function BookingsPageInner() {
                         onClick={goToPrevNewAppStep}
                         className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
                       >
-                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                        <ArrowLeft className="h-5 w-5 text-neutral-600" />
                       </button>
                       <div>
-                        <h3 className="text-lg font-semibold text-neutral-900">Select Service</h3>
-                        <p className="text-sm text-neutral-600">Choose the specific service from your selected category</p>
+                        <h3 className="text-lg font-semibold text-neutral-900">Choose Staff</h3>
+                        <p className="text-sm text-neutral-600">Select a staff member for {newAppServices.find(s => s.value === newAppSelectedService)?.label || 'your service'}</p>
                       </div>
                     </div>
                     
-                    {newAppLoadingServices ? (
+                    {newAppLoadingStaff ? (
                       <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
-                        <span className="text-lg">Loading services...</span>
+                        <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                        <span className="text-lg">Loading staff data...</span>
                       </div>
-                    ) : (
-                      <div className="max-h-[60vh] overflow-y-auto">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {newAppServices.map((service) => (
-                          <div
-                            key={service.value || service.id || Math.random().toString(36)}
-                            onClick={() => handleNewAppServiceSelect(service.value || service.id || '')}
-                              className="group p-6 border-2 border-neutral-200 rounded-2xl hover:border-primary/30 hover:bg-primary/5 cursor-pointer transition-all"
-                            >
-                              <div className="flex items-start gap-4">
-                                <div className="p-3 rounded-xl bg-neutral-100">
-                                  <Calendar className="h-6 w-6 text-neutral-600" />
+                    ) : newAppStaff.length > 0 ? (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+                          {newAppStaff.map((staff) => {
+                            const isSelected = newAppSelectedStaff === (staff.value || staff.id)
+                            const staffName = staff.label || staff.name || staff.email || 'Staff'
+                            const initials = staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                            
+                            return (
+                              <button
+                                key={staff.value || staff.id || staff.email || Math.random().toString(36)}
+                                onClick={() => handleNewAppStaffSelect(staff.value || staff.id || '')}
+                                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all relative ${
+                                  isSelected
+                                    ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                                    : 'border-neutral-200 bg-white hover:border-[#7b1d1d]/30 hover:bg-neutral-50'
+                                }`}
+                              >
+                                {isSelected && (
+                                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-[#7b1d1d] rounded-full flex items-center justify-center">
+                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                  </div>
+                                )}
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
+                                  isSelected ? 'bg-[#7b1d1d]' : 'bg-neutral-400'
+                                }`}>
+                                  {initials}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-semibold text-base text-neutral-900 group-hover:text-primary transition-colors">
-                                    {service.label || service.name}
-                                  </h4>
-                                  {service.description && (
-                                    <p className="text-sm text-neutral-600 mt-1">
-                                      {service.description}
-                                    </p>
+                                <div className="text-center">
+                                  <p className="text-sm font-medium text-neutral-900 line-clamp-2">
+                                    {staffName}
+                                  </p>
+                                  {staff.badge && (
+                                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                      {staff.badge}
+                                    </span>
                                   )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                                </div>
+                              </button>
+                            )
+                          })}
                         </div>
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            onClick={goToPrevNewAppStep}
+                            className="flex-1 rounded-xl"
+                          >
+                            Back
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              if (newAppSelectedStaff) {
+                                goToNextNewAppStep()
+                              }
+                            }}
+                            disabled={!newAppSelectedStaff}
+                            className="flex-1 rounded-xl bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                          >
+                            Continue
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                          <AlertCircle className="h-8 w-8 text-neutral-400" />
+                        </div>
+                        <p className="text-lg text-neutral-600">No staff available</p>
+                        <p className="text-sm text-neutral-500 mt-1">Please try again later</p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Step 3: Staff Selection */}
+                {/* Step 3: Date & Time Selection with Working Date Slider */}
                 {newAppCurrentStep === 3 && (
                   <div className="w-full">
                     <div className="flex items-center gap-3 mb-6">
@@ -2416,76 +2603,7 @@ function BookingsPageInner() {
                         onClick={goToPrevNewAppStep}
                         className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
                       >
-                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
-                      </button>
-                      <div>
-                        <h3 className="text-lg font-semibold text-neutral-900">Choose Staff</h3>
-                        <p className="text-sm text-neutral-600">Select your preferred staff member for this service</p>
-                      </div>
-                    </div>
-                    
-                    {newAppLoadingStaff ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
-                        <span className="text-lg">Loading staff members...</span>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-5 gap-4">
-                        {newAppStaff.map((staff) => {
-                          const isSelected = newAppSelectedStaff === (staff.value || staff.id)
-                          const getInitials = (name: string) => {
-                            const parts = name.split(' ')
-                            if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`
-                            return parts[0][0]
-                          }
-                          
-                          return (
-                            <button
-                            key={staff.value || staff.id || staff.email || Math.random().toString(36)}
-                            onClick={() => handleNewAppStaffSelect(staff.value || staff.id || '')}
-                              className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all relative ${
-                                isSelected
-                                ? 'border-primary bg-primary/5'
-                                  : 'border-neutral-200 bg-white hover:border-primary/30 hover:bg-neutral-50'
-                              }`}
-                            >
-                              {isSelected && (
-                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                                  <CheckCircle className="h-4 w-4 text-white" />
-                                </div>
-                              )}
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
-                                isSelected ? 'bg-primary' : 'bg-neutral-400'
-                              }`}>
-                                {getInitials(staff.label || staff.name || staff.email || '')}
-                              </div>
-                              <div className="text-center">
-                                <p className="text-sm font-medium text-neutral-900">
-                                  {staff.label || staff.name || staff.email}
-                                </p>
-                                {staff.badge && (
-                                  <Badge variant="secondary" className="text-xs mt-1">
-                                    {staff.badge}
-                                  </Badge>
-                                )}
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Step 4: Date & Time Selection */}
-                {newAppCurrentStep === 4 && (
-                  <div className="w-full">
-                    <div className="flex items-center gap-3 mb-6">
-                      <button
-                        onClick={goToPrevNewAppStep}
-                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
-                      >
-                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                        <ArrowLeft className="h-5 w-5 text-neutral-600" />
                       </button>
                       <div>
                         <h3 className="text-lg font-semibold text-neutral-900">Select Date & Time</h3>
@@ -2493,57 +2611,129 @@ function BookingsPageInner() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Date Selection */}
-                      <div className="space-y-3">
-                        <Label className="text-sm font-semibold text-neutral-700">Select Date</Label>
-                        {newAppLoadingSlots ? (
-                          <div className="h-60 rounded-xl bg-neutral-100 animate-pulse" />
-                        ) : (
-                          <div className="h-60 overflow-y-auto border-2 border-neutral-200 rounded-xl p-3">
-                            <div className="grid grid-cols-1 gap-2">
-                              {newAppDates.map((dateInfo) => (
-                                <Button
-                                  key={dateInfo.dateString}
-                                  variant="ghost"
-                                  size="sm"
-                                  className={`justify-start text-left h-auto p-3 rounded-lg ${
-                                    newAppSelectedDate === dateInfo.dateString 
-                                      ? "bg-primary text-white hover:bg-primary/90" 
-                                      : "hover:bg-neutral-100"
-                                  }`}
-                                  onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
-                                >
-                                  <div className="flex flex-col items-start">
-                                    <span className="text-xs opacity-70">
+                    {/* MST timezone indicator */}
+                    <div className="text-center mb-6">
+                      <div className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+                        TIME ZONE: MOUNTAIN TIME - EDMONTON (GMT-06:00)
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      {/* Date Slider with Working Navigation */}
+                      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                          <button
+                            onClick={() => {
+                              // Navigate to previous 3 dates
+                              const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
+                              if (currentIndex > 0) {
+                                const prevDate = newAppDates[Math.max(0, currentIndex - 1)]
+                                handleNewAppDateSelect(prevDate.dateString)
+                              }
+                            }}
+                            disabled={!newAppSelectedDate || newAppDates.findIndex(d => d.dateString === newAppSelectedDate) === 0}
+                            className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                          </button>
+                          
+                          {/* Show 3 dates dynamically based on current selection */}
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:mx-4">
+                            {(() => {
+                              // Get the current index and show 3 dates around it
+                              const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
+                              const startIndex = currentIndex > 0 ? Math.max(0, currentIndex - 1) : 0
+                              const datesToShow = newAppDates.slice(startIndex, startIndex + 3)
+                              
+                              // If no date selected, show first 3
+                              if (currentIndex === -1 && newAppDates.length > 0) {
+                                return newAppDates.slice(0, 3).map((dateInfo) => (
+                                  <div
+                                    key={dateInfo.dateString}
+                                    onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
+                                    className={`p-4 rounded-lg border-2 transition-all duration-200 text-center cursor-pointer hover:shadow-md ${
+                                      newAppSelectedDate === dateInfo.dateString 
+                                        ? 'border-[#7b1d1d] bg-[#7b1d1d]/10'
+                                        : 'border-neutral-200 bg-neutral-50 hover:border-[#7b1d1d]/30'
+                                    }`}
+                                  >
+                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                      {dateInfo.label}
+                                    </div>
+                                    <div className="font-bold text-lg text-black">
                                       {dateInfo.dayName}
-                                    </span>
-                                    <span className="font-medium">
+                                    </div>
+                                    <div className="text-sm text-gray-600">
                                       {dateInfo.dateDisplay}
-                                    </span>
+                                    </div>
                                   </div>
-                                </Button>
-                              ))}
-                            </div>
+                                ))
+                              }
+                              
+                              return datesToShow.map((dateInfo) => (
+                                <div
+                                  key={dateInfo.dateString}
+                                  onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
+                                  className={`p-4 rounded-lg border-2 transition-all duration-200 text-center cursor-pointer hover:shadow-md ${
+                                    newAppSelectedDate === dateInfo.dateString 
+                                      ? 'border-[#7b1d1d] bg-[#7b1d1d]/10'
+                                      : 'border-neutral-200 bg-neutral-50 hover:border-[#7b1d1d]/30'
+                                  }`}
+                                >
+                                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                    {dateInfo.label}
+                                  </div>
+                                  <div className="font-bold text-lg text-black">
+                                    {dateInfo.dayName}
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {dateInfo.dateDisplay}
+                                  </div>
+                                </div>
+                              ))
+                            })()}
                           </div>
-                        )}
+                          
+                          <button
+                            onClick={() => {
+                              // Navigate to next dates
+                              const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
+                              if (currentIndex < newAppDates.length - 1) {
+                                const nextDate = newAppDates[currentIndex + 1]
+                                handleNewAppDateSelect(nextDate.dateString)
+                              }
+                            }}
+                            disabled={!newAppSelectedDate || newAppDates.findIndex(d => d.dateString === newAppSelectedDate) === newAppDates.length - 1}
+                            className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronRight className="h-5 w-5 text-neutral-600" />
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Time Selection */}
-                      <div className="space-y-3">
-                        <Label className="text-sm font-semibold text-neutral-700">Select Time</Label>
-                        {newAppSelectedDate ? (
-                          <div className="h-60 overflow-y-auto border-2 border-neutral-200 rounded-xl p-3">
-                            <div className="grid grid-cols-2 gap-2">
+                      {/* Time slots section */}
+                      <div className="space-y-4">
+                        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-h-[400px]">
+                          {newAppSlots.length > 0 ? (
+                            <div className="space-y-4">
+                              <div className="text-sm text-gray-600 mb-3">
+                                Available slots for {newAppSelectedDate ? new Date(newAppSelectedDate).toLocaleDateString('en-US', { 
+                                  weekday: 'long', 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                }) : ''}:
+                              </div>
+                              <div className="grid sm:grid-cols-4 sm:gap-4 grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2">
                               {newAppSlots.map((slot) => (
                                 <Button
                                   key={slot.time}
                                   variant="outline"
                                   size="sm"
-                                  className={`text-xs rounded-lg ${
+                                    className={`py-3 transition-all duration-200 text-black border border-gray-300 rounded-lg justify-center hover:shadow-sm ${
                                     newAppSelectedTime === slot.time 
-                                      ? "bg-primary text-white border-primary hover:bg-primary/90" 
-                                      : "border-neutral-300 hover:bg-neutral-50"
+                                        ? 'bg-red-700 hover:bg-red-700 text-white border-red-700 shadow-sm' 
+                                        : 'hover:border-red-300'
                                   }`}
                                   onClick={() => handleNewAppTimeSelect(slot.time)}
                                 >
@@ -2552,11 +2742,31 @@ function BookingsPageInner() {
                               ))}
                             </div>
                           </div>
-                        ) : (
-                          <div className="h-60 rounded-xl border-2 border-dashed border-neutral-300 flex items-center justify-center text-neutral-500">
+                          ) : newAppSelectedDate ? (
+                            <div className="text-center py-8">
+                              <div className="text-gray-500 text-lg">No available slots for this date</div>
+                              <div className="text-sm text-gray-400 mt-2">Please select another date</div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8">
+                              <div className="text-gray-500 text-lg">Select a date to view available slots</div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {newAppSelectedTime && (
+                          <div className="p-4 bg-red-50 rounded-xl border border-red-200">
                             <div className="text-center">
-                              <Calendar className="h-8 w-8 mx-auto mb-2 text-neutral-400" />
-                              <p>Select a date first</p>
+                              <div className="font-bold text-black text-lg">Selected Time</div>
+                              <div className="text-red-700 font-semibold">{newAppSelectedTime} MST</div>
+                              <div className="text-sm text-gray-600 mt-1">
+                                {newAppSelectedDate ? new Date(newAppSelectedDate).toLocaleDateString('en-US', { 
+                                  weekday: 'long', 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                }) : ''}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -2565,101 +2775,137 @@ function BookingsPageInner() {
                   </div>
                 )}
 
-                {/* Step 5: Contact Information */}
-                {newAppCurrentStep === 5 && (
+                {/* Step 4: Contact Information */}
+                {newAppCurrentStep === 4 && (
                   <div className="w-full">
                     <div className="flex items-center gap-3 mb-6">
                       <button
                         onClick={goToPrevNewAppStep}
-                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
                       >
-                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                        <ChevronLeft className="h-5 w-5 text-gray-600" />
                       </button>
                       <div>
-                        <h3 className="text-lg font-semibold text-neutral-900">Contact Information</h3>
-                        <p className="text-sm text-neutral-600">Enter customer details to complete the booking</p>
+                        <h2 className="text-2xl font-bold text-black mb-2">Contact Information</h2>
+                        <p className="text-gray-700">Please provide your details to complete the booking</p>
                       </div>
                     </div>
                     
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Contact Form */}
                     <div className="space-y-6">
+                        <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                          <Label htmlFor="newapp-firstname" className="text-sm font-semibold text-neutral-700">First Name *</Label>
-                        <Input
-                          id="newapp-firstname"
-                          value={newAppContactForm.firstName}
-                          onChange={(e) => setNewAppContactForm(prev => ({ ...prev, firstName: e.target.value }))}
-                            placeholder="Enter first name"
-                            className="mt-1.5 h-11 border-neutral-300 focus:border-primary focus:ring-primary"
-                          required
-                        />
+                              <Label htmlFor="newapp-firstname" className="block text-sm font-medium text-gray-700 text-black">First Name *</Label>
+                              <Input
+                                id="newapp-firstname"
+                                value={newAppContactForm.firstName}
+                                onChange={(e) => setNewAppContactForm(prev => ({ ...prev, firstName: e.target.value }))}
+                                placeholder="First Name"
+                                className="mt-1.5 h-11 border-[#751A29] focus:border-[#751A29] focus:ring-[#751A29]"
+                                required
+                              />
                       </div>
                       <div>
-                          <Label htmlFor="newapp-lastname" className="text-sm font-semibold text-neutral-700">Last Name *</Label>
+                              <Label htmlFor="newapp-lastname" className="block text-sm font-medium text-gray-700 text-black">Last Name *</Label>
                         <Input
                           id="newapp-lastname"
                           value={newAppContactForm.lastName}
                           onChange={(e) => setNewAppContactForm(prev => ({ ...prev, lastName: e.target.value }))}
-                            placeholder="Enter last name"
-                            className="mt-1.5 h-11 border-neutral-300 focus:border-primary focus:ring-primary"
+                          placeholder="Last Name"
+                          className="mt-1.5 h-11 border-[#751A29] focus:border-[#751A29] focus:ring-[#751A29]"
                           required
                         />
                       </div>
                     </div>
                     
-                    <div>
-                        <Label htmlFor="newapp-phone" className="text-sm font-semibold text-neutral-700">Phone Number *</Label>
-                      <Input
-                        id="newapp-phone"
-                        value={newAppContactForm.phone}
-                        onChange={(e) => setNewAppContactForm(prev => ({ ...prev, phone: e.target.value }))}
-                        placeholder="+1 (555) 123-4567"
-                          className="mt-1.5 h-11 border-neutral-300 focus:border-[#7b1d1d] focus:ring-[#7b1d1d]"
-                        required
-                      />
+                          {/* Phone Number */}
+                          <div className="space-y-3">
+                            <Label htmlFor="newapp-phone" className="block text-sm font-medium text-gray-700 text-black">Phone Number *</Label>
+                            <div className="flex items-center">
+                              <Input
+                                id="newapp-phone"
+                                value={newAppContactForm.phone}
+                                onChange={(e) => setNewAppContactForm(prev => ({ ...prev, phone: e.target.value }))}
+                                placeholder="+1 (555) 123-4567"
+                                className="flex-1 h-11 border-[#751A29] focus:border-[#751A29] focus:ring-[#751A29]"
+                                required
+                              />
+                            </div>
+                            <div className="text-xs text-gray-500">Enter your 10-digit US phone number</div>
+                          </div>
+                        </form>
                     </div>
 
                     {/* Appointment Summary */}
-                      <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20 rounded-2xl">
-                        <h4 className="font-semibold text-lg mb-4 text-primary">Appointment Summary</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Service</span>
-                            <span className="font-medium text-neutral-900">{newAppServices.find(s => s.value === newAppSelectedService)?.label}</span>
+                      <div className="space-y-4">
+                        <h3 className="font-bold text-xl text-black mb-4">Appointment Summary</h3>
+                        
+                        <div className="space-y-4">
+                          <div className="p-6 rounded-xl border border-gray-200 bg-white">
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <Calendar className="text-xl text-red-700" />
+                                <span className="font-semibold text-black">
+                                  {newAppSelectedDate ? new Date(newAppSelectedDate).toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                  }) : 'Select Date'}
+                                </span>
                         </div>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Staff</span>
-                            <span className="font-medium text-neutral-900">{newAppStaff.find(s => s.value === newAppSelectedStaff)?.label}</span>
+                              <div className="flex items-center gap-3">
+                                <Clock className="text-xl text-red-700" />
+                                <span className="font-semibold text-black">{newAppSelectedTime || 'Select Time'} MST</span>
                         </div>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Date</span>
-                            <span className="font-medium text-neutral-900">{newAppSelectedDate}</span>
+                              <div className="flex items-center gap-3">
+                                <User className="text-xl text-red-700" />
+                                <span className="text-gray-700">with {newAppStaff.find(s => s.value === newAppSelectedStaff)?.label || 'Select Staff'}</span>
                         </div>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Time</span>
-                            <span className="font-medium text-neutral-900">{newAppSelectedTime}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="p-6 rounded-xl border border-gray-200 bg-white">
+                            <div className="space-y-3">
+                              <div className="font-bold text-lg text-black">{newAppServices.find(s => s.value === newAppSelectedService)?.label || 'Select Service'}</div>
+                              <div className="flex items-center gap-3">
+                                <User className="text-xl text-red-700" />
+                                <span className="text-gray-700">with {newAppStaff.find(s => s.value === newAppSelectedStaff)?.label || 'Select Staff'}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                     
-                      <div className="flex gap-3 pt-2">
-                        <Button variant="outline" onClick={goToPrevNewAppStep} className="flex-1 h-11 rounded-xl">
+                    <div className="flex gap-4 pt-6">
+                      <Button 
+                        variant="outline"
+                        onClick={goToPrevNewAppStep} 
+                        className="flex-1 h-11 border-gray-300 hover:bg-gray-50"
+                      >
                         <ChevronLeft className="h-4 w-4 mr-2" />
-                        Back
+                        Previous
                       </Button>
                       <Button 
                         onClick={submitNewAppointment}
                         disabled={!newAppContactForm.firstName || !newAppContactForm.lastName || !newAppContactForm.phone || newAppLoading}
-                          className="flex-1 h-11 rounded-xl bg-primary hover:bg-primary/90 text-white"
+                        className="flex-1 h-11 bg-red-700 hover:bg-red-700 text-white font-bold"
                         >
                           {newAppLoading ? (
                             <>
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Creating...
-                            </>
-                          ) : 'Create Booking'}
+                            Booking Your Appointment...
+                          </>
+                        ) : (
+                          <>
+                            <Calendar className="h-4 w-4 mr-2" />
+                            Book Appointment
+                          </>
+                        )}
                       </Button>
-                      </div>
                     </div>
                   </div>
                 )}
