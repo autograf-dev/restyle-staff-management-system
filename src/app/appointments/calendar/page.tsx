@@ -1312,29 +1312,10 @@ const StaffOverviewView = ({
                         )}
                         
                         {/* Hover overlay with time information */}
-                        <div className="absolute inset-0 bg-[#601625]/95 text-white p-2 rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 flex flex-col justify-center">
-                          <div className="text-center">
-                            <div className="text-sm font-medium mb-1">
-                              {appointment.startTime && formatTime(appointment.startTime)}
-                              {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
-                            </div>
-                            <div className="text-xs text-white/80">
-                              {appointment.startTime && appointment.endTime && 
-                                `${Math.round((new Date(appointment.endTime).getTime() - new Date(appointment.startTime).getTime()) / (1000 * 60))} minutes`
-                              }
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-end mt-2">
-                            {appointment.payment_status === 'paid' && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200">
-                                PAID
-                              </span>
-                            )}
-                            {appointment.appointment_status === 'cancelled' && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-200 ml-2">
-                                CANCELLED
-                              </span>
-                            )}
+                        <div className="absolute inset-0 bg-[#601625]/95 text-white rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 flex items-center justify-center">
+                          <div className="text-xs font-medium text-center">
+                            {appointment.startTime && formatTime(appointment.startTime)}
+                            {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
                           </div>
                         </div>
                       </div>
