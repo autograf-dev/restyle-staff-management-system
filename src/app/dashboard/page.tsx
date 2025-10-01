@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { 
   Calendar, 
   Users, 
@@ -27,7 +28,8 @@ import {
   RefreshCcw,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  ArrowLeft
 } from "lucide-react"
 import { 
   LineChart, 
@@ -381,6 +383,7 @@ function getAppointmentStatus(appointment: Appointment) {
 
 export default function DashboardPage() {
   const { user } = useUser()
+  const router = useRouter()
   
   // PIN Protection State
   const [isPinVerified, setIsPinVerified] = useState(false)
@@ -390,8 +393,8 @@ export default function DashboardPage() {
   const [attempts, setAttempts] = useState(0)
   
   // Dashboard PIN - you can change this to any 4-6 digit PIN
-  const DASHBOARD_PIN = "1234"
-  const MAX_ATTEMPTS = 3
+  const DASHBOARD_PIN = "57216"
+  const MAX_ATTEMPTS = 10
   
   // All hooks must be called at the top level
   const { data: appointments, loading: appointmentsLoading, error: appointmentsError, refresh: refreshAppointments } = useAppointments()
@@ -421,6 +424,11 @@ export default function DashboardPage() {
     if (e.key === 'Enter' && pinInput.length >= 4 && attempts < MAX_ATTEMPTS) {
       handlePinSubmit()
     }
+  }
+
+  const handleGoBack = () => {
+    // Navigate to a default page or the previous page
+    router.push('/appointments') // or router.back() if you prefer
   }
 
   // Check if user has access to dashboard
@@ -719,13 +727,23 @@ export default function DashboardPage() {
                       </div>
                     )}
                     
-                    <Button 
-                      onClick={handlePinSubmit}
-                      disabled={pinInput.length < 4 || attempts >= MAX_ATTEMPTS}
-                      className="w-full bg-[#601625] hover:bg-[#751a29] text-white transition-colors duration-200"
-                    >
-                      {attempts >= MAX_ATTEMPTS ? "Access Locked" : "Verify PIN"}
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button 
+                        variant="outline"
+                        onClick={handleGoBack}
+                        className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/10 hover:border-[#601625]/50"
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Go Back
+                      </Button>
+                      <Button 
+                        onClick={handlePinSubmit}
+                        disabled={pinInput.length < 4 || attempts >= MAX_ATTEMPTS}
+                        className="flex-1 bg-[#601625] hover:bg-[#751a29] text-white transition-colors duration-200"
+                      >
+                        {attempts >= MAX_ATTEMPTS ? "Access Locked" : "Verify PIN"}
+                      </Button>
+                    </div>
                     
                     <div className="text-xs text-[#751a29]/60 text-center">
                       PIN must be 4-6 digits
