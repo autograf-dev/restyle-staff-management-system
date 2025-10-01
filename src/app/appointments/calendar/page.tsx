@@ -389,6 +389,8 @@ const StaffOverviewView = ({
   // Minimal padding for the time grid
   const GRID_TOP_PADDING = 8
   const GRID_BOTTOM_PADDING = 16
+  // Reduced hour slot height to fit everything in viewport (12 hours * 60px = 720px + padding = ~744px total)
+  const HOUR_SLOT_HEIGHT = 60
 
   // Update current time every minute
   React.useEffect(() => {
@@ -407,46 +409,15 @@ const StaffOverviewView = ({
     
     const currentMinutes = hour * 60 + minute
     const dayStartMinutes = 8 * 60 // 8 AM
-    const position = GRID_TOP_PADDING + ((currentMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
+    const position = GRID_TOP_PADDING + ((currentMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT // Use reduced slot height
     
     return position
   }
 
-  // Auto-scroll to current time on component mount
+  // Auto-scroll disabled for full-view calendar
   React.useEffect(() => {
-    const scrollToCurrentTime = () => {
-      if (!scrollContainerRef.current) return
-      
-      const currentTimePosition = getCurrentTimePosition()
-      if (currentTimePosition !== null) {
-        // Center the current-time indicator in the viewport for best UX
-        const container = scrollContainerRef.current
-        const containerHeight = container.clientHeight || 0
-        // If the container hasn't been laid out yet, retry shortly
-        if (containerHeight <= 1) {
-          setTimeout(scrollToCurrentTime, 150)
-          return
-        }
-        const totalHeight = 12 * 120 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
-        const desiredTop = currentTimePosition - (containerHeight / 2)
-        const clampedTop = Math.max(0, Math.min(totalHeight - containerHeight, desiredTop))
-        container.scrollTop = clampedTop
-      } else {
-        // If outside 8AM-8PM, snap to nearest bound
-        const hourNow = new Date().getHours()
-        if (hourNow < 8) {
-          scrollContainerRef.current.scrollTop = 0
-        } else {
-          const totalHeight = 12 * 120 + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
-          scrollContainerRef.current.scrollTop = totalHeight
-        }
-      }
-    }
-
-    // Delay scroll to ensure component is fully rendered
-    const timer = setTimeout(scrollToCurrentTime, 250)
-    return () => clearTimeout(timer)
-  }, [staff]) // Re-run when staff data loads
+    // No auto-scrolling since we want the entire calendar visible
+  }, [staff])
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -557,11 +528,10 @@ const StaffOverviewView = ({
     fetchData()
   }, [user])
 
-  // Auto-scroll to 8 AM on component mount
+  // No auto-scroll since calendar is now fully visible
   React.useEffect(() => {
     if (headerScrollRef.current) headerScrollRef.current.scrollLeft = 0
     if (columnsScrollRef.current) columnsScrollRef.current.scrollLeft = 0
-    // Do not force vertical scroll to 8 AM here; allow current-time autoscroll to take precedence
   }, [staff]) // Trigger after staff data is loaded
 
   // Keep header and body horizontal scroll in sync
@@ -625,8 +595,8 @@ const StaffOverviewView = ({
       return { display: 'none' }
     }
     
-    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
-    const height = ((endMinutes - startMinutes) / 60) * 120
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT // Use reduced slot height
+    const height = ((endMinutes - startMinutes) / 60) * HOUR_SLOT_HEIGHT
     
     console.log(`📅 Appointment ${appointment.id} positioned:`, {
       title: appointment.title,
@@ -699,8 +669,8 @@ const StaffOverviewView = ({
       return { display: 'none' }
     }
     
-    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * 120 // 120px per 60min slot
-    const height = ((endMinutes - startMinutes) / 60) * 120
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT // Use reduced slot height
+    const height = ((endMinutes - startMinutes) / 60) * HOUR_SLOT_HEIGHT
     
     return {
       position: 'absolute' as const,
@@ -1066,9 +1036,9 @@ const StaffOverviewView = ({
       
       </div>
 
-      {/* Scrollable Time grid container */}
-      <div className="flex-1 overflow-y-auto w-full pb-6 min-h-0" ref={scrollContainerRef}>
-        <div className="flex w-full" style={{ height: `${(12 * 120) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+      {/* Fixed height Time grid container - no scrolling */}
+      <div className="w-full pb-6" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING + 24}px` }} ref={scrollContainerRef}>
+        <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
             {timeSlots.map((time, index) => {
@@ -1077,8 +1047,8 @@ const StaffOverviewView = ({
                   key={time}
                   className={"absolute left-0 right-0 px-2 flex items-center justify-end border-b border-border"}
                   style={{ 
-                    top: `${GRID_TOP_PADDING + index * 120}px`, 
-                    height: '120px'
+                    top: `${GRID_TOP_PADDING + index * HOUR_SLOT_HEIGHT}px`, 
+                    height: `${HOUR_SLOT_HEIGHT}px`
                   }}
                 >
                   <span className="text-xs font-medium text-muted-foreground">
@@ -1102,7 +1072,7 @@ const StaffOverviewView = ({
               h.scrollLeft = sl
             }
           }}>
-            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${(12 * 120) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => (
                 <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
@@ -1113,8 +1083,8 @@ const StaffOverviewView = ({
                         key={time}
                         className={`absolute left-0 right-0 border-b border-border`}
                         style={{ 
-                          top: `${GRID_TOP_PADDING + index * 120}px`, 
-                          height: '120px'
+                          top: `${GRID_TOP_PADDING + index * HOUR_SLOT_HEIGHT}px`, 
+                          height: `${HOUR_SLOT_HEIGHT}px`
                         }}
                       />
                     )
@@ -1127,10 +1097,10 @@ const StaffOverviewView = ({
     const startSlotIndex = (period.startMinutes - (8 * 60)) / 60
     const endSlotIndex = (period.endMinutes - (8 * 60)) / 60
     
-    // Position based on slot index (each slot is 120px high)
+    // Position based on slot index (each slot is now HOUR_SLOT_HEIGHT high)
     // Use the exact same positioning as the time slot lines
-    const startPosition = GRID_TOP_PADDING + startSlotIndex * 120
-    const endPosition = GRID_TOP_PADDING + endSlotIndex * 120
+    const startPosition = GRID_TOP_PADDING + startSlotIndex * HOUR_SLOT_HEIGHT
+    const endPosition = GRID_TOP_PADDING + endSlotIndex * HOUR_SLOT_HEIGHT
                     const height = endPosition - startPosition
                     
                     // Debug logging
@@ -2161,7 +2131,7 @@ export default function CalendarPage() {
             </div>
           </header>
 
-          <div className="flex flex-col h-screen overflow-hidden">
+          <div className="flex flex-col min-h-0 flex-1">
             {/* Calendar Controls */}
             <div className="flex items-center justify-between p-4 bg-background border-b flex-shrink-0">
               <div className="flex items-center gap-4">
