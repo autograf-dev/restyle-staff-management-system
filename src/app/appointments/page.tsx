@@ -96,11 +96,19 @@ function useBookings() {
   const [currentPage, setCurrentPage] = React.useState<number>(1)
   const [totalPages, setTotalPages] = React.useState<number>(1)
   const [total, setTotal] = React.useState<number>(0)
-  const [statusFilter, setStatusFilter] = React.useState<string>("confirmed")
+  const [statusFilter, setStatusFilter] = React.useState<string>("upcoming")
   const [searchTerm, setSearchTerm] = React.useState<string>("")
   const isInitialMount = React.useRef(true)
   const isMounted = React.useRef(false)
   const [lastUpdated, setLastUpdated] = React.useState<number>(0)
+  
+  // Separate pagination state for each tab
+  const [paginationState, setPaginationState] = React.useState<Record<string, { page: number; totalPages: number; total: number }>>({
+    upcoming: { page: 1, totalPages: 1, total: 0 },
+    past: { page: 1, totalPages: 1, total: 0 },
+    confirmed: { page: 1, totalPages: 1, total: 0 },
+    cancelled: { page: 1, totalPages: 1, total: 0 }
+  })
 
   React.useEffect(() => {
     isMounted.current = true
@@ -112,7 +120,7 @@ function useBookings() {
   const fetchBookings = React.useCallback(
     async (
       forceRefresh: boolean = false,
-      params?: { assignedUserId?: string; page?: number; search?: string; appointmentStatus?: string }
+      params?: { assignedUserId?: string; page?: number; search?: string; appointmentStatus?: string; timeFilter?: string }
     ) => {
     if (!isMounted.current) return
     if (isMounted.current) {
@@ -123,15 +131,28 @@ function useBookings() {
     const { signal } = controller
 
     try {
-        const pageToUse = params?.page ?? currentPage
+        const pageToUse = params?.page ?? 1
         const qs = new URLSearchParams()
         qs.set('page', String(pageToUse))
         qs.set('pageSize', '20')
         if (params?.assignedUserId) qs.set('assigned_user_id', params.assignedUserId)
         const searchValue = params?.search ?? searchTerm
         if (searchValue) qs.set('search', searchValue)
-        const statusValue = params?.appointmentStatus
-        if (statusValue) qs.set('appointment_status', statusValue)
+        
+        // Handle different filter types
+        if (statusFilter === 'upcoming' || statusFilter === 'past') {
+          // For time-based filtering, we'll use appointment_status and add time filter
+          qs.set('appointment_status', 'confirmed')
+          if (statusFilter === 'upcoming') {
+            qs.set('time_filter', 'upcoming')
+          } else {
+            qs.set('time_filter', 'past')
+          }
+        } else {
+          // For status-based filtering (confirmed/cancelled)
+          const statusValue = params?.appointmentStatus ?? (statusFilter === 'confirmed' ? 'confirmed' : 'cancelled')
+          if (statusValue) qs.set('appointment_status', statusValue)
+        }
 
         const res = await fetch(`/api/bookings?${qs.toString()}`, { signal })
         if (!res.ok) {
@@ -145,6 +166,18 @@ function useBookings() {
           setData((json.bookings || []) as Booking[])
           setTotal(Number(json.total) || (json.bookings?.length || 0))
           setTotalPages(Number(json.totalPages) || 1)
+          setCurrentPage(pageToUse)
+          
+          // Update pagination state for current tab
+          setPaginationState(prev => ({
+            ...prev,
+            [statusFilter]: {
+              page: pageToUse,
+              totalPages: Number(json.totalPages) || 1,
+              total: Number(json.total) || (json.bookings?.length || 0)
+            }
+          }))
+          
           setLastUpdated(Date.now())
       }
     } catch (error) {
@@ -165,7 +198,7 @@ function useBookings() {
       controller.abort()
     }
     },
-    [currentPage, searchTerm]
+    [statusFilter, searchTerm]
   )
 
   return { 
@@ -181,7 +214,9 @@ function useBookings() {
     setStatusFilter,
     searchTerm,
     setSearchTerm,
-    lastUpdated
+    lastUpdated,
+    paginationState,
+    setPaginationState
   }
 }
 
@@ -307,7 +342,9 @@ function BookingsPageInner() {
     totalPages,
     total,
     fetchBookings: fetchBookings,
-    lastUpdated
+    lastUpdated,
+    paginationState,
+    setPaginationState
   } = useBookings()
 
   const [selected, setSelected] = React.useState<Booking | null>(null)
@@ -407,17 +444,33 @@ function BookingsPageInner() {
   // Fetch bookings on mount and when filters change (server-side pagination + filtering)
   React.useEffect(() => {
     const assigned = user?.role === 'barber' ? user.ghlId : undefined
+    const page = paginationState[statusFilter]?.page || 1
     const appointmentStatus = statusFilter === 'confirmed' ? 'confirmed' : statusFilter === 'cancelled' ? 'cancelled' : undefined
-    fetchBookings(false, { assignedUserId: assigned, page: currentPage, search: searchTerm || undefined, appointmentStatus })
+    fetchBookings(false, { assignedUserId: assigned, page, search: searchTerm || undefined, appointmentStatus })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role, user?.ghlId, statusFilter, searchTerm, currentPage])
+  }, [user?.role, user?.ghlId, statusFilter, searchTerm, paginationState.upcoming?.page, paginationState.past?.page, paginationState.confirmed?.page, paginationState.cancelled?.page])
 
   // Manual refresh helper
   const refreshBookings = React.useCallback(async () => {
     const assigned = user?.role === 'barber' ? user.ghlId : undefined
-    const appointmentStatus = statusFilter === 'confirmed' ? 'confirmed' : statusFilter === 'cancelled' ? 'cancelled' : undefined
-    await fetchBookings(true, { assignedUserId: assigned, page: currentPage, search: searchTerm || undefined, appointmentStatus })
-  }, [fetchBookings, user?.role, user?.ghlId, statusFilter, searchTerm, currentPage])
+    const currentTabState = paginationState[statusFilter]
+    await fetchBookings(true, { 
+      assignedUserId: assigned, 
+      page: currentTabState?.page || 1, 
+      search: searchTerm || undefined, 
+      appointmentStatus: statusFilter === 'confirmed' ? 'confirmed' : statusFilter === 'cancelled' ? 'cancelled' : undefined 
+    })
+  }, [fetchBookings, user?.role, user?.ghlId, statusFilter, searchTerm, paginationState])
+
+  // Handle tab change with pagination reset
+  const handleTabChange = React.useCallback((newTab: string) => {
+    setStatusFilter(newTab)
+    // Reset to page 1 for the new tab
+    setPaginationState(prev => ({
+      ...prev,
+      [newTab]: { ...prev[newTab], page: 1 }
+    }))
+  }, [setStatusFilter, setPaginationState])
 
   // Keep URL in sync when dialog opens/closes
   React.useEffect(() => {
@@ -1267,6 +1320,52 @@ function BookingsPageInner() {
       },
     },
     {
+      accessorKey: "startTime",
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="-ml-4">
+          Start Time <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const startTime = row.original.startTime
+        if (!startTime) return <div className="text-sm text-gray-500">—</div>
+		const date = new Date(startTime)
+		const now = new Date()
+		const isPast = date < now
+		const isToday = date.toDateString() === now.toDateString()
+		const dateStr = date.toLocaleDateString('en-US', {
+		  month: 'short',
+		  day: 'numeric',
+		  year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+		})
+		const timeStr = date.toLocaleTimeString('en-US', {
+		  hour: 'numeric',
+		  minute: '2-digit',
+		  hour12: true,
+		})
+		
+		return (
+		  <div className="text-sm whitespace-nowrap">
+			<span
+			  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${
+				isPast
+				  ? 'bg-gray-50 text-gray-700 border-gray-200'
+				  : 'bg-[#601625]/5 text-[#601625] border-[#601625]/20'
+			  }`}
+			>
+			  <span className="font-medium">{dateStr}</span>
+			  <span className="text-xs opacity-70">{timeStr}</span>
+			  {isToday && (
+				<span className="ml-1 inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-[10px] font-semibold">
+				  Today
+				</span>
+			  )}
+			</span>
+		  </div>
+		)
+      },
+    },
+    {
       accessorKey: "duration",
       header: "Duration",
       cell: ({ row }) => (
@@ -1422,35 +1521,35 @@ function BookingsPageInner() {
                 </CardContent>
               </Card>
 
-              {/* Confirmed */}
+              {/* Upcoming */}
               <Card className="border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-neutral-600">Confirmed</p>
-                      <p className="text-2xl font-bold text-green-600 mt-1">
-                        {statusFilter === 'confirmed' ? total : '—'}
+                      <p className="text-sm font-medium text-neutral-600">Upcoming</p>
+                      <p className="text-2xl font-bold text-[#601625] mt-1">
+                        {paginationState.upcoming?.total || 0}
                       </p>
                     </div>
-                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    <div className="h-12 w-12 rounded-full bg-[#601625]/10 flex items-center justify-center">
+                      <Calendar className="h-6 w-6 text-[#601625]" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Cancelled */}
+              {/* Past */}
               <Card className="border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-neutral-600">Cancelled</p>
-                      <p className="text-2xl font-bold text-red-600 mt-1">
-                        {statusFilter === 'cancelled' ? total : '—'}
+                      <p className="text-sm font-medium text-neutral-600">Past</p>
+                      <p className="text-2xl font-bold text-gray-600 mt-1">
+                        {paginationState.past?.total || 0}
                       </p>
                     </div>
-                    <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-                      <XCircle className="h-6 w-6 text-red-600" />
+                    <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                      <Clock className="h-6 w-6 text-gray-600" />
                     </div>
                   </div>
                 </CardContent>
@@ -1504,21 +1603,58 @@ function BookingsPageInner() {
               </CardContent>
             </Card>
 
-            {/* Status Tabs - Confirmed / Cancelled */}
+            {/* Status Tabs - Upcoming / Past / Confirmed / Cancelled */}
             <div className="flex gap-2 border-b border-neutral-200">
               <button
-                onClick={() => setStatusFilter('confirmed')}
+                onClick={() => handleTabChange('upcoming')}
                 className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
-                  statusFilter === 'confirmed'
+                  statusFilter === 'upcoming'
                     ? 'border-[#601625] text-[#601625] bg-[#601625]/5'
                     : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
                 }`}
               >
-                <CheckCircle className="h-4 w-4" />
-                Confirmed Appointments
+                <Calendar className="h-4 w-4" />
+                Upcoming Appointments
+                {paginationState.upcoming?.total > 0 && (
+                  <Badge variant="secondary" className="ml-2 bg-[#601625]/10 text-[#601625] border-[#601625]/20">
+                    {paginationState.upcoming.total}
+                  </Badge>
+                )}
               </button>
               <button
-                onClick={() => setStatusFilter('cancelled')}
+                onClick={() => handleTabChange('past')}
+                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                  statusFilter === 'past'
+                    ? 'border-gray-600 text-gray-600 bg-gray-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <Clock className="h-4 w-4" />
+                Past Appointments
+                {paginationState.past?.total > 0 && (
+                  <Badge variant="secondary" className="ml-2 bg-gray-100 text-gray-600 border-gray-200">
+                    {paginationState.past.total}
+                  </Badge>
+                )}
+              </button>
+              <button
+                onClick={() => handleTabChange('confirmed')}
+                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                  statusFilter === 'confirmed'
+                    ? 'border-green-600 text-green-600 bg-green-50'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Confirmed
+                {paginationState.confirmed?.total > 0 && (
+                  <Badge variant="secondary" className="ml-2 bg-green-100 text-green-600 border-green-200">
+                    {paginationState.confirmed.total}
+                  </Badge>
+                )}
+              </button>
+              <button
+                onClick={() => handleTabChange('cancelled')}
                 className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
                   statusFilter === 'cancelled'
                     ? 'border-red-600 text-red-600 bg-red-50'
@@ -1526,7 +1662,12 @@ function BookingsPageInner() {
                 }`}
               >
                 <XCircle className="h-4 w-4" />
-                Cancelled Appointments
+                Cancelled
+                {paginationState.cancelled?.total > 0 && (
+                  <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600 border-red-200">
+                    {paginationState.cancelled.total}
+                  </Badge>
+                )}
               </button>
             </div>
 
@@ -1539,59 +1680,84 @@ function BookingsPageInner() {
                   </div>
                   
                   {/* Top Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        disabled={currentPage === 1}
-                        className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      
-                      {/* Page numbers */}
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum
-                        if (totalPages <= 5) {
-                          pageNum = i + 1
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i
-                        } else {
-                          pageNum = currentPage - 2 + i
-                        }
+                  {(() => {
+                    const currentTabState = paginationState[statusFilter]
+                    const tabTotalPages = currentTabState?.totalPages || 1
+                    const tabCurrentPage = currentTabState?.page || 1
+                    
+                    if (tabTotalPages <= 1) return null
+                    
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newPage = Math.max(1, tabCurrentPage - 1)
+                            setPaginationState(prev => ({
+                              ...prev,
+                              [statusFilter]: { ...prev[statusFilter], page: newPage }
+                            }))
+                          }}
+                          disabled={tabCurrentPage === 1}
+                          className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
                         
-                        return (
-                          <Button
-                            key={pageNum}
-                            variant={currentPage === pageNum ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={`h-8 w-8 p-0 ${
-                              currentPage === pageNum 
-                                ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
-                                : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
-                            }`}
-                          >
-                            {pageNum}
-                          </Button>
-                        )
-                      })}
+                        {/* Page numbers */}
+                        {Array.from({ length: Math.min(5, tabTotalPages) }, (_, i) => {
+                          let pageNum
+                          if (tabTotalPages <= 5) {
+                            pageNum = i + 1
+                          } else if (tabCurrentPage <= 3) {
+                            pageNum = i + 1
+                          } else if (tabCurrentPage >= tabTotalPages - 2) {
+                            pageNum = tabTotalPages - 4 + i
+                          } else {
+                            pageNum = tabCurrentPage - 2 + i
+                          }
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={tabCurrentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                setPaginationState(prev => ({
+                                  ...prev,
+                                  [statusFilter]: { ...prev[statusFilter], page: pageNum }
+                                }))
+                              }}
+                              className={`h-8 w-8 p-0 ${
+                                tabCurrentPage === pageNum 
+                                  ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
+                                  : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                              }`}
+                            >
+                              {pageNum}
+                            </Button>
+                          )
+                        })}
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        disabled={currentPage === totalPages}
-                        className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newPage = Math.min(tabTotalPages, tabCurrentPage + 1)
+                            setPaginationState(prev => ({
+                              ...prev,
+                              [statusFilter]: { ...prev[statusFilter], page: newPage }
+                            }))
+                          }}
+                          disabled={tabCurrentPage === tabTotalPages}
+                          className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  })()}
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -1652,64 +1818,90 @@ function BookingsPageInner() {
                     </div>
 
                     {/* Bottom Pagination with Info */}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
-                        <div className="flex items-center gap-2 text-sm text-neutral-600">
-                          <span>Showing {((currentPage - 1) * 20) + 1}-{Math.min(currentPage * 20, total)} of {total}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          
-                          {/* Page numbers */}
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum
-                            if (totalPages <= 5) {
-                              pageNum = i + 1
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i
-                            } else {
-                              pageNum = currentPage - 2 + i
-                            }
+                    {(() => {
+                      const currentTabState = paginationState[statusFilter]
+                      const tabTotalPages = currentTabState?.totalPages || 1
+                      const tabCurrentPage = currentTabState?.page || 1
+                      const tabTotal = currentTabState?.total || 0
+                      
+                      if (tabTotalPages <= 1) return null
+                      
+                      return (
+                        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+                          <div className="flex items-center gap-2 text-sm text-neutral-600">
+                            <span>Showing {((tabCurrentPage - 1) * 20) + 1}-{Math.min(tabCurrentPage * 20, tabTotal)} of {tabTotal}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newPage = Math.max(1, tabCurrentPage - 1)
+                                setPaginationState(prev => ({
+                                  ...prev,
+                                  [statusFilter]: { ...prev[statusFilter], page: newPage }
+                                }))
+                              }}
+                              disabled={tabCurrentPage === 1}
+                              className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
                             
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                className={`h-8 w-8 p-0 ${
-                                  currentPage === pageNum 
-                                    ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
-                                    : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
-                                }`}
-                              >
-                                {pageNum}
-                              </Button>
-                            )
-                          })}
+                            {/* Page numbers */}
+                            {Array.from({ length: Math.min(5, tabTotalPages) }, (_, i) => {
+                              let pageNum
+                              if (tabTotalPages <= 5) {
+                                pageNum = i + 1
+                              } else if (tabCurrentPage <= 3) {
+                                pageNum = i + 1
+                              } else if (tabCurrentPage >= tabTotalPages - 2) {
+                                pageNum = tabTotalPages - 4 + i
+                              } else {
+                                pageNum = tabCurrentPage - 2 + i
+                              }
+                              
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={tabCurrentPage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => {
+                                    setPaginationState(prev => ({
+                                      ...prev,
+                                      [statusFilter]: { ...prev[statusFilter], page: pageNum }
+                                    }))
+                                  }}
+                                  className={`h-8 w-8 p-0 ${
+                                    tabCurrentPage === pageNum 
+                                      ? "bg-[#601625] text-white border-[#601625] hover:bg-[#4a1119]" 
+                                      : "border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                                  }`}
+                                >
+                                  {pageNum}
+                                </Button>
+                              )
+                            })}
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages}
-                            className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newPage = Math.min(tabTotalPages, tabCurrentPage + 1)
+                                setPaginationState(prev => ({
+                                  ...prev,
+                                  [statusFilter]: { ...prev[statusFilter], page: newPage }
+                                }))
+                              }}
+                              disabled={tabCurrentPage === tabTotalPages}
+                              className="h-8 border-gray-300 hover:bg-[#601625] hover:text-white hover:border-[#601625] disabled:opacity-50"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                  </div>
-                    )}
+                      )
+                    })()}
                   </>
                 )}
               </CardContent>
