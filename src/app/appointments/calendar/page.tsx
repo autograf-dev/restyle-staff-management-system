@@ -1282,22 +1282,25 @@ const StaffOverviewView = ({
                         } ${isShortAppointment ? 'px-2 py-1' : 'px-3 py-2'}`}
                         style={style}
                         onClick={() => appointment.appointment_status !== 'cancelled' && onAppointmentClick(appointment)}
-                        title={`${appointment.serviceName} - ${appointment.contactName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
+                        title={`${appointment.contactName || 'Unknown Client'} - ${appointment.serviceName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
                       >
-                        {/* Service name - always show for proper identification */}
+                        {/* Client name at top - always show */}
                         <div className={`font-medium truncate leading-tight ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-500 line-through' 
                             : 'text-[#601625]'
                         } ${isShortAppointment ? 'text-[10px]' : 'text-xs'}`}>
-                          {appointment.serviceName}
+                          {appointment.contactName || 'Unknown Client'}
                         </div>
                         
-                        {!isShortAppointment && (
-                          <div className="text-[10px] text-[#751a29]/70 truncate mt-0.5">
-                            {appointment.contactName}
-                          </div>
-                        )}
+                        {/* Service name at bottom - always show */}
+                        <div className={`truncate leading-tight ${
+                          appointment.appointment_status === 'cancelled' 
+                            ? 'text-gray-400 line-through' 
+                            : 'text-[#751a29]/70'
+                        } ${isShortAppointment ? 'text-[9px] mt-0.5' : 'text-[10px] mt-0.5'}`}>
+                          {appointment.serviceName}
+                        </div>
                         
                         {/* Status indicator - only show paid when applicable */}
                         {appointment.payment_status === 'paid' && (
@@ -1308,19 +1311,20 @@ const StaffOverviewView = ({
                           </div>
                         )}
                         
-                        {/* Hover overlay with full details */}
+                        {/* Hover overlay with time information */}
                         <div className="absolute inset-0 bg-[#601625]/95 text-white p-2 rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 flex flex-col justify-center">
-                          <div className="text-xs font-medium truncate mb-1">
-                            {appointment.serviceName}
+                          <div className="text-center">
+                            <div className="text-sm font-medium mb-1">
+                              {appointment.startTime && formatTime(appointment.startTime)}
+                              {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
+                            </div>
+                            <div className="text-xs text-white/80">
+                              {appointment.startTime && appointment.endTime && 
+                                `${Math.round((new Date(appointment.endTime).getTime() - new Date(appointment.startTime).getTime()) / (1000 * 60))} minutes`
+                              }
+                            </div>
                           </div>
-                          <div className="text-xs truncate mb-1">
-                            {appointment.contactName}
-                          </div>
-                          <div className="text-xs text-white/80 mb-2">
-                            {appointment.startTime && formatTime(appointment.startTime)}
-                            {appointment.endTime && ` - ${formatTime(appointment.endTime)}`}
-                          </div>
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center justify-end mt-2">
                             {appointment.payment_status === 'paid' && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200">
                                 PAID
