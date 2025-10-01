@@ -21,8 +21,9 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get("startDate") || undefined
     const endDate = searchParams.get("endDate") || undefined
     const bookingId = searchParams.get("id") || undefined
+    const timeFilter = searchParams.get("time_filter") || undefined
 
-    console.log('Fetching bookings with params:', { page, pageSize, appointmentStatus, search, assignedUserId, startDate, endDate, bookingId })
+    console.log('Fetching bookings with params:', { page, pageSize, appointmentStatus, search, assignedUserId, startDate, endDate, bookingId, timeFilter })
 
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
@@ -34,6 +35,16 @@ export async function GET(req: NextRequest) {
     // If searching for a specific booking ID, filter by it first
     if (bookingId) {
       query = query.eq("id", bookingId)
+    }
+
+    // Apply time filtering (upcoming/past)
+    if (timeFilter) {
+      const now = new Date().toISOString()
+      if (timeFilter === 'upcoming') {
+        query = query.gte("start_time", now)
+      } else if (timeFilter === 'past') {
+        query = query.lt("start_time", now)
+      }
     }
 
     // Apply date range filtering
@@ -74,9 +85,15 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // Order by start_time when date filtering is used, otherwise by id for general queries
-    if (startDate || endDate) {
-      query = query.order("start_time", { ascending: false })
+    // Order by start_time when date or time filtering is used, otherwise by id for general queries
+    if (startDate || endDate || timeFilter) {
+      if (timeFilter === 'upcoming') {
+        // For upcoming appointments, order by start_time ascending (earliest first)
+        query = query.order("start_time", { ascending: true })
+      } else {
+        // For past appointments or date ranges, order by start_time descending (most recent first)
+        query = query.order("start_time", { ascending: false })
+      }
     } else {
       query = query.order("id", { ascending: false })
     }

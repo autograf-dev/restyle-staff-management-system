@@ -74,28 +74,30 @@ function useAppointments(view: CalendarView, currentDate: Date) {
   const fetchAppointments = React.useCallback(async (forceRefresh: boolean = false) => {
       setLoading(true)
       try {
-        // Calculate date range based on view
+        // Calculate date range in America/Denver wall time based on view
         let startDate: string | undefined
         let endDate: string | undefined
         
         if (view === 'day') {
-          // For daily view, fetch all appointments for the specific day
-          const start = new Date(currentDate)
-          start.setHours(0, 0, 0, 0)
-          const end = new Date(currentDate)
-          end.setHours(23, 59, 59, 999)
-          
-          startDate = start.toISOString()
-          endDate = end.toISOString()
+          const y = currentDate.getFullYear()
+          const m = currentDate.getMonth() + 1
+          const d = currentDate.getDate()
+          // Denver midnight to 23:59
+          startDate = convertDenverWallTimeToUtcIso(y, m, d, 0, 0)
+          endDate = convertDenverWallTimeToUtcIso(y, m, d, 23, 59)
         } else if (view === 'month') {
-          // For monthly view, fetch all appointments for the month
-          const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-          const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999)
-          
-          startDate = start.toISOString()
-          endDate = end.toISOString()
+          const y = currentDate.getFullYear()
+          const m = currentDate.getMonth() + 1
+          const firstDay = 1
+          const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
+          startDate = convertDenverWallTimeToUtcIso(y, m, firstDay, 0, 0)
+          endDate = convertDenverWallTimeToUtcIso(y, m, lastDay, 23, 59)
+        } else if (view === 'year') {
+          const y = currentDate.getFullYear()
+          startDate = convertDenverWallTimeToUtcIso(y, 1, 1, 0, 0)
+          endDate = convertDenverWallTimeToUtcIso(y, 12, 31, 23, 59)
         }
-        // For year view, don't use date filtering - fetch recent 1000 appointments
+        // For all views we now use explicit date range
         
         // Cache key includes view and date for proper cache separation
         const cacheKey = `restyle.calendar.appointments.${view}.${currentDate.toDateString()}`
@@ -116,18 +118,16 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           }
         } catch {}
 
-        // Build API URL with date filtering for daily/monthly views
+        // Build API URL with date filtering for all views
         let apiUrl = '/api/bookings?'
         const params = new URLSearchParams()
         
         if (startDate && endDate) {
           params.append('startDate', startDate)
           params.append('endDate', endDate)
-          params.append('pageSize', '5000') // High limit for date-filtered queries
+          // Use a generous limit to include all appointments in range
+          params.append('pageSize', view === 'year' ? '20000' : '5000')
           console.log(`📅 Calendar ${view}: Fetching appointments for date range ${startDate} to ${endDate}`)
-        } else {
-          params.append('pageSize', '1000') // Reasonable size for yearly view
-          console.log(`📅 Calendar ${view}: Fetching recent 1000 appointments`)
         }
         params.append('page', '1')
         
@@ -271,20 +271,70 @@ function useAppointments(view: CalendarView, currentDate: Date) {
 
 // Utility functions
 function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('en-US', {
-    hour: '2-digit',
+  const date = new Date(dateString)
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
+    hour: 'numeric',
     minute: '2-digit',
     hour12: true
-  })
+  }).format(date)
 }
 
 function formatDate(date: Date) {
-  return date.toLocaleDateString('en-US', {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
+  }).format(date)
+}
+
+function getHourMinuteInTimeZone(date: Date, timeZone: string) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   })
+  const parts = dtf.formatToParts(date)
+  const map: Record<string, string> = {}
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = p.value
+  }
+  return {
+    hour: Number(map.hour || '0'),
+    minute: Number(map.minute || '0')
+  }
+}
+
+function convertDenverWallTimeToUtcIso(year: number, month: number, day: number, hour: number, minute: number) {
+  const baseUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const parts = dtf.formatToParts(baseUtc)
+  const map: Record<string, string> = {}
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = p.value
+  }
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  )
+  const offset = asUTC - baseUtc.getTime()
+  return new Date(baseUtc.getTime() - offset).toISOString()
 }
 
 // Staff Overview Component - Acuity-style time grid calendar
@@ -350,8 +400,7 @@ const StaffOverviewView = ({
   // Calculate current time position for live line
   const getCurrentTimePosition = () => {
     const now = currentTime
-    const hour = now.getHours()
-    const minute = now.getMinutes()
+    const { hour, minute } = getHourMinuteInTimeZone(now, 'America/Denver')
     
     // Only show if within business hours (8 AM to 7 PM)
     if (hour < 8 || hour >= 19) return null
@@ -554,11 +603,8 @@ const StaffOverviewView = ({
     
     const start = new Date(appointment.startTime)
     const end = new Date(appointment.endTime)
-    
-    const startHour = start.getHours()
-    const startMinute = start.getMinutes()
-    const endHour = end.getHours()
-    const endMinute = end.getMinutes()
+    const { hour: startHour, minute: startMinute } = getHourMinuteInTimeZone(start, 'America/Denver')
+    const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
     
     // Calculate position from 8AM (480 minutes from midnight)
     const dayStartMinutes = 8 * 60 // 8 AM start
