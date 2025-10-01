@@ -2115,9 +2115,9 @@ export default function CalendarPage() {
             </div>
           </header>
 
-          <div className="flex flex-1 flex-col h-full overflow-hidden">
+          <div className="flex flex-col h-screen overflow-hidden">
             {/* Calendar Controls */}
-            <div className="flex items-center justify-between p-4 bg-background border-b">
+            <div className="flex items-center justify-between p-4 bg-background border-b flex-shrink-0">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Button
@@ -2190,8 +2190,8 @@ export default function CalendarPage() {
 
             {/* Calendar Views */}
             {loading ? (
-              <div className="flex-1 p-4">
-                <Skeleton className="h-full w-full min-h-[calc(100vh-200px)]" />
+              <div className="flex-1 p-4 min-h-0">
+                <Skeleton className="h-full w-full" />
               </div>
             ) : (
               <>
