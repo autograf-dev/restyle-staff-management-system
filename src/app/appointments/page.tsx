@@ -222,24 +222,19 @@ function useBookings() {
 
 function formatDateTime(isoString?: string) {
   if (!isoString) return 'N/A'
-  // Render the wall time exactly as provided by API (no timezone conversion)
-  // Expected formats include: YYYY-MM-DDTHH:mm:ss.SSS±HH:MM or YYYY-MM-DDTHH:mm:ss±HH:MM
-  const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/) 
-  if (!match) return isoString
-
-  const year = parseInt(match[1], 10)
-  const month = parseInt(match[2], 10)
-  const day = parseInt(match[3], 10)
-  const hour24 = parseInt(match[4], 10)
-  const minute = parseInt(match[5], 10)
-
-  const ampm = hour24 >= 12 ? 'PM' : 'AM'
-  const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
-
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const datePart = `${monthNames[month - 1]} ${day}, ${year}`
-  const timePart = `${hour12}:${String(minute).padStart(2, '0')} ${ampm}`
-  return `${datePart}, ${timePart}`
+  const date = new Date(isoString)
+  if (isNaN(date.getTime())) return isoString
+  // Always render in America/Denver wall time so table and details match
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+  return dtf.format(date)
 }
 
 function formatDuration(startIso?: string, endIso?: string) {
@@ -1409,16 +1404,11 @@ function BookingsPageInner() {
 		const now = new Date()
 		const isPast = date < now
 		const isToday = date.toDateString() === now.toDateString()
-		const dateStr = date.toLocaleDateString('en-US', {
-		  month: 'short',
-		  day: 'numeric',
-		  year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-		})
-		const timeStr = date.toLocaleTimeString('en-US', {
-		  hour: 'numeric',
-		  minute: '2-digit',
-		  hour12: true,
-		})
+		// Use the same formatter as details view to avoid timezone conversion
+		const formatted = formatDateTime(startTime)
+		const lastCommaIndex = formatted.lastIndexOf(', ')
+		const dateStr = lastCommaIndex !== -1 ? formatted.slice(0, lastCommaIndex) : formatted
+		const timeStr = lastCommaIndex !== -1 ? formatted.slice(lastCommaIndex + 2) : ''
 		
 		return (
 		  <div className="text-sm whitespace-nowrap">

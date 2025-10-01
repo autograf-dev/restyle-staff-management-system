@@ -271,20 +271,41 @@ function useAppointments(view: CalendarView, currentDate: Date) {
 
 // Utility functions
 function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('en-US', {
-    hour: '2-digit',
+  const date = new Date(dateString)
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
+    hour: 'numeric',
     minute: '2-digit',
     hour12: true
-  })
+  }).format(date)
 }
 
 function formatDate(date: Date) {
-  return date.toLocaleDateString('en-US', {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
+  }).format(date)
+}
+
+function getHourMinuteInTimeZone(date: Date, timeZone: string) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   })
+  const parts = dtf.formatToParts(date)
+  const map: Record<string, string> = {}
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = p.value
+  }
+  return {
+    hour: Number(map.hour || '0'),
+    minute: Number(map.minute || '0')
+  }
 }
 
 // Staff Overview Component - Acuity-style time grid calendar
@@ -350,8 +371,7 @@ const StaffOverviewView = ({
   // Calculate current time position for live line
   const getCurrentTimePosition = () => {
     const now = currentTime
-    const hour = now.getHours()
-    const minute = now.getMinutes()
+    const { hour, minute } = getHourMinuteInTimeZone(now, 'America/Denver')
     
     // Only show if within business hours (8 AM to 7 PM)
     if (hour < 8 || hour >= 19) return null
@@ -554,11 +574,8 @@ const StaffOverviewView = ({
     
     const start = new Date(appointment.startTime)
     const end = new Date(appointment.endTime)
-    
-    const startHour = start.getHours()
-    const startMinute = start.getMinutes()
-    const endHour = end.getHours()
-    const endMinute = end.getMinutes()
+    const { hour: startHour, minute: startMinute } = getHourMinuteInTimeZone(start, 'America/Denver')
+    const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
     
     // Calculate position from 8AM (480 minutes from midnight)
     const dayStartMinutes = 8 * 60 // 8 AM start
