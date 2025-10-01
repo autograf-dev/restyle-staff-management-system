@@ -83,19 +83,19 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           const m = currentDate.getMonth() + 1
           const d = currentDate.getDate()
           // Denver midnight to 23:59
-          startDate = denverWallTimeToUtcIso(y, m, d, 0, 0)
-          endDate = denverWallTimeToUtcIso(y, m, d, 23, 59)
+          startDate = convertDenverWallTimeToUtcIso(y, m, d, 0, 0)
+          endDate = convertDenverWallTimeToUtcIso(y, m, d, 23, 59)
         } else if (view === 'month') {
           const y = currentDate.getFullYear()
           const m = currentDate.getMonth() + 1
           const firstDay = 1
           const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
-          startDate = denverWallTimeToUtcIso(y, m, firstDay, 0, 0)
-          endDate = denverWallTimeToUtcIso(y, m, lastDay, 23, 59)
+          startDate = convertDenverWallTimeToUtcIso(y, m, firstDay, 0, 0)
+          endDate = convertDenverWallTimeToUtcIso(y, m, lastDay, 23, 59)
         } else if (view === 'year') {
           const y = currentDate.getFullYear()
-          startDate = denverWallTimeToUtcIso(y, 1, 1, 0, 0)
-          endDate = denverWallTimeToUtcIso(y, 12, 31, 23, 59)
+          startDate = convertDenverWallTimeToUtcIso(y, 1, 1, 0, 0)
+          endDate = convertDenverWallTimeToUtcIso(y, 12, 31, 23, 59)
         }
         // For all views we now use explicit date range
         
@@ -306,6 +306,35 @@ function getHourMinuteInTimeZone(date: Date, timeZone: string) {
     hour: Number(map.hour || '0'),
     minute: Number(map.minute || '0')
   }
+}
+
+function convertDenverWallTimeToUtcIso(year: number, month: number, day: number, hour: number, minute: number) {
+  const baseUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const parts = dtf.formatToParts(baseUtc)
+  const map: Record<string, string> = {}
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = p.value
+  }
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  )
+  const offset = asUTC - baseUtc.getTime()
+  return new Date(baseUtc.getTime() - offset).toISOString()
 }
 
 // Staff Overview Component - Acuity-style time grid calendar
