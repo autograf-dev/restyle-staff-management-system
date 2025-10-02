@@ -48,6 +48,24 @@ interface TxRow {
   }>
 }
 
+interface OldTxRow {
+  idx: number
+  rowId: string
+  bookingId: string
+  paymentDate: string | null
+  paymentMethod: string | null
+  paymentStatus: string | null
+  transactionServicesTotal: number | null
+  transactionTax: number | null
+  transactionTotalPaid: number | null
+  transactionTip: string | null
+  serviceJoinedList: string | null
+  joinedStaffList: string | null
+  summaryDate: number | null
+  summaryYear: number | null
+  summaryMonth: number | null
+}
+
 export default function DashboardPage() {
   const { user } = useUser()
   const router = useRouter()
@@ -65,6 +83,7 @@ export default function DashboardPage() {
 
   // Data State
   const [rows, setRows] = useState<TxRow[]>([])
+  const [oldRows, setOldRows] = useState<OldTxRow[]>([])
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -198,6 +217,43 @@ export default function DashboardPage() {
     return filtered
   }, [rows, selectedFilter, dateRange])
 
+  // Filter old transactions based on selected date range
+  const filteredOldRows = useMemo(() => {
+    const { start, end } = getDateRange(selectedFilter)
+    
+    // Normalize dates to compare only date parts (ignore time)
+    const normalizeDate = (date: Date) => {
+      const normalized = new Date(date)
+      normalized.setHours(0, 0, 0, 0)
+      return normalized
+    }
+    
+    const startDate = normalizeDate(start)
+    const endDate = normalizeDate(end)
+    
+    const filtered = oldRows.filter(row => {
+      if (!row.paymentDate) return false
+      try {
+        const paymentDate = normalizeDate(new Date(row.paymentDate))
+        return paymentDate >= startDate && paymentDate <= endDate
+      } catch {
+        return false
+      }
+    })
+    
+    // Debug logging
+    console.log('📅 Old Transactions Filter Debug:', {
+      selectedFilter,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      totalOldRows: oldRows.length,
+      filteredOldRows: filtered.length,
+      sampleOldPaymentDates: filtered.slice(0, 3).map(r => r.paymentDate)
+    })
+    
+    return filtered
+  }, [oldRows, selectedFilter, dateRange])
+
   // Calculate KPIs from filtered data
   const kpis = useMemo(() => {
     const count = filteredRows.length
@@ -237,18 +293,116 @@ export default function DashboardPage() {
     return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods }
   }, [filteredRows])
 
+  // Calculate V1 metrics from old transactions with proper staff distribution
+  const v1Metrics = useMemo(() => {
+    if (filteredOldRows.length === 0) {
+      return {
+        totalRevenue: 0,
+        totalTips: 0,
+        totalTransactions: 0,
+        staffRevenue: new Map<string, number>(),
+        staffTips: new Map<string, number>(),
+        staffTransactions: new Map<string, number>(),
+        uniqueStaffCount: 0
+      }
+    }
+
+    const staffRevenue = new Map<string, number>()
+    const staffTips = new Map<string, number>()
+    const staffTransactions = new Map<string, number>()
+    let totalRevenue = 0
+    let totalTips = 0
+    const totalTransactions = filteredOldRows.length
+
+    filteredOldRows.forEach(row => {
+      const revenue = Number(row.transactionTotalPaid || 0)
+      const tip = Number(row.transactionTip || 0)
+      
+      totalRevenue += revenue
+      totalTips += tip
+
+      // Parse joined_staff_list to distribute revenue and tips
+      if (row.joinedStaffList) {
+        const staffList = row.joinedStaffList
+          .split(',')
+          .map(name => name.trim())
+          .filter(name => name.length > 0)
+
+        if (staffList.length > 0) {
+          // Count occurrences of each staff member
+          const staffCounts = new Map<string, number>()
+          staffList.forEach(staff => {
+            staffCounts.set(staff, (staffCounts.get(staff) || 0) + 1)
+          })
+
+          const totalStaffOccurrences = staffList.length
+          
+          // Distribute revenue and tips based on staff occurrence ratio
+          staffCounts.forEach((count, staffName) => {
+            const ratio = count / totalStaffOccurrences
+            const staffRevenueShare = revenue * ratio
+            const staffTipShare = tip * ratio
+
+            // Update staff totals
+            staffRevenue.set(staffName, (staffRevenue.get(staffName) || 0) + staffRevenueShare)
+            staffTips.set(staffName, (staffTips.get(staffName) || 0) + staffTipShare)
+            staffTransactions.set(staffName, (staffTransactions.get(staffName) || 0) + (1 / staffCounts.size))
+          })
+        }
+      }
+    })
+
+    const uniqueStaffCount = staffRevenue.size
+
+    console.log('📊 V1 Metrics Calculated:', {
+      totalRevenue,
+      totalTips,
+      totalTransactions,
+      uniqueStaffCount,
+      sampleStaffRevenue: Array.from(staffRevenue.entries()).slice(0, 3),
+      sampleStaffTips: Array.from(staffTips.entries()).slice(0, 3)
+    })
+
+    return {
+      totalRevenue,
+      totalTips,
+      totalTransactions,
+      staffRevenue,
+      staffTips,
+      staffTransactions,
+      uniqueStaffCount
+    }
+  }, [filteredOldRows])
+
 
   // Fetch transactions data
   useEffect(() => {
     const load = async () => {
       setSectionsLoading(true)
       try {
-        const res = await fetch(`/api/transactions?limit=100`)
-        const json = await res.json()
-        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
+        // Fetch both current and old transactions
+        const [currentRes, oldRes] = await Promise.all([
+          fetch(`/api/transactions?limit=100`),
+          fetch(`/api/old-transactions?limit=500`)
+        ])
         
-        const transactions = json.data || []
-        setRows(transactions)
+        // Process current transactions
+        const currentJson = await currentRes.json()
+        if (!currentRes.ok || !currentJson.ok) {
+          console.warn('Failed to load current transactions:', currentJson.error)
+        } else {
+          const transactions = currentJson.data || []
+          setRows(transactions)
+        }
+        
+        // Process old transactions
+        const oldJson = await oldRes.json()
+        if (!oldRes.ok || !oldJson.ok) {
+          console.warn('Failed to load old transactions:', oldJson.error)
+        } else {
+          const oldTransactions = oldJson.data || []
+          setOldRows(oldTransactions)
+        }
         
         // Add 0.5 second delay for skeleton loading
         setTimeout(() => {
@@ -829,6 +983,151 @@ export default function DashboardPage() {
               </Card>
                     </>
                   )}
+            </div>
+
+            {/* Metrics from V1 Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-[#601625]" />
+                  <h2 className="text-lg font-semibold text-[#601625]">Metrics from V1</h2>
+                  <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
+                    {sectionsLoading ? <Skeleton className="h-4 w-12" /> : `${v1Metrics.totalTransactions} Transactions`}
+                  </Badge>
+                </div>
+                <Badge variant="secondary" className="text-xs bg-[#601625]/10 text-[#601625] border-[#601625]/20">
+                  Legacy Data
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {sectionsLoading ? (
+                  Array.from({ length: 4 }).map((_, index) => (
+                    <Card key={index} className="rounded-2xl border-neutral-200 shadow-sm">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-2">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-6 w-20" />
+                          </div>
+                          <Skeleton className="h-10 w-10 rounded-xl" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <>
+                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Total Revenue</div>
+                            <div className="text-[24px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.totalRevenue)}</div>
+                          </div>
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                            <DollarSign className="h-5 w-5 text-[#601625]" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Total Tips</div>
+                            <div className="text-[24px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.totalTips)}</div>
+                          </div>
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                            <TrendingUp className="h-5 w-5 text-[#601625]" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Transactions</div>
+                            <div className="text-[24px] font-bold text-[#601625] mt-1">{v1Metrics.totalTransactions}</div>
+                          </div>
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                            <Receipt className="h-5 w-5 text-[#601625]" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Staff Count</div>
+                            <div className="text-[24px] font-bold text-[#601625] mt-1">{v1Metrics.uniqueStaffCount}</div>
+                          </div>
+                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                            <Users className="h-5 w-5 text-[#601625]" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
+              </div>
+
+              {/* V1 Staff Performance Table */}
+              {!sectionsLoading && v1Metrics.staffRevenue.size > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium text-[#601625] mb-4">V1 Staff Performance</h3>
+                  <Card className="rounded-2xl border-[#601625]/20 shadow-sm bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                    <CardContent className="p-6">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-[#601625]/20">
+                              <th className="text-left py-3 px-4 text-sm font-semibold text-[#601625]">Staff Member</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Revenue</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Tips</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Transactions</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Avg/Transaction</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from(v1Metrics.staffRevenue.entries())
+                              .sort(([,a], [,b]) => b - a) // Sort by revenue descending
+                              .slice(0, 10) // Show top 10 staff
+                              .map(([staffName, revenue]) => {
+                                const tips = v1Metrics.staffTips.get(staffName) || 0
+                                const transactions = v1Metrics.staffTransactions.get(staffName) || 0
+                                const avgPerTransaction = transactions > 0 ? revenue / transactions : 0
+                                
+                                return (
+                                  <tr key={staffName} className="border-b border-[#601625]/10 hover:bg-[#601625]/5 transition-colors">
+                                    <td className="py-3 px-4">
+                                      <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
+                                          <span className="text-white font-semibold text-sm">
+                                            {staffName.charAt(0).toUpperCase()}
+                                          </span>
+                                        </div>
+                                        <span className="font-medium text-[#601625]">{staffName}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4 text-right font-bold text-[#601625]">{formatCurrency(revenue)}</td>
+                                    <td className="py-3 px-4 text-right font-medium text-[#751a29]">{formatCurrency(tips)}</td>
+                                    <td className="py-3 px-4 text-right text-neutral-600">{Math.round(transactions)}</td>
+                                    <td className="py-3 px-4 text-right font-medium text-[#601625]">{formatCurrency(avgPerTransaction)}</td>
+                                  </tr>
+                                )
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
 
             {/* Payment Methods Section - Full Width */}
