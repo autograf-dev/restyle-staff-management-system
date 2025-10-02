@@ -148,7 +148,7 @@ function CheckoutContent() {
     name: '',
     phone: ''
   })
-  const [tipPercentage, setTipPercentage] = useState(18)
+  const [tipPercentage, setTipPercentage] = useState(0)
   const [customTipAmount, setCustomTipAmount] = useState('')
   const [useCustomTip, setUseCustomTip] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('visa')
