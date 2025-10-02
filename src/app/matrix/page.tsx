@@ -1,4 +1,6 @@
 "use client"
+
+export const dynamic = 'force-dynamic'
 import { AppSidebar } from "@/components/app-sidebar"
 import { RoleGuard } from "@/components/role-guard"
 import { Separator } from "@/components/ui/separator"
@@ -15,37 +17,23 @@ import {
   DollarSign,
   Users,
   Gauge,
-  TrendingUp,
-  Activity,
   Info
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, Suspense } from "react"
 
 interface TxRow {
   id: string
   paymentDate: string | null
   method: string | null
-  subtotal: number | null
-  tax: number | null
-  tip: number | null
   totalPaid: number | null
-  services: string | null
-  serviceIds: string | null
-  staff: string | null
+  tip: number | null
   customerPhone: string | null
-  customerLookup: string | null
-  status?: string | null
-  paymentStatus?: string | null
-  paid?: string | null
-  items?: Array<{
-    id: string
-    serviceId: string
+  staff: string | null
+  items: Array<{
+    staffName: string
     serviceName: string
     price: number
-    staffName: string
-    staffTipSplit: number
-    staffTipCollected: number
   }>
 }
 
@@ -53,7 +41,7 @@ export default function MatrixPage() {
   const { user } = useUser()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<TxRow[]>([])
-  const [services, setServices] = useState<any[]>([])
+  const [services, setServices] = useState<unknown[]>([])
   const [targetRevenueAmount, setTargetRevenueAmount] = useState<number | null>(null)
   const [targetPercentage, setTargetPercentage] = useState<number>(80)
   const [savingTarget, setSavingTarget] = useState(false)
@@ -167,7 +155,6 @@ export default function MatrixPage() {
     const filterDate = new Date()
     
     if (staffFilter === 'today') {
-      // Today only - same day
       filterDate.setDate(now.getDate())
     } else if (staffFilter === '7days') {
       filterDate.setDate(now.getDate() - 7)
@@ -180,10 +167,8 @@ export default function MatrixPage() {
       const paymentDate = new Date(row.paymentDate)
       
       if (staffFilter === 'today') {
-        // For today, compare exact dates
         return paymentDate.toDateString() === now.toDateString()
       } else {
-        // For other filters, compare with start of day
         filterDate.setHours(0, 0, 0, 0)
         paymentDate.setHours(0, 0, 0, 0)
         return paymentDate >= filterDate
@@ -195,9 +180,8 @@ export default function MatrixPage() {
   }, [rows, staffFilter])
 
   const saveTargetRevenue = async () => {
-    if (targetRevenueAmount == null || Number.isNaN(targetRevenueAmount) || targetRevenueAmount < 0) return
+    setSavingTarget(true)
     try {
-      setSavingTarget(true)
       const res = await fetch('/api/settings/target-revenue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -216,7 +200,9 @@ export default function MatrixPage() {
   if (loading) {
     return (
       <SidebarProvider>
-        <AppSidebar />
+        <Suspense fallback={<div>Loading...</div>}>
+          <AppSidebar />
+        </Suspense>
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">
@@ -249,24 +235,12 @@ export default function MatrixPage() {
                     placeholder="e.g. 15000"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-neutral-700">Revenue %</label>
-                    <Input type="number" min={0} max={100} value={weights.revenue}
-                      onChange={(e) => setWeights({ ...weights, revenue: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-neutral-700">Satisfaction %</label>
-                    <Input type="number" min={0} max={100} value={weights.satisfaction}
-                      onChange={(e) => setWeights({ ...weights, satisfaction: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-neutral-700">Efficiency %</label>
-                    <Input type="number" min={0} max={100} value={weights.efficiency}
-                      onChange={(e) => setWeights({ ...weights, efficiency: Number(e.target.value) })} />
-                  </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700">Revenue Weight %</label>
+                  <Input type="number" min={0} max={100} value={weights.revenue}
+                    onChange={(e) => setWeights({ ...weights, revenue: Number(e.target.value) })} />
                 </div>
-                <div className="text-xs text-neutral-500">Weights will be normalized to 100% when calculating performance.</div>
+                <div className="text-xs text-neutral-500">Performance is calculated based on revenue achievement vs target.</div>
                 <div className="flex justify-end gap-2">
                   <Button variant="secondary" onClick={() => setDialogOpen(false)}>Cancel</Button>
                   <Button onClick={saveTargetRevenue} disabled={savingTarget}>{savingTarget ? 'Saving...' : 'Save'}</Button>
@@ -277,15 +251,20 @@ export default function MatrixPage() {
 
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-4 w-4" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-8 w-16 mb-2" />
-                    <Skeleton className="h-3 w-20" />
+              {[1, 2, 3, 4].map((i) => (
+                <Card key={i} className="rounded-2xl border-neutral-200 shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Loading...</div>
+                        <div className="text-2xl font-bold text-neutral-900 mt-1">
+                          <Skeleton className="h-8 w-16" />
+                        </div>
+                      </div>
+                      <div className="p-2 bg-neutral-100 rounded-lg">
+                        <Skeleton className="h-6 w-6" />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -297,10 +276,12 @@ export default function MatrixPage() {
   }
 
   return (
-    <RoleGuard allowedRoles={['admin', 'manager', 'barber']}>
+    <RoleGuard requiredRole="barber">
       <SidebarProvider>
-        <AppSidebar />
-            <SidebarInset>
+        <Suspense fallback={<div>Loading...</div>}>
+          <AppSidebar />
+        </Suspense>
+        <SidebarInset>
               <header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                 <div className="flex items-center gap-2 px-4">
                   <SidebarTrigger className="-ml-1" />
@@ -322,10 +303,10 @@ export default function MatrixPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Revenue</div>
-                      <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(metrics.totalRevenue)}</div>
+                      <div className="text-2xl font-bold text-neutral-900 mt-1">{formatCurrency(metrics.totalRevenue)}</div>
                     </div>
-                    <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                      <DollarSign className="h-5 w-5 text-[#601625]" />
+                    <div className="p-2 bg-[#601625]/10 rounded-lg">
+                      <DollarSign className="h-6 w-6 text-[#601625]" />
                     </div>
                   </div>
                 </CardContent>
@@ -336,10 +317,10 @@ export default function MatrixPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Customers</div>
-                      <div className="text-[24px] font-bold text-neutral-900 mt-1">{metrics.uniqueCustomers}</div>
+                      <div className="text-2xl font-bold text-neutral-900 mt-1">{metrics.uniqueCustomers}</div>
                     </div>
-                    <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-[#601625]" />
+                    <div className="p-2 bg-[#601625]/10 rounded-lg">
+                      <Users className="h-6 w-6 text-[#601625]" />
                     </div>
                   </div>
                 </CardContent>
@@ -350,10 +331,10 @@ export default function MatrixPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Transactions</div>
-                      <div className="text-[24px] font-bold text-neutral-900 mt-1">{metrics.totalTransactions}</div>
+                      <div className="text-2xl font-bold text-neutral-900 mt-1">{metrics.totalTransactions}</div>
                     </div>
-                    <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                      <Calendar className="h-5 w-5 text-[#601625]" />
+                    <div className="p-2 bg-[#601625]/10 rounded-lg">
+                      <Calendar className="h-6 w-6 text-[#601625]" />
                     </div>
                   </div>
                 </CardContent>
@@ -364,10 +345,10 @@ export default function MatrixPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Services</div>
-                      <div className="text-[24px] font-bold text-neutral-900 mt-1">{metrics.serviceCount}</div>
+                      <div className="text-2xl font-bold text-neutral-900 mt-1">{metrics.serviceCount}</div>
                     </div>
-                    <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                      <Target className="h-5 w-5 text-[#601625]" />
+                    <div className="p-2 bg-[#601625]/10 rounded-lg">
+                      <Target className="h-6 w-6 text-[#601625]" />
                     </div>
                   </div>
                 </CardContent>
@@ -400,51 +381,55 @@ export default function MatrixPage() {
                     <div className="relative w-full h-80 flex items-center justify-center">
                       <div className="relative w-80 h-80">
                         <svg className="w-full h-full" viewBox="0 0 200 200">
-                          <defs>
-                            <linearGradient id="doughnutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" stopColor="#601625" />
-                              <stop offset="50%" stopColor="#8B2635" />
-                              <stop offset="100%" stopColor="#601625" />
-                            </linearGradient>
-                          </defs>
-                          
                           {/* Background Circle */}
                           <circle
                             cx="100"
                             cy="100"
                             r="80"
                             fill="none"
-                            stroke="#f3f4f6"
+                            stroke="#e5e7eb"
                             strokeWidth="20"
                           />
                           
-                          {/* Progress Circle - Dynamic Percentage */}
+                          {/* Progress Arc */}
                           <circle
                             cx="100"
                             cy="100"
                             r="80"
                             fill="none"
-                            stroke="url(#doughnutGradient)"
+                            stroke="url(#progressGradient)"
                             strokeWidth="20"
                             strokeLinecap="round"
-                            strokeDasharray="502.4"
-                            strokeDashoffset={502.4 - (502.4 * metrics.performancePercentage / 100)}
-                            className="transition-all duration-2000 ease-out"
+                            strokeDasharray={`${2 * Math.PI * 80}`}
+                            strokeDashoffset={`${2 * Math.PI * 80 * (1 - metrics.performancePercentage / 100)}`}
                             transform="rotate(-90 100 100)"
+                            className="transition-all duration-1000 ease-out"
                           />
                           
-                          {/* Target Indicator Circle */}
+                          {/* Target Indicator */}
                           <circle
                             cx="100"
-                            cy="20"
-                            r="8"
-                            fill="#601625"
-                            stroke="white"
+                            cy="100"
+                            r="80"
+                            fill="none"
+                            stroke="#fbbf24"
                             strokeWidth="3"
-                            className="transition-all duration-2000 ease-out"
+                            strokeDasharray="8 4"
+                            strokeDashoffset={`${2 * Math.PI * 80 * (1 - metrics.targetPercentage / 100)}`}
+                            transform="rotate(-90 100 100)"
+                            opacity="0.7"
                           />
                           
-                          {/* Progress Percentage Labels */}
+                          {/* Gradient Definition */}
+                          <defs>
+                            <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#ef4444" />
+                              <stop offset="50%" stopColor="#f59e0b" />
+                              <stop offset="100%" stopColor="#10b981" />
+                            </linearGradient>
+                          </defs>
+                          
+                          {/* Center Text */}
                           <text
                             x="100"
                             y="100"
@@ -623,7 +608,6 @@ export default function MatrixPage() {
                             
                             filteredRows.forEach(row => {
                               if (row.staff) {
-                                // Split staff field by comma and process each staff member
                                 const staffNames = row.staff.split(',').map(name => name.trim()).filter(name => name)
                                 
                                 staffNames.forEach(staffName => {
@@ -639,12 +623,10 @@ export default function MatrixPage() {
                                   }
                                   
                                   const staff = staffMap.get(staffName)
-                                  // Split revenue equally among staff members
                                   staff.totalRevenue += (row.totalPaid || 0) / staffNames.length
-                                  staff.totalServices += 1 / staffNames.length // Split service count
+                                  staff.totalServices += 1 / staffNames.length
                                   staff.totalTransactions += 1 / staffNames.length
                                   
-                                  // Track unique days for daily average calculation
                                   if (row.paymentDate) {
                                     const date = new Date(row.paymentDate).toDateString()
                                     staff.totalDays.add(date)
@@ -653,7 +635,6 @@ export default function MatrixPage() {
                               }
                             })
                             
-                            // Calculate performance metrics
                             const performance = Array.from(staffMap.values()).map(staff => {
                               const uniqueDays = staff.totalDays.size
                               const avgTransactionsPerDay = uniqueDays > 0 ? staff.totalTransactions / uniqueDays : 0
@@ -836,7 +817,6 @@ export default function MatrixPage() {
                   </CardContent>
                 </Card>
               </div>
-
             </TooltipProvider>
           </div>
         </SidebarInset>
@@ -850,30 +830,22 @@ export default function MatrixPage() {
             <DialogDescription>Configure target revenue and weightage for performance calculation.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-neutral-700">Target Revenue (amount)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={targetRevenueAmount ?? ''}
-                  onChange={(e) => setTargetRevenueAmount(Number(e.target.value))}
-                  placeholder="e.g. 15000"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-neutral-700">Target Percentage (%)</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={targetPercentage}
-                  onChange={(e) => setTargetPercentage(Number(e.target.value))}
-                  placeholder="e.g. 80"
-                />
-              </div>
+            <div>
+              <label className="text-sm font-medium text-neutral-700">Target Revenue (amount)</label>
+              <Input
+                type="number"
+                min={0}
+                value={targetRevenueAmount ?? ''}
+                onChange={(e) => setTargetRevenueAmount(Number(e.target.value))}
+                placeholder="e.g. 15000"
+              />
             </div>
-            <div className="text-xs text-neutral-500">Performance is calculated based on actual revenue vs target revenue. Target percentage is the goal to achieve.</div>
+            <div>
+              <label className="text-sm font-medium text-neutral-700">Revenue Weight %</label>
+              <Input type="number" min={0} max={100} value={weights.revenue}
+                onChange={(e) => setWeights({ ...weights, revenue: Number(e.target.value) })} />
+            </div>
+            <div className="text-xs text-neutral-500">Performance is calculated based on revenue achievement vs target.</div>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button onClick={saveTargetRevenue} disabled={savingTarget}>{savingTarget ? 'Saving...' : 'Save'}</Button>

@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const value = setting?.value ?? null
 
     return NextResponse.json({ ok: true, value })
-  } catch (e: unknown) {
+  } catch {
     return NextResponse.json({ ok: false, error: "Unexpected error" }, { status: 500 })
   }
 }
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     // Handle both old format (value as number) and new format (value as object)
     let amount: number
     let targetPercentage: number = 80
-    let weights: any = null
+          let weights: { revenue: number } | null = null
     
     if (typeof body?.value === 'number') {
       // Old format: { value: 15000 }
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true })
-  } catch (e: unknown) {
+  } catch {
     return NextResponse.json({ ok: false, error: "Unexpected error" }, { status: 500 })
   }
 }
