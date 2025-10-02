@@ -59,56 +59,52 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Generate navigation items based on current team
   const navMain = React.useMemo(() => {
     const prefix = getTeamPrefix()
-    const items: {
+    
+    // Create base items array with proper typing
+    const baseItems: {
       title: string
       url: string
       icon?: LucideIcon
-      isActive?: boolean
       items?: { title: string; url: string }[]
     }[] = [
       {
         title: "Dashboard",
         url: `${prefix}/dashboard`,
         icon: IconDashboard,
-        isActive: false,
       },
       {
         title: "Calendar",
         url: `${prefix}/calendar`,
         icon: CalendarIcon,
-        isActive: false,
       },
       {
         title: "Appointments",
         url: `${prefix}/appointments`,
         icon: Clock,
-        isActive: false,
       },
       {
         title: "Payments",
         url: `${prefix}/payments`,
         icon: CreditCard,
-        isActive: false,
       },
-      // Customers stays visible for non-barbers only
-      ...(user?.role === 'barber'
-        ? []
-        : [{
-            title: "Customers",
-            url: `${prefix}/customers`,
-            icon: UsersRound,
-            isActive: false,
-          }]),
     ]
 
-    // Manage section varies by role
+    // Add customers for non-barbers
+    if (user?.role !== 'barber') {
+      baseItems.push({
+        title: "Customers",
+        url: `${prefix}/customers`,
+        icon: UsersRound,
+      })
+    }
+
+    // Add manage section based on role
     if (user?.role === 'barber') {
       const myHoursUrl = user?.ghlId ? `${prefix}/manage/staff-hours/${user.ghlId}` : `${prefix}/manage/staff-hours`
-      items.push({
+      baseItems.push({
         title: "Manage",
         url: "#",
         icon: Settings,
-        isActive: true,
         items: [
           { title: "Hours", url: myHoursUrl },
           { title: "Holidays", url: `${prefix}/manage/leaves` },
@@ -116,24 +112,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ],
       })
     } else {
-      // Admin/manager view
-      items.push({
+      const manageItems = [
+        { title: "Services", url: `${prefix}/manage/services` },
+        { title: "Salon Hours", url: `${prefix}/manage/salon-hours` },
+        { title: "Stylists", url: `${prefix}/manage/stylists` },
+        { title: "Holidays", url: `${prefix}/manage/leaves` },
+        { title: "Breaks", url: `${prefix}/manage/breaks` },
+      ]
+      
+      if (user?.role === "admin") {
+        manageItems.push({ title: "Admin", url: "/teams" })
+      }
+      
+      baseItems.push({
         title: "Manage",
         url: "#",
         icon: Settings,
-        isActive: true,
-        items: [
-          { title: "Services", url: `${prefix}/manage/services` },
-          { title: "Salon Hours", url: `${prefix}/manage/salon-hours` },
-          { title: "Stylists", url: `${prefix}/manage/stylists` },
-          { title: "Holidays", url: `${prefix}/manage/leaves` },
-          { title: "Breaks", url: `${prefix}/manage/breaks` },
-          ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams" }] : []),
-        ],
+        items: manageItems,
       })
     }
 
-    return items
+    return baseItems
   }, [getTeamPrefix, user?.role, user?.ghlId])
 
   return (

@@ -42,7 +42,7 @@ const formatCurrency = (amount: number) => {
 export function ServicesRevenueTable({ data }: ServicesRevenueTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
 
-  const columns: ColumnDef<ServiceRevenue>[] = [
+  const columns: ColumnDef<ServiceRevenue>[] = React.useMemo(() => [
     {
       accessorKey: "name",
       header: ({ column }) => {
@@ -126,7 +126,7 @@ export function ServicesRevenueTable({ data }: ServicesRevenueTableProps) {
         return <div className="text-right font-normal text-[#601625]">{formatCurrency(amount)}</div>
       },
     },
-  ]
+  ], [data])
 
   const table = useReactTable({
     data,

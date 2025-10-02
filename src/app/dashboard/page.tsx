@@ -196,7 +196,7 @@ export default function DashboardPage() {
     })
     
     return filtered
-  }, [rows, selectedFilter, dateRange, getDateRange])
+  }, [rows, selectedFilter, dateRange])
 
   // Calculate KPIs from filtered data
   const kpis = useMemo(() => {
@@ -294,9 +294,11 @@ export default function DashboardPage() {
           staff.totalRevenue += (row.totalPaid || 0) / staffNames.length
           staff.totalServices += 1 / staffNames.length // Split service count
           
-          // Add rating if available (mock data for now)
-          if (Math.random() > 0.3) { // 70% chance of having a rating
-            staff.ratings.push(3.5 + Math.random() * 1.5) // Rating between 3.5-5.0
+          // Add rating if available (stable mock data based on staff name)
+          const staffHash = staffName.split('').reduce((a, b) => a + b.charCodeAt(0), 0)
+          if (staffHash % 10 > 3) { // 70% chance of having a rating based on name hash
+            const rating = 3.5 + (staffHash % 15) / 10 // Rating between 3.5-5.0 based on name
+            staff.ratings.push(rating)
           }
         })
       }

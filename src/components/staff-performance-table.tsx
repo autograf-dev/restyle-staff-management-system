@@ -48,7 +48,7 @@ const formatCurrency = (amount: number) => {
 export function StaffPerformanceTable({ data, selectedStaff, onStaffSelect }: StaffPerformanceTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
 
-  const columns: ColumnDef<StaffPerformance>[] = [
+  const columns: ColumnDef<StaffPerformance>[] = React.useMemo(() => [
     {
       accessorKey: "staffName",
       header: ({ column }) => {
@@ -160,7 +160,7 @@ export function StaffPerformanceTable({ data, selectedStaff, onStaffSelect }: St
         return <div className="text-right font-normal text-slate-600">{row.getValue("efficiency")}%</div>
       },
     },
-  ]
+  ], [])
 
   const table = useReactTable({
     data,

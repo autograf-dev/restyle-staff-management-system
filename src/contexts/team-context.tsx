@@ -58,11 +58,11 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, user, userHasAccessToTeam, router])
 
-  const getTeamPrefix = () => currentTeam.prefix
+  const getTeamPrefix = React.useCallback(() => currentTeam.prefix, [currentTeam.prefix])
 
-  const getTeamDashboardUrl = () => {
+  const getTeamDashboardUrl = React.useCallback(() => {
     return currentTeam.prefix + "/dashboard"
-  }
+  }, [currentTeam.prefix])
 
   const handleSetCurrentTeam = (team: Team) => {
     if (!userHasAccessToTeam(team.prefix)) {
