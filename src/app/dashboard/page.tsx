@@ -13,9 +13,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { StaffPerformanceTable, type StaffPerformance } from "@/components/staff-performance-table"
 import { ServicesRevenueTable, type ServiceRevenue } from "@/components/services-revenue-table"
+import { PaymentMethodsSection, type PaymentMethod } from "@/components/payment-methods-section"
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt } from "lucide-react"
+import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, CheckCircle, Clock, XCircle, Timer, Scissors } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -67,8 +68,11 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<TxRow[]>([])
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [serviceCategories, setServiceCategories] = useState<any[]>([])
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [showAllStaff, setShowAllStaff] = useState(false)
+  const [sectionsLoading, setSectionsLoading] = useState(true)
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom"
@@ -162,10 +166,12 @@ export default function DashboardPage() {
     return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods }
   }, [filteredRows])
 
+
   // Fetch transactions data
   useEffect(() => {
     const load = async () => {
       setLoading(true)
+      setSectionsLoading(true)
       try {
         const res = await fetch(`/api/transactions?limit=100`)
         const json = await res.json()
@@ -173,12 +179,18 @@ export default function DashboardPage() {
         
         const transactions = json.data || []
         setRows(transactions)
+        
+        // Add 0.5 second delay for skeleton loading
+        setTimeout(() => {
+          setSectionsLoading(false)
+        }, 500)
       } catch (e: unknown) {
         console.error('Error loading payments:', e)
+        setSectionsLoading(false)
       } finally {
-          setLoading(false)
-        }
+        setLoading(false)
       }
+    }
 
     if (isPinVerified) {
       load()
@@ -187,12 +199,12 @@ export default function DashboardPage() {
 
   // Calculate staff performance
   useEffect(() => {
-    if (rows.length === 0) return
+    if (filteredRows.length === 0) return
 
     // Group transactions by staff
     const staffMap = new Map()
     
-    rows.forEach(row => {
+    filteredRows.forEach(row => {
       if (row.staff) {
         // Split staff field by comma and process each staff member
         const staffNames = row.staff.split(',').map(name => name.trim()).filter(name => name)
@@ -250,7 +262,7 @@ export default function DashboardPage() {
     // Calculate services revenue
     const servicesMap = new Map()
     
-    rows.forEach(row => {
+    filteredRows.forEach(row => {
       if (row.services) {
         const services = row.services.split(',').map(s => s.trim()).filter(s => s)
         const revenuePerService = (row.totalPaid || 0) / services.length
@@ -282,7 +294,169 @@ export default function DashboardPage() {
       }))
     
     setServicesRevenue(topServices)
-  }, [rows])
+
+    // Calculate payment methods - map checkout methods to proper names
+    const paymentMethodsMap = new Map()
+    
+    // Define the payment methods from checkout page
+    const checkoutMethods = {
+      'visa': 'Visa',
+      'mastercard': 'Mastercard', 
+      'amex': 'American Express',
+      'debit': 'Debit Card',
+      'cash': 'Cash',
+      'split_payment': 'Split Payment',
+      'service_split': 'Service Split',
+      'gift_card': 'Gift Card',
+      'other': 'Other'
+    }
+    
+    // Debug: Log unique payment methods found in data
+    const uniqueMethods = [...new Set(filteredRows.map(row => row.method || 'null'))]
+    console.log('📊 Payment methods found in data:', uniqueMethods)
+    console.log('📊 Total transactions:', filteredRows.length)
+    
+    // Debug: Show sample transactions with different methods
+    const methodSamples: Record<string, { count: number; totalRevenue: number; sample: any }> = {}
+    filteredRows.forEach(row => {
+      const method = row.method || 'null'
+      if (!methodSamples[method]) {
+        methodSamples[method] = {
+          count: 0,
+          totalRevenue: 0,
+          sample: row
+        }
+      }
+      methodSamples[method].count++
+      methodSamples[method].totalRevenue += row.totalPaid || 0
+    })
+    console.log('📊 Method breakdown:', methodSamples)
+    
+    filteredRows.forEach(row => {
+      const rawMethod = row.method || 'other'
+      const method = rawMethod.toLowerCase()
+      
+      // Map to proper display name
+      const displayName = checkoutMethods[method as keyof typeof checkoutMethods] || rawMethod
+      const methodKey = method
+      
+      if (!paymentMethodsMap.has(methodKey)) {
+        paymentMethodsMap.set(methodKey, {
+          name: displayName,
+          type: method,
+          revenue: 0,
+          count: 0,
+          icon: getPaymentIcon(method)
+        })
+      }
+      
+      const methodData = paymentMethodsMap.get(methodKey)
+      methodData.revenue += row.totalPaid || 0
+      methodData.count += 1
+    })
+    
+    console.log('📊 Final payment methods calculated:', Array.from(paymentMethodsMap.values()))
+
+    const totalRevenue = Array.from(paymentMethodsMap.values()).reduce((sum, method) => sum + method.revenue, 0)
+    
+    const paymentMethodsData = Array.from(paymentMethodsMap.values())
+      .map(method => ({
+        ...method,
+        percentage: totalRevenue > 0 ? (method.revenue / totalRevenue) * 100 : 0
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+    
+    setPaymentMethods(paymentMethodsData)
+  }, [filteredRows])
+
+  // Fetch service categories data
+  useEffect(() => {
+    const fetchServiceCategories = async () => {
+      try {
+        // Fetch groups
+        const groupsResponse = await fetch('/api/groups')
+        if (!groupsResponse.ok) throw new Error('Failed to fetch groups')
+        const groupsData = await groupsResponse.json()
+        const groups = groupsData.groups || []
+
+        // Fetch services for each group and calculate stats
+        const categoryPromises = groups.map(async (group: any) => {
+          try {
+            const servicesResponse = await fetch(`/api/services?groupId=${group.id}`)
+            if (!servicesResponse.ok) return null
+            const servicesData = await servicesResponse.json()
+            const services = servicesData.services || []
+
+            // Calculate total price from service descriptions
+            const totalPrice = services.reduce((sum: number, service: any) => {
+              const description = service.description || ''
+              const priceMatch = description.match(/CA\$(\d+\.?\d*)/i)
+              return sum + (priceMatch ? parseFloat(priceMatch[1]) : 0)
+            }, 0)
+
+            // Calculate total assigned staff count
+            const totalStaffCount = services.reduce((count: number, service: any) => {
+              const teamMembers = service.teamMembers || []
+              return count + teamMembers.length
+            }, 0)
+      
+      return {
+              id: group.id,
+              name: group.name,
+              description: group.description,
+              serviceCount: services.length,
+              totalPrice: totalPrice,
+              totalStaffCount: totalStaffCount,
+              icon: getServiceCategoryIcon(group.name)
+            }
+          } catch (error) {
+            console.error(`Error fetching services for group ${group.name}:`, error)
+            return {
+              id: group.id,
+              name: group.name,
+              description: group.description,
+              serviceCount: 0,
+              totalPrice: 0,
+              totalStaffCount: 0,
+              icon: getServiceCategoryIcon(group.name)
+            }
+          }
+        })
+
+        const categories = await Promise.all(categoryPromises)
+        const validCategories = categories.filter(Boolean)
+        
+        console.log('📊 Service categories loaded:', validCategories)
+        setServiceCategories(validCategories)
+      } catch (error) {
+        console.error('Error fetching service categories:', error)
+      }
+    }
+
+    fetchServiceCategories()
+  }, [])
+
+  // Helper function for service category icons
+  const getServiceCategoryIcon = (categoryName: string) => {
+    const name = categoryName.toLowerCase()
+    if (name.includes('bridal') || name.includes('wedding')) return <Gift className="h-4 w-4" />
+    if (name.includes('facial') || name.includes('skin')) return <Package className="h-4 w-4" />
+    if (name.includes('laser') || name.includes('hair')) return <Scissors className="h-4 w-4" />
+    if (name.includes('threading') || name.includes('waxing')) return <Scissors className="h-4 w-4" />
+    if (name.includes('gents') || name.includes('men')) return <Users className="h-4 w-4" />
+    if (name.includes('ladies') || name.includes('women')) return <Users className="h-4 w-4" />
+    return <Package className="h-4 w-4" />
+  }
+
+  // Helper function for payment method icons
+  const getPaymentIcon = (method: string) => {
+    const methodLower = method.toLowerCase()
+    if (methodLower === 'cash') return <DollarSign className="h-4 w-4" />
+    if (methodLower === 'visa' || methodLower === 'mastercard' || methodLower === 'amex' || methodLower === 'debit') return <CreditCard className="h-4 w-4" />
+    if (methodLower === 'gift_card') return <Gift className="h-4 w-4" />
+    if (methodLower === 'split_payment' || methodLower === 'service_split') return <Receipt className="h-4 w-4" />
+    return <Smartphone className="h-4 w-4" />
+  }
 
   // Handle PIN verification
   const handlePinSubmit = () => {
@@ -528,7 +702,7 @@ export default function DashboardPage() {
 
             {/* Enhanced KPI Cards - Cloned from Payments Page */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {loading ? (
+                  {sectionsLoading ? (
                 <>
                   <Skeleton className="h-[88px] rounded-2xl" />
                   <Skeleton className="h-[88px] rounded-2xl" />
@@ -538,12 +712,12 @@ export default function DashboardPage() {
                 </>
                   ) : (
                     <>
-                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Total Revenue</div>
-                          <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.revenue)}</div>
+                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Revenue</div>
+                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.revenue)}</div>
                         </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <DollarSign className="h-5 w-5 text-[#601625]" />
@@ -552,63 +726,175 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Total Tips</div>
-                          <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.tips)}</div>
+                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Tips</div>
+                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.tips)}</div>
             </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <TrendingUp className="h-5 w-5 text-[#601625]" />
-                                    </div>
-                                  </div>
+                        </div>
+                      </div>
                 </CardContent>
               </Card>
 
-                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Transactions</div>
-                          <div className="text-[24px] font-normal text-[#601625] mt-1">{kpis.count}</div>
-                                      </div>
+                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Transactions</div>
+                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.count}</div>
+                        </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <CreditCard className="h-5 w-5 text-[#601625]" />
-                                      </div>
-                                    </div>
+                        </div>
+                      </div>
                 </CardContent>
               </Card>
 
-                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Active Staff</div>
-                          <div className="text-[24px] font-normal text-[#601625] mt-1">{kpis.uniqueStaff}</div>
-            </div>
+                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Active Staff</div>
+                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.uniqueStaff}</div>
+                        </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <Users className="h-5 w-5 text-[#601625]" />
-                                    </div>
-                                    </div>
+                        </div>
+                      </div>
                 </CardContent>
               </Card>
 
-                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Avg. Ticket</div>
-                          <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.avg)}</div>
-                                    </div>
+                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Avg. Ticket</div>
+                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.avg)}</div>
+                        </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <CalendarIcon className="h-5 w-5 text-[#601625]" />
-                                    </div>
-                                  </div>
+                        </div>
+                      </div>
                 </CardContent>
               </Card>
                     </>
                   )}
+            </div>
+
+            {/* Payment Methods Section - Full Width */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-medium text-[#601625]">Payment Methods</h2>
+                <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
+                  {sectionsLoading ? <Skeleton className="h-4 w-8" /> : `${paymentMethods.length} Methods`}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-3">
+                {sectionsLoading ? (
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <Card key={index} className="rounded-xl border-neutral-200 shadow-sm">
+                      <CardContent className="p-3">
+                        <div className="flex flex-col items-center text-center space-y-2">
+                          <Skeleton className="h-8 w-8 rounded-lg" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-3 w-12" />
+                            <Skeleton className="h-4 w-16" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  paymentMethods.map((method, index) => (
+                    <Card 
+                      key={method.type} 
+                      className="rounded-xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex flex-col items-center text-center space-y-2">
+                          <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
+                            {method.icon}
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide">
+                              {method.name}
+                            </div>
+                            <div className="text-[16px] font-bold text-neutral-900 mt-1">
+                              {formatCurrency(method.revenue)}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Service Categories Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-[#601625]" />
+                  <h2 className="text-lg font-semibold text-[#601625]">Service Categories</h2>
+                  <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
+                    {sectionsLoading ? <Skeleton className="h-4 w-8" /> : `${serviceCategories.length} Categories`}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 overflow-x-auto pb-2">
+                {sectionsLoading ? (
+                  Array.from({ length: 7 }).map((_, index) => (
+                    <Card
+                      key={index}
+                      className="min-w-[180px] max-w-[180px] rounded-lg border-[#601625]/20 shadow-sm flex-shrink-0"
+                    >
+                      <CardContent className="py-2 px-3">
+                        <div className="flex flex-col items-center text-center space-y-1">
+                          <Skeleton className="h-7 w-7 rounded-lg" />
+                          <div className="w-full space-y-1">
+                            <Skeleton className="h-4 w-20 mx-auto" />
+                            <Skeleton className="h-3 w-16 mx-auto" />
+                            <Skeleton className="h-3 w-12 mx-auto" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  serviceCategories.map((category, index) => (
+                    <Card
+                      key={category.id}
+                      className="min-w-[180px] max-w-[180px] rounded-lg border-[#601625]/20 shadow-sm hover:shadow-md transition-all duration-200 hover:border-[#601625]/40 flex-shrink-0"
+                    >
+                      <CardContent className="py-2 px-3">
+                        <div className="flex flex-col items-center text-center space-y-1">
+                          <div className="h-7 w-7 rounded-lg bg-[#601625]/10 flex items-center justify-center">
+                            <div className="h-4 w-4 text-[#601625]">
+                              {category.icon}
+                            </div>
+                          </div>
+                          <div className="w-full">
+                            <div className="text-base font-semibold text-[#601625] mb-1 truncate">
+                              {category.name}
+                            </div>
+                            <div className="text-sm text-neutral-600 space-y-0.5">
+                              <div className="truncate">{category.serviceCount} services</div>
+                              <div className="font-medium text-[#601625] truncate">{formatCurrency(category.totalPrice)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
             </div>
 
             {/* Staff Performance & Services Revenue Section */}
@@ -619,29 +905,65 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-medium text-[#601625]">Staff Performance</h2>
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
-                    Top 5 Staff
+                    {sectionsLoading ? <Skeleton className="h-4 w-8" /> : "Top 5 Staff"}
                   </Badge>
                 </div>
                 
-                <StaffPerformanceTable 
-                  data={staffPerformance.slice(0, 5)} 
-                  selectedStaff={selectedStaff}
-                  onStaffSelect={setSelectedStaff}
-                />
-                                      </div>
+                {sectionsLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <div key={index} className="flex items-center space-x-4 p-3 border rounded-lg">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-24" />
+                          <div className="flex space-x-2">
+                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-3 w-12" />
+                            <Skeleton className="h-3 w-14" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <StaffPerformanceTable 
+                    data={staffPerformance.slice(0, 5)} 
+                    selectedStaff={selectedStaff}
+                    onStaffSelect={setSelectedStaff}
+                  />
+                )}
+              </div>
 
               {/* Services Revenue - 50% */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-medium text-[#601625]">Services Revenue</h2>
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
-                    Top 5 Services
+                    {sectionsLoading ? <Skeleton className="h-4 w-8" /> : "Top 5 Services"}
                   </Badge>
-                                      </div>
+                </div>
                 
-                <ServicesRevenueTable data={servicesRevenue} />
-                                    </div>
-                                  </div>
+                {sectionsLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <div key={index} className="flex items-center space-x-4 p-3 border rounded-lg">
+                        <Skeleton className="h-6 w-6 rounded" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-32" />
+                          <div className="flex space-x-2">
+                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-3 w-12" />
+                            <Skeleton className="h-3 w-14" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ServicesRevenueTable data={servicesRevenue} />
+                )}
+              </div>
+                                      </div>
 
             {/* Expanded Staff Detail Card */}
             {selectedStaff && (

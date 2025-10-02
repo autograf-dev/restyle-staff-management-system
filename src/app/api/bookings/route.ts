@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, Number(searchParams.get("page") || 1))
-    const pageSize = Math.min(5000, Math.max(1, Number(searchParams.get("pageSize") || 20)))
+    const pageSize = Math.min(20000, Math.max(1, Number(searchParams.get("pageSize") || 20)))
     const appointmentStatus = searchParams.get("appointment_status") || undefined
     const search = searchParams.get("search")?.trim() || ""
     const assignedUserId = searchParams.get("assigned_user_id") || undefined
