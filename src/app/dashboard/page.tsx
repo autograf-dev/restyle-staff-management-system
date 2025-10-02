@@ -7,16 +7,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { StaffPerformanceTable, type StaffPerformance } from "@/components/staff-performance-table"
 import { ServicesRevenueTable, type ServiceRevenue } from "@/components/services-revenue-table"
-import { PaymentMethodsSection, type PaymentMethod } from "@/components/payment-methods-section"
+import { type PaymentMethod } from "@/components/payment-methods-section"
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, CheckCircle, Clock, XCircle, Timer, Scissors } from "lucide-react"
+import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, Scissors } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -64,21 +64,26 @@ export default function DashboardPage() {
   const MAX_ATTEMPTS = 10
 
   // Data State
-  const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<TxRow[]>([])
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
-  const [serviceCategories, setServiceCategories] = useState<any[]>([])
+  const [serviceCategories, setServiceCategories] = useState<Array<{
+    id: string;
+    name: string;
+    description: string;
+    serviceCount: number;
+    totalPrice: number;
+    totalStaffCount: number;
+    icon: React.ReactNode;
+  }>>([])
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
-  const [showAllStaff, setShowAllStaff] = useState(false)
   const [sectionsLoading, setSectionsLoading] = useState(true)
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom"
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("today")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [customDateDialogOpen, setCustomDateDialogOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState<Date | undefined>()
   const [tempEndDate, setTempEndDate] = useState<Date | undefined>()
@@ -191,7 +196,7 @@ export default function DashboardPage() {
     })
     
     return filtered
-  }, [rows, selectedFilter, dateRange])
+  }, [rows, selectedFilter, dateRange, getDateRange])
 
   // Calculate KPIs from filtered data
   const kpis = useMemo(() => {
@@ -236,7 +241,6 @@ export default function DashboardPage() {
   // Fetch transactions data
   useEffect(() => {
     const load = async () => {
-      setLoading(true)
       setSectionsLoading(true)
       try {
         const res = await fetch(`/api/transactions?limit=100`)
@@ -253,10 +257,8 @@ export default function DashboardPage() {
       } catch (e: unknown) {
         console.error('Error loading payments:', e)
         setSectionsLoading(false)
-      } finally {
-            setLoading(false)
-        }
       }
+    }
 
     if (isPinVerified) {
       load()
@@ -383,7 +385,7 @@ export default function DashboardPage() {
     console.log('📊 Total transactions:', filteredRows.length)
     
     // Debug: Show sample transactions with different methods
-    const methodSamples: Record<string, { count: number; totalRevenue: number; sample: any }> = {}
+    const methodSamples: Record<string, { count: number; totalRevenue: number; sample: TxRow }> = {}
     filteredRows.forEach(row => {
       const method = row.method || 'null'
       if (!methodSamples[method]) {
@@ -446,7 +448,7 @@ export default function DashboardPage() {
         const groups = groupsData.groups || []
 
         // Fetch services for each group and calculate stats
-        const categoryPromises = groups.map(async (group: any) => {
+        const categoryPromises = groups.map(async (group: { id: string; name: string; description: string }) => {
           try {
             const servicesResponse = await fetch(`/api/services?groupId=${group.id}`)
             if (!servicesResponse.ok) return null
@@ -454,14 +456,14 @@ export default function DashboardPage() {
             const services = servicesData.services || []
 
             // Calculate total price from service descriptions
-            const totalPrice = services.reduce((sum: number, service: any) => {
+            const totalPrice = services.reduce((sum: number, service: { description?: string }) => {
               const description = service.description || ''
               const priceMatch = description.match(/CA\$(\d+\.?\d*)/i)
               return sum + (priceMatch ? parseFloat(priceMatch[1]) : 0)
             }, 0)
 
             // Calculate total assigned staff count
-            const totalStaffCount = services.reduce((count: number, service: any) => {
+            const totalStaffCount = services.reduce((count: number, service: { teamMembers?: Array<unknown> }) => {
               const teamMembers = service.teamMembers || []
               return count + teamMembers.length
             }, 0)
@@ -1068,8 +1070,8 @@ export default function DashboardPage() {
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-          </div>
+                                      </div>
+                                      </div>
           
           <div className="flex justify-end space-x-2">
             <Button variant="outline" onClick={handleCancelCustomDate}>
@@ -1082,7 +1084,7 @@ export default function DashboardPage() {
             >
               Apply Filter
             </Button>
-          </div>
+                                    </div>
         </DialogContent>
       </Dialog>
 
@@ -1095,7 +1097,7 @@ export default function DashboardPage() {
                 <span className="text-white font-semibold text-lg">
                   {selectedStaff ? staffPerformance.find(s => s.staffId === selectedStaff)?.staffName.charAt(0).toUpperCase() : 'S'}
                 </span>
-              </div>
+                                  </div>
               <div>
                 <div className="text-xl font-semibold text-[#601625]">
                   {selectedStaff ? staffPerformance.find(s => s.staffId === selectedStaff)?.staffName : 'Staff Member'}
@@ -1109,27 +1111,27 @@ export default function DashboardPage() {
             const staff = staffPerformance.find(s => s.staffId === selectedStaff)
             if (!staff) return null
             
-            return (
+                                return (
               <div className="space-y-6 py-4">
                 {/* Performance Metrics Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
                     <div className="text-2xl font-bold text-[#601625]">{formatCurrency(staff.totalRevenue)}</div>
                     <div className="text-sm font-medium text-neutral-600 mt-1">Total Revenue</div>
-                  </div>
+                                      </div>
                   <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
                     <div className="text-2xl font-bold text-[#601625]">{Math.round(staff.totalServices)}</div>
                     <div className="text-sm font-medium text-neutral-600 mt-1">Services Completed</div>
-                  </div>
+                                      </div>
                   <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
                     <div className="text-2xl font-bold text-[#601625]">{staff.totalHours}h</div>
                     <div className="text-sm font-medium text-neutral-600 mt-1">Total Hours</div>
-                  </div>
+                                      </div>
                   <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
                     <div className="text-2xl font-bold text-[#601625]">{staff.efficiency}%</div>
                     <div className="text-sm font-medium text-neutral-600 mt-1">Efficiency</div>
-                  </div>
-                </div>
+                                    </div>
+                                  </div>
 
                 {/* Rating & Performance Details */}
                 <div className="grid md:grid-cols-2 gap-6">
@@ -1150,7 +1152,7 @@ export default function DashboardPage() {
                       </div>
                       <span className="text-lg font-bold text-[#601625]">{staff.avgRating.toFixed(1)}/5.0</span>
                     </div>
-                  </div>
+            </div>
 
                   <div className="space-y-4">
                     <h4 className="text-lg font-semibold text-[#601625]">Performance Summary</h4>
@@ -1158,16 +1160,16 @@ export default function DashboardPage() {
                       <div className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
                         <span className="text-sm font-medium text-neutral-600">Avg Revenue/Service</span>
                         <span className="font-bold text-[#601625]">{formatCurrency(staff.totalRevenue / staff.totalServices)}</span>
-                      </div>
+                  </div>
                       <div className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
                         <span className="text-sm font-medium text-neutral-600">Revenue/Hour</span>
                         <span className="font-bold text-[#601625]">{formatCurrency(staff.totalRevenue / staff.totalHours)}</span>
-                      </div>
+                  </div>
                       <div className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
                         <span className="text-sm font-medium text-neutral-600">Services/Hour</span>
                         <span className="font-bold text-[#601625]">{(staff.totalServices / staff.totalHours).toFixed(1)}</span>
-                      </div>
-                    </div>
+                </div>
+          </div>
                   </div>
                 </div>
               </div>
