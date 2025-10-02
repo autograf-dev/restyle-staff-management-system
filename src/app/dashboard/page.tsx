@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { StaffPerformanceTable, type StaffPerformance } from "@/components/staff-performance-table"
+import { ServicesRevenueTable, type ServiceRevenue } from "@/components/services-revenue-table"
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt } from "lucide-react"
@@ -63,7 +65,8 @@ export default function DashboardPage() {
   // Data State
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<TxRow[]>([])
-  const [staffPerformance, setStaffPerformance] = useState<any[]>([])
+  const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
+  const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [showAllStaff, setShowAllStaff] = useState(false)
   
@@ -243,6 +246,42 @@ export default function DashboardPage() {
     performance.sort((a, b) => b.totalRevenue - a.totalRevenue)
     
     setStaffPerformance(performance)
+
+    // Calculate services revenue
+    const servicesMap = new Map()
+    
+    rows.forEach(row => {
+      if (row.services) {
+        const services = row.services.split(',').map(s => s.trim()).filter(s => s)
+        const revenuePerService = (row.totalPaid || 0) / services.length
+        
+        services.forEach(service => {
+          if (!servicesMap.has(service)) {
+            servicesMap.set(service, {
+              name: service,
+              revenue: 0,
+              count: 0
+            })
+          }
+          
+          const serviceData = servicesMap.get(service)
+          serviceData.revenue += revenuePerService
+          serviceData.count += 1
+        })
+      }
+    })
+
+    const topServices = Array.from(servicesMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+      .map(service => ({
+        name: service.name,
+        revenue: service.revenue,
+        count: service.count,
+        avgPrice: service.revenue / service.count
+      }))
+    
+    setServicesRevenue(topServices)
   }, [rows])
 
   // Handle PIN verification
@@ -519,7 +558,7 @@ export default function DashboardPage() {
                         <div>
                           <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Total Tips</div>
                           <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.tips)}</div>
-                                    </div>
+            </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <TrendingUp className="h-5 w-5 text-[#601625]" />
                                     </div>
@@ -547,10 +586,10 @@ export default function DashboardPage() {
                         <div>
                           <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Active Staff</div>
                           <div className="text-[24px] font-normal text-[#601625] mt-1">{kpis.uniqueStaff}</div>
-                                      </div>
+            </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <Users className="h-5 w-5 text-[#601625]" />
-                                      </div>
+                                    </div>
                                     </div>
                 </CardContent>
               </Card>
@@ -561,11 +600,11 @@ export default function DashboardPage() {
                         <div>
                           <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Avg. Ticket</div>
                           <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.avg)}</div>
-                                      </div>
+                                    </div>
                         <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                           <CalendarIcon className="h-5 w-5 text-[#601625]" />
-                                      </div>
                                     </div>
+                                  </div>
                 </CardContent>
               </Card>
                     </>
@@ -584,63 +623,12 @@ export default function DashboardPage() {
                   </Badge>
                 </div>
                 
-                <Card className="rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full table-fixed">
-                        <thead className="bg-[#601625]/5">
-                          <tr>
-                            <th className="text-left p-4 text-sm font-normal text-[#601625] w-2/5 border-r border-[#601625]/10">Staff Name</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/5 border-r border-[#601625]/10">Revenue</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6 border-r border-[#601625]/10">Services</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6 border-r border-[#601625]/10">Rating</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6">Efficiency</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {staffPerformance.slice(0, 5).map((staff, index) => (
-                            <tr 
-                              key={staff.staffId}
-                              className={`border-b border-[#601625]/10 hover:bg-[#601625]/5 cursor-pointer transition-colors ${
-                                selectedStaff === staff.staffId ? 'bg-[#601625]/10' : ''
-                              }`}
-                              onClick={() => setSelectedStaff(selectedStaff === staff.staffId ? null : staff.staffId)}
-                            >
-                              <td className="p-4 border-r border-[#601625]/10">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
-                                    <span className="text-white font-normal text-sm">
-                                      {staff.staffName.charAt(0).toUpperCase()}
-                                    </span>
-                                    </div>
-                                  <span className="font-normal text-slate-700">{staff.staffName}</span>
-                                    </div>
-                              </td>
-                              <td className="p-4 text-right border-r border-[#601625]/10">
-                                <span className="font-normal text-[#601625]">{formatCurrency(staff.totalRevenue)}</span>
-                              </td>
-                              <td className="p-4 text-right border-r border-[#601625]/10">
-                                <span className="font-normal text-slate-600">{Math.round(staff.totalServices)}</span>
-                              </td>
-                              <td className="p-4 text-right border-r border-[#601625]/10">
-                                <Badge 
-                                  variant={staff.avgRating >= 4.5 ? "default" : staff.avgRating >= 4.0 ? "secondary" : "outline"}
-                                  className="text-xs"
-                                >
-                                  {staff.avgRating.toFixed(1)}★
-                                </Badge>
-                              </td>
-                              <td className="p-4 text-right">
-                                <span className="font-normal text-slate-600">{staff.efficiency}%</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                                    </div>
-                </CardContent>
-              </Card>
-              </div>
+                <StaffPerformanceTable 
+                  data={staffPerformance.slice(0, 5)} 
+                  selectedStaff={selectedStaff}
+                  onStaffSelect={setSelectedStaff}
+                />
+                                      </div>
 
               {/* Services Revenue - 50% */}
               <div className="space-y-4">
@@ -649,79 +637,11 @@ export default function DashboardPage() {
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
                     Top 5 Services
                   </Badge>
-                </div>
+                                      </div>
                 
-                <Card className="rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full table-fixed">
-                        <thead className="bg-[#601625]/5">
-                          <tr>
-                            <th className="text-left p-4 text-sm font-normal text-[#601625] w-2/5 border-r border-[#601625]/10">Service Name</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/5 border-r border-[#601625]/10">Revenue</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6 border-r border-[#601625]/10">Bookings</th>
-                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6">Avg. Price</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            // Calculate services revenue from transaction data
-                            const servicesMap = new Map()
-                            
-                            rows.forEach(row => {
-                              if (row.services) {
-                                const services = row.services.split(',').map(s => s.trim()).filter(s => s)
-                                const revenuePerService = (row.totalPaid || 0) / services.length
-                                
-                                services.forEach(service => {
-                                  if (!servicesMap.has(service)) {
-                                    servicesMap.set(service, {
-                                      name: service,
-                                      revenue: 0,
-                                      count: 0
-                                    })
-                                  }
-                                  
-                                  const serviceData = servicesMap.get(service)
-                                  serviceData.revenue += revenuePerService
-                                  serviceData.count += 1
-                                })
-                              }
-                            })
-                            
-                            const topServices = Array.from(servicesMap.values())
-                              .sort((a, b) => b.revenue - a.revenue)
-                              .slice(0, 5)
-                            
-                            return topServices.map((service, index) => (
-                              <tr key={service.name} className="border-b border-[#601625]/10 hover:bg-[#601625]/5 transition-colors">
-                                <td className="p-4 border-r border-[#601625]/10">
-                                  <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
-                                      <span className="text-white font-normal text-sm">{index + 1}</span>
-                      </div>
-                                    <span className="font-normal text-slate-700">{service.name}</span>
-                    </div>
-                                </td>
-                                <td className="p-4 text-right border-r border-[#601625]/10">
-                                  <span className="font-normal text-[#601625]">{formatCurrency(service.revenue)}</span>
-                                </td>
-                                <td className="p-4 text-right border-r border-[#601625]/10">
-                                  <span className="font-normal text-slate-600">{service.count}</span>
-                                </td>
-                                <td className="p-4 text-right">
-                                  <span className="font-normal text-slate-600">{formatCurrency(service.revenue / service.count)}</span>
-                                </td>
-                              </tr>
-                            ))
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
-                </CardContent>
-              </Card>
-              </div>
-            </div>
+                <ServicesRevenueTable data={servicesRevenue} />
+                                    </div>
+                                  </div>
 
             {/* Expanded Staff Detail Card */}
             {selectedStaff && (
