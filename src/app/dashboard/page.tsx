@@ -79,8 +79,51 @@ export default function DashboardPage() {
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("today")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [customDateDialogOpen, setCustomDateDialogOpen] = useState(false)
+  const [tempStartDate, setTempStartDate] = useState<Date | undefined>()
+  const [tempEndDate, setTempEndDate] = useState<Date | undefined>()
+  const [staffDetailDialogOpen, setStaffDetailDialogOpen] = useState(false)
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
+
+  // Handle custom date dialog
+  const handleCustomDateClick = () => {
+    setCustomDateDialogOpen(true)
+    // Initialize with current date range if available
+    if (dateRange?.from) setTempStartDate(dateRange.from)
+    if (dateRange?.to) setTempEndDate(dateRange.to)
+  }
+
+  const handleApplyCustomDate = () => {
+    if (tempStartDate && tempEndDate) {
+      // Ensure end date includes the full day (23:59:59)
+      const endDate = new Date(tempEndDate)
+      endDate.setHours(23, 59, 59, 999)
+      
+      setDateRange({ from: tempStartDate, to: endDate })
+      setSelectedFilter("custom")
+      setCustomDateDialogOpen(false)
+    }
+  }
+
+  const handleCancelCustomDate = () => {
+    setCustomDateDialogOpen(false)
+    setTempStartDate(undefined)
+    setTempEndDate(undefined)
+  }
+
+  // Handle staff detail dialog
+  const handleStaffSelect = (staffId: string | null) => {
+    if (staffId) {
+      setSelectedStaff(staffId)
+      setStaffDetailDialogOpen(true)
+    }
+  }
+
+  const handleCloseStaffDetail = () => {
+    setStaffDetailDialogOpen(false)
+    setSelectedStaff(null)
+  }
 
   // Get date range based on filter
   const getDateRange = (filter: FilterType): { start: Date; end: Date } => {
@@ -120,11 +163,34 @@ export default function DashboardPage() {
   // Filter rows based on selected date range
   const filteredRows = useMemo(() => {
     const { start, end } = getDateRange(selectedFilter)
-    return rows.filter(row => {
+    
+    // Normalize dates to compare only date parts (ignore time)
+    const normalizeDate = (date: Date) => {
+      const normalized = new Date(date)
+      normalized.setHours(0, 0, 0, 0)
+      return normalized
+    }
+    
+    const startDate = normalizeDate(start)
+    const endDate = normalizeDate(end)
+    
+    const filtered = rows.filter(row => {
       if (!row.paymentDate) return false
-      const paymentDate = new Date(row.paymentDate)
-      return paymentDate >= start && paymentDate <= end
+      const paymentDate = normalizeDate(new Date(row.paymentDate))
+      return paymentDate >= startDate && paymentDate <= endDate
     })
+    
+    // Debug logging
+    console.log('📅 Date Filter Debug:', {
+      selectedFilter,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      totalRows: rows.length,
+      filteredRows: filtered.length,
+      samplePaymentDates: filtered.slice(0, 3).map(r => r.paymentDate)
+    })
+    
+    return filtered
   }, [rows, selectedFilter, dateRange])
 
   // Calculate KPIs from filtered data
@@ -188,9 +254,9 @@ export default function DashboardPage() {
         console.error('Error loading payments:', e)
         setSectionsLoading(false)
       } finally {
-        setLoading(false)
+            setLoading(false)
+        }
       }
-    }
 
     if (isPinVerified) {
       load()
@@ -411,7 +477,7 @@ export default function DashboardPage() {
             }
           } catch (error) {
             console.error(`Error fetching services for group ${group.name}:`, error)
-            return {
+      return {
               id: group.id,
               name: group.name,
               description: group.description,
@@ -659,45 +725,21 @@ export default function DashboardPage() {
                 This Year
               </Button>
               
-              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={selectedFilter === "custom" ? "default" : "outline"}
-                    size="sm"
-                    className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
-                      selectedFilter === "custom"
-                        ? "bg-[#601625] hover:bg-[#751a29] text-white"
-                        : "hover:bg-[#601625]/5"
-                    }`}
-                  >
-                    <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                    {dateRange?.from && dateRange?.to
-                      ? `${format(dateRange.from, "MMM dd")} - ${format(dateRange.to, "MMM dd")}`
-                      : "Custom"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={(range) => {
-                      setDateRange(range)
-                      // Only close and apply filter when BOTH dates are selected
-                      if (range?.from && range?.to) {
-                        setSelectedFilter("custom")
-                        setIsCalendarOpen(false)
-                      }
-                    }}
-                    disabled={(date) => {
-                      // Disable future dates - only allow today and past dates
-                      return date > new Date()
-                    }}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
+              <Button
+                variant={selectedFilter === "custom" ? "default" : "outline"}
+                size="sm"
+                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                  selectedFilter === "custom"
+                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                    : "hover:bg-[#601625]/5"
+                }`}
+                onClick={handleCustomDateClick}
+              >
+                <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                {dateRange?.from && dateRange?.to
+                  ? `${format(dateRange.from, "MMM dd")} - ${format(dateRange.to, "MMM dd")}`
+                  : "Custom"}
+              </Button>
                   </div>
 
             {/* Enhanced KPI Cards - Cloned from Payments Page */}
@@ -806,8 +848,8 @@ export default function DashboardPage() {
                             <Skeleton className="h-4 w-16" />
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                </CardContent>
+              </Card>
                   ))
                 ) : (
                   paymentMethods.map((method, index) => (
@@ -829,8 +871,8 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                </CardContent>
+              </Card>
                   ))
                 )}
               </div>
@@ -845,8 +887,8 @@ export default function DashboardPage() {
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
                     {sectionsLoading ? <Skeleton className="h-4 w-8" /> : `${serviceCategories.length} Categories`}
                   </Badge>
-                </div>
-              </div>
+                                    </div>
+                                    </div>
               
               <div className="flex items-center gap-3 overflow-x-auto pb-2">
                 {sectionsLoading ? (
@@ -862,8 +904,8 @@ export default function DashboardPage() {
                             <Skeleton className="h-4 w-20 mx-auto" />
                             <Skeleton className="h-3 w-16 mx-auto" />
                             <Skeleton className="h-3 w-12 mx-auto" />
-                          </div>
-                        </div>
+                                  </div>
+                                </div>
                       </CardContent>
                     </Card>
                   ))
@@ -878,8 +920,8 @@ export default function DashboardPage() {
                           <div className="h-7 w-7 rounded-lg bg-[#601625]/10 flex items-center justify-center">
                             <div className="h-4 w-4 text-[#601625]">
                               {category.icon}
-                            </div>
-                          </div>
+                      </div>
+                    </div>
                           <div className="w-full">
                             <div className="text-base font-semibold text-[#601625] mb-1 truncate">
                               {category.name}
@@ -890,8 +932,8 @@ export default function DashboardPage() {
                             </div>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                </CardContent>
+              </Card>
                   ))
                 )}
               </div>
@@ -907,7 +949,7 @@ export default function DashboardPage() {
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
                     {sectionsLoading ? <Skeleton className="h-4 w-8" /> : "Top 5 Staff"}
                   </Badge>
-                </div>
+                                    </div>
                 
                 {sectionsLoading ? (
                   <div className="space-y-3">
@@ -920,19 +962,19 @@ export default function DashboardPage() {
                             <Skeleton className="h-3 w-16" />
                             <Skeleton className="h-3 w-12" />
                             <Skeleton className="h-3 w-14" />
-                          </div>
-                        </div>
-                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                     ))}
                   </div>
                 ) : (
                   <StaffPerformanceTable 
                     data={staffPerformance.slice(0, 5)} 
                     selectedStaff={selectedStaff}
-                    onStaffSelect={setSelectedStaff}
+                    onStaffSelect={handleStaffSelect}
                   />
                 )}
-              </div>
+                      </div>
 
               {/* Services Revenue - 50% */}
               <div className="space-y-4">
@@ -941,7 +983,7 @@ export default function DashboardPage() {
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
                     {sectionsLoading ? <Skeleton className="h-4 w-8" /> : "Top 5 Services"}
                   </Badge>
-                </div>
+                    </div>
                 
                 {sectionsLoading ? (
                   <div className="space-y-3">
@@ -954,109 +996,194 @@ export default function DashboardPage() {
                             <Skeleton className="h-3 w-16" />
                             <Skeleton className="h-3 w-12" />
                             <Skeleton className="h-3 w-14" />
-                          </div>
-                        </div>
-                      </div>
+                                      </div>
+                                      </div>
+                                    </div>
                     ))}
-                  </div>
+                                  </div>
                 ) : (
                   <ServicesRevenueTable data={servicesRevenue} />
                 )}
-              </div>
-                                      </div>
-
-            {/* Expanded Staff Detail Card */}
-            {selectedStaff && (
-              <Card className="rounded-xl border-2 border-slate-300 shadow-lg bg-gradient-to-r from-slate-50 to-white">
-                <CardContent className="p-6">
-                  {(() => {
-                    const staff = staffPerformance.find(s => s.staffId === selectedStaff)
-                    if (!staff) return null
-                    
-                                return (
-                      <div className="space-y-6">
-                        {/* Staff Header */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-full bg-slate-600 flex items-center justify-center">
-                              <span className="text-white font-medium text-lg">
-                                {staff.staffName.charAt(0).toUpperCase()}
-                              </span>
-                                      </div>
-                            <div>
-                              <h3 className="text-xl font-medium text-slate-700">{staff.staffName}</h3>
-                              <p className="text-sm text-slate-500">Staff Member</p>
-                                      </div>
-                                    </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedStaff(null)}
-                            className="text-slate-600 border-slate-200 hover:bg-slate-50"
-                          >
-                            Close
-                          </Button>
-                                  </div>
-
-                        {/* Performance Metrics Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                            <div className="text-2xl font-medium text-slate-800">{formatCurrency(staff.totalRevenue)}</div>
-                            <div className="text-sm text-slate-500">Total Revenue</div>
-                                      </div>
-                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                            <div className="text-2xl font-medium text-slate-800">{Math.round(staff.totalServices)}</div>
-                            <div className="text-sm text-slate-500">Services Completed</div>
-                                      </div>
-                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                            <div className="text-2xl font-medium text-slate-800">{staff.totalHours}h</div>
-                            <div className="text-sm text-slate-500">Total Hours</div>
-                                      </div>
-                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-                            <div className="text-2xl font-medium text-slate-800">{staff.efficiency}%</div>
-                            <div className="text-sm text-slate-500">Efficiency</div>
-                                    </div>
-                                  </div>
-
-                        {/* Rating & Performance Details */}
-                        <div className="grid md:grid-cols-2 gap-6">
-                          <div className="space-y-3">
-                            <h4 className="font-medium text-slate-700">Performance Rating</h4>
-                            <div className="flex items-center gap-2">
-                              <div className="flex">
-                                {[...Array(5)].map((_, i) => (
-                                  <span
-                                    key={i}
-                                    className={`text-lg ${
-                                      i < Math.floor(staff.avgRating) ? 'text-yellow-400' : 'text-gray-300'
-                                    }`}
-                                  >
-                                    ★
-                                  </span>
-                                ))}
                       </div>
-                              <span className="font-medium text-slate-700">{staff.avgRating.toFixed(1)}/5.0</span>
                     </div>
-            </div>
 
-                          <div className="space-y-3">
-                            <h4 className="font-medium text-slate-700">Performance Summary</h4>
-                            <div className="text-sm text-slate-600 space-y-1">
-                              <p>• Average revenue per service: {formatCurrency(staff.totalRevenue / staff.totalServices)}</p>
-                              <p>• Revenue per hour: {formatCurrency(staff.totalRevenue / staff.totalHours)}</p>
-                              <p>• Services per hour: {(staff.totalServices / staff.totalHours).toFixed(1)}</p>
-                  </div>
-                  </div>
-                </div>
-                      </div>
-                    )
-                  })()}
-              </CardContent>
-            </Card>
-            )}
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* Custom Date Range Dialog */}
+      <Dialog open={customDateDialogOpen} onOpenChange={setCustomDateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Date Range</DialogTitle>
+            <DialogDescription>
+              Choose your start and end dates to filter the dashboard data.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Start Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {tempStartDate ? format(tempStartDate, "PPP") : "Select start date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={tempStartDate}
+                    onSelect={setTempStartDate}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">End Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {tempEndDate ? format(tempEndDate, "PPP") : "Select end date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={tempEndDate}
+                    onSelect={setTempEndDate}
+                    disabled={(date) => date > new Date() || (tempStartDate ? date < tempStartDate : false)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={handleCancelCustomDate}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleApplyCustomDate}
+              disabled={!tempStartDate || !tempEndDate}
+              className="bg-[#601625] hover:bg-[#751a29]"
+            >
+              Apply Filter
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Staff Detail Dialog */}
+      <Dialog open={staffDetailDialogOpen} onOpenChange={setStaffDetailDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-[#601625] flex items-center justify-center">
+                <span className="text-white font-semibold text-lg">
+                  {selectedStaff ? staffPerformance.find(s => s.staffId === selectedStaff)?.staffName.charAt(0).toUpperCase() : 'S'}
+                </span>
+              </div>
+              <div>
+                <div className="text-xl font-semibold text-[#601625]">
+                  {selectedStaff ? staffPerformance.find(s => s.staffId === selectedStaff)?.staffName : 'Staff Member'}
+                </div>
+                <div className="text-sm text-neutral-500">Performance Details</div>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedStaff && (() => {
+            const staff = staffPerformance.find(s => s.staffId === selectedStaff)
+            if (!staff) return null
+            
+            return (
+              <div className="space-y-6 py-4">
+                {/* Performance Metrics Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
+                    <div className="text-2xl font-bold text-[#601625]">{formatCurrency(staff.totalRevenue)}</div>
+                    <div className="text-sm font-medium text-neutral-600 mt-1">Total Revenue</div>
+                  </div>
+                  <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
+                    <div className="text-2xl font-bold text-[#601625]">{Math.round(staff.totalServices)}</div>
+                    <div className="text-sm font-medium text-neutral-600 mt-1">Services Completed</div>
+                  </div>
+                  <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
+                    <div className="text-2xl font-bold text-[#601625]">{staff.totalHours}h</div>
+                    <div className="text-sm font-medium text-neutral-600 mt-1">Total Hours</div>
+                  </div>
+                  <div className="text-center p-4 bg-[#601625]/5 rounded-xl border border-[#601625]/10">
+                    <div className="text-2xl font-bold text-[#601625]">{staff.efficiency}%</div>
+                    <div className="text-sm font-medium text-neutral-600 mt-1">Efficiency</div>
+                  </div>
+                </div>
+
+                {/* Rating & Performance Details */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-semibold text-[#601625]">Performance Rating</h4>
+                    <div className="flex items-center gap-3">
+                      <div className="flex">
+                        {[...Array(5)].map((_, i) => (
+                          <span
+                            key={i}
+                            className={`text-2xl ${
+                              i < Math.floor(staff.avgRating) ? 'text-yellow-400' : 'text-neutral-300'
+                            }`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                      <span className="text-lg font-bold text-[#601625]">{staff.avgRating.toFixed(1)}/5.0</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-semibold text-[#601625]">Performance Summary</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
+                        <span className="text-sm font-medium text-neutral-600">Avg Revenue/Service</span>
+                        <span className="font-bold text-[#601625]">{formatCurrency(staff.totalRevenue / staff.totalServices)}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
+                        <span className="text-sm font-medium text-neutral-600">Revenue/Hour</span>
+                        <span className="font-bold text-[#601625]">{formatCurrency(staff.totalRevenue / staff.totalHours)}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
+                        <span className="text-sm font-medium text-neutral-600">Services/Hour</span>
+                        <span className="font-bold text-[#601625]">{(staff.totalServices / staff.totalHours).toFixed(1)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          
+          <div className="flex justify-end pt-4 border-t border-neutral-200">
+            <Button 
+              onClick={handleCloseStaffDetail}
+              className="bg-[#601625] hover:bg-[#751a29] text-white"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </RoleGuard>
   )
 }
