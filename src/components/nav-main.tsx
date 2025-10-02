@@ -98,7 +98,7 @@ export const NavMain = React.memo(function NavMain({
           <Collapsible
             key={item.title}
             asChild
-            defaultOpen={parentActive}
+            defaultOpen={parentActive || item.title === "Manage"}
             className="group/collapsible"
           >
             <SidebarMenuItem>
