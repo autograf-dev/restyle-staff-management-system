@@ -3,382 +3,46 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { RoleGuard } from "@/components/role-guard"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useEffect, useMemo, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { 
-  Calendar, 
-  Users, 
-  DollarSign, 
-  Clock, 
-  TrendingUp, 
-  TrendingDown,
-  Activity,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  UserCheck,
-  UserX,
-  CalendarDays,
-  RefreshCcw,
-  Lock,
-  Eye,
-  EyeOff,
-  ArrowLeft
-} from "lucide-react"
-import { 
-  LineChart, 
-  Line, 
-  BarChart, 
-  Bar, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  ResponsiveContainer,
-  Area,
-  AreaChart
-} from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from "@/components/ui/chart"
+import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
+import { format } from "date-fns"
+import type { DateRange } from "react-day-picker"
 
-// Types
-type Appointment = {
+interface TxRow {
   id: string
-  calendar_id: string
-  contact_id: string
-  title: string
-  status: string
-  appointment_status: string
-  assigned_user_id: string
-  address: string
-  is_recurring: boolean
-  trace_id: string
-  serviceName?: string
-  startTime?: string
-  endTime?: string
-  assignedStaffFirstName?: string
-  assignedStaffLastName?: string
-  contactName?: string
-  contactPhone?: string
-}
-
-type Contact = {
+  paymentDate: string | null
+  method: string | null
+  subtotal: number | null
+  tax: number | null
+  tip: number | null
+  totalPaid: number | null
+  services: string | null
+  serviceIds: string | null
+  staff: string | null
+  customerPhone: string | null
+  customerLookup: string | null
+  status?: string | null
+  paymentStatus?: string | null
+  paid?: string | null
+  items?: Array<{
   id: string
-  contactName: string
-  firstName: string
-  lastName: string
-  phone: string | null
-  dateAdded: string
-}
-
-type Staff = {
-  id?: string
-  firstName?: string
-  lastName?: string
-  [key: string]: unknown
-}
-
-// Custom hooks
-function useAppointments() {
-  const [data, setData] = useState<Appointment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<number>(0)
-
-  useEffect(() => {
-    const fetchAppointments = async (forceRefresh: boolean = false) => {
-      setLoading(true)
-      setError(null)
-      
-      const controller = new AbortController()
-      const { signal } = controller
-
-      try {
-        // Try cache first (10 minutes TTL)
-        try {
-          const cached = JSON.parse(localStorage.getItem('restyle.dashboard.appointments') || 'null') as { data: Appointment[]; fetchedAt: number } | null
-          const ttl = 10 * 60 * 1000
-          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
-            setData(cached.data || [])
-            setLastUpdated(cached.fetchedAt)
-            setLoading(false)
-            return () => controller.abort()
-          }
-        } catch {}
-
-        // Use the correct endpoint from appointments page
-        const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getAllBookings", { signal })
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-        }
-        
-        const json = await res.json()
-        const bookings = json?.bookings || []
-        
-        // Process a limited number of appointments for dashboard performance
-        const limitedBookings = bookings.slice(0, 50)
-        
-        // Process appointments in smaller batches to avoid overwhelming the API
-        const enrichedBookings: Appointment[] = []
-        
-        for (let i = 0; i < limitedBookings.length; i += 5) {
-          if (signal.aborted) break
-          
-          const batch = limitedBookings.slice(i, i + 5)
-          const batchResults = await Promise.all(
-            batch.map(async (booking: { id?: string; calendar_id?: string; contact_id?: string; assigned_user_id?: string; title?: string; status?: string; startTime?: string; endTime?: string; appointment_status?: string; address?: string; is_recurring?: boolean; trace_id?: string }) => {
-              if (signal.aborted) throw new Error('Aborted')
-
-              const details: Appointment = {
-                id: String(booking.id || ""),
-                calendar_id: String(booking.calendar_id || ""),
-                contact_id: String(booking.contact_id || ""),
-                title: booking.title || "",
-                status: booking.status || "",
-                appointment_status: booking.appointment_status || "",
-                assigned_user_id: String(booking.assigned_user_id || ""),
-                address: booking.address || "",
-                is_recurring: booking.is_recurring || false,
-                trace_id: booking.trace_id || "",
-                serviceName: booking.title || 'Untitled Service',
-              }
-
-              // Try to fetch appointment details (with timeout and error handling)
-              try {
-                const apptRes = await Promise.race([
-                  fetch(`https://restyle-backend.netlify.app/.netlify/functions/getBooking?id=${booking.id}`, { signal }),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-                ]) as Response
-                
-                if (apptRes.ok && !signal.aborted) {
-                  const apptData = await apptRes.json()
-                  if (apptData.booking) {
-                    details.startTime = apptData.booking.startTime
-                    details.endTime = apptData.booking.endTime
-                    details.appointment_status = apptData.booking.appointmentStatus || details.appointment_status
-                  }
-                }
-              } catch (error) {
-                // Silently fail for individual appointment details
-                console.warn(`Failed to fetch details for booking ${booking.id}:`, error)
-              }
-
-              return details
-            })
-          )
-          
-          enrichedBookings.push(...batchResults)
-          
-          // Small delay between batches
-          if (i + 5 < limitedBookings.length && !signal.aborted) {
-            await new Promise(resolve => setTimeout(resolve, 100))
-          }
-        }
-        
-        if (!signal.aborted) {
-          setData(enrichedBookings)
-          const nowTs = Date.now()
-          setLastUpdated(nowTs)
-          try { localStorage.setItem('restyle.dashboard.appointments', JSON.stringify({ data: enrichedBookings, fetchedAt: nowTs })) } catch {}
-        }
-      } catch (error) {
-        if (!signal.aborted) {
-          console.error("Failed to fetch appointments:", error)
-          setError(error instanceof Error ? error.message : 'Unknown error')
-        }
-      } finally {
-        if (!signal.aborted) {
-          setLoading(false)
-        }
-      }
-
-      return () => controller.abort()
-    }
-
-    fetchAppointments()
-
-    // Auto-refresh every 10 minutes
-    const interval = setInterval(() => fetchAppointments(true), 10 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const refresh = () => {
-    try { localStorage.removeItem('restyle.dashboard.appointments') } catch {}
-    // Trigger a fresh fetch
-    ;(async () => {
-      setLoading(true)
-      try { await fetch("/api/clear-auth-cookie") } catch {}
-      // Reuse effect logic by calling endpoint directly
-      const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getAllBookings")
-      const json = await res.json().catch(() => ({}))
-      const bookings = json?.bookings || []
-      const limited = bookings.slice(0, 50)
-      setData(limited)
-      const nowTs = Date.now()
-      setLastUpdated(nowTs)
-      try { localStorage.setItem('restyle.dashboard.appointments', JSON.stringify({ data: limited, fetchedAt: nowTs })) } catch {}
-      setLoading(false)
-    })()
-  }
-
-  return { data, loading, error, lastUpdated, refresh }
-}
-
-function useContacts() {
-  const [data, setData] = useState<Contact[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<number>(0)
-
-  useEffect(() => {
-    const fetchContacts = async (forceRefresh: boolean = false) => {
-      setLoading(true)
-      setError(null)
-      
-      const controller = new AbortController()
-      const { signal } = controller
-
-      try {
-        try {
-          const cached = JSON.parse(localStorage.getItem('restyle.dashboard.contacts') || 'null') as { data: Contact[]; fetchedAt: number } | null
-          const ttl = 10 * 60 * 1000
-          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
-            setData(cached.data || [])
-            setLastUpdated(cached.fetchedAt)
-            setLoading(false)
-            return () => controller.abort()
-          }
-        } catch {}
-
-        // Use the correct endpoint with limit for dashboard performance
-        const res = await fetch("https://restyle-backend.netlify.app/.netlify/functions/getcontacts?page=1&limit=500", { signal })
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-        }
-        
-        const json = await res.json()
-        const contacts = Array.isArray(json?.contacts) 
-          ? json.contacts 
-          : (json?.contacts?.contacts || [])
-        
-        const mapped: Contact[] = contacts.map((c: { id?: string; firstName?: string; lastName?: string; phone?: string; email?: string; dateAdded?: string; contactName?: string }) => ({
-          id: String(c.id ?? ""),
-          contactName: c.contactName || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
-          firstName: c.firstName || "",
-          lastName: c.lastName || "",
-          phone: c.phone ?? null,
-          dateAdded: c.dateAdded || new Date().toISOString(),
-        }))
-        
-        if (!signal.aborted) {
-          setData(mapped)
-          const nowTs = Date.now()
-          setLastUpdated(nowTs)
-          try { localStorage.setItem('restyle.dashboard.contacts', JSON.stringify({ data: mapped, fetchedAt: nowTs })) } catch {}
-        }
-      } catch (error) {
-        if (!signal.aborted) {
-          console.error("Failed to fetch contacts:", error)
-          setError(error instanceof Error ? error.message : 'Unknown error')
-        }
-      } finally {
-        if (!signal.aborted) {
-          setLoading(false)
-        }
-      }
-
-      return () => controller.abort()
-    }
-
-    fetchContacts()
-    const interval = setInterval(() => fetchContacts(true), 10 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const refresh = () => { try { localStorage.removeItem('restyle.dashboard.contacts') } catch {} }
-  return { data, loading, error, lastUpdated, refresh }
-}
-
-function useStaff() {
-  const [data, setData] = useState<Staff[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<number>(0)
-
-  useEffect(() => {
-    const fetchStaff = async (forceRefresh: boolean = false) => {
-      setLoading(true)
-      setError(null)
-      
-      try {
-        try {
-          const cached = JSON.parse(localStorage.getItem('restyle.dashboard.staff') || 'null') as { data: Staff[]; fetchedAt: number } | null
-          const ttl = 10 * 60 * 1000
-          if (!forceRefresh && cached && Date.now() - cached.fetchedAt < ttl) {
-            setData(cached.data || [])
-            setLastUpdated(cached.fetchedAt)
-            setLoading(false)
-            return
-          }
-        } catch {}
-
-        const res = await fetch('/api/barber-hours')
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-        }
-        
-        const json = await res.json()
-        const mapped = json?.data || []
-        setData(mapped)
-        const nowTs = Date.now()
-        setLastUpdated(nowTs)
-        try { localStorage.setItem('restyle.dashboard.staff', JSON.stringify({ data: mapped, fetchedAt: nowTs })) } catch {}
-      } catch (error) {
-        console.error("Failed to fetch staff:", error)
-        setError(error instanceof Error ? error.message : 'Unknown error')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchStaff()
-    const interval = setInterval(() => fetchStaff(true), 10 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const refresh = () => { try { localStorage.removeItem('restyle.dashboard.staff') } catch {} }
-  return { data, loading, error, lastUpdated, refresh }
-}
-
-// Utility functions
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-US', { 
-    style: 'currency', 
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount)
-}
-
-function getAppointmentStatus(appointment: Appointment) {
-  const status = (appointment.appointment_status || '').toLowerCase()
-  const now = new Date()
-  const startTime = appointment.startTime ? new Date(appointment.startTime) : null
-  
-  if (status === 'cancelled') return 'cancelled'
-  if (status === 'confirmed') return 'confirmed'
-  if (!startTime) return 'pending'
-  
-  if (startTime < now) return 'completed'
-  return 'upcoming'
+    serviceId: string
+    serviceName: string
+    price: number
+    staffName: string
+    staffTipSplit: number
+    staffTipCollected: number
+  }>
 }
 
 export default function DashboardPage() {
@@ -395,11 +59,191 @@ export default function DashboardPage() {
   // Dashboard PIN - you can change this to any 4-6 digit PIN
   const DASHBOARD_PIN = "57216"
   const MAX_ATTEMPTS = 10
+
+  // Data State
+  const [loading, setLoading] = useState(true)
+  const [rows, setRows] = useState<TxRow[]>([])
+  const [staffPerformance, setStaffPerformance] = useState<any[]>([])
+  const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
+  const [showAllStaff, setShowAllStaff] = useState(false)
   
-  // All hooks must be called at the top level
-  const { data: appointments, loading: appointmentsLoading, error: appointmentsError, refresh: refreshAppointments } = useAppointments()
-  const { data: contacts, loading: contactsLoading, error: contactsError, refresh: refreshContacts } = useContacts()
-  const { data: staff, loading: staffLoading, error: staffError, refresh: refreshStaff } = useStaff()
+  // Date Filter State
+  type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom"
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>("today")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+
+  const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
+
+  // Get date range based on filter
+  const getDateRange = (filter: FilterType): { start: Date; end: Date } => {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    
+    switch (filter) {
+      case "today":
+        return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      case "thisWeek": {
+        const weekStart = new Date(today)
+        weekStart.setDate(today.getDate() - today.getDay())
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekStart.getDate() + 7)
+        return { start: weekStart, end: weekEnd }
+      }
+      case "thisMonth": {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+        return { start: monthStart, end: monthEnd }
+      }
+      case "thisYear": {
+        const yearStart = new Date(now.getFullYear(), 0, 1)
+        const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59)
+        return { start: yearStart, end: yearEnd }
+      }
+      case "custom":
+        if (dateRange?.from && dateRange?.to) {
+          return { start: dateRange.from, end: dateRange.to }
+        }
+        return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      default:
+        return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+    }
+  }
+
+  // Filter rows based on selected date range
+  const filteredRows = useMemo(() => {
+    const { start, end } = getDateRange(selectedFilter)
+    return rows.filter(row => {
+      if (!row.paymentDate) return false
+      const paymentDate = new Date(row.paymentDate)
+      return paymentDate >= start && paymentDate <= end
+    })
+  }, [rows, selectedFilter, dateRange])
+
+  // Calculate KPIs from filtered data
+  const kpis = useMemo(() => {
+    const count = filteredRows.length
+    const revenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
+    const tips = filteredRows.reduce((sum, r) => sum + Number(r.tip || 0), 0)
+    const subtotal = filteredRows.reduce((sum, r) => sum + Number(r.subtotal || 0), 0)
+    const tax = filteredRows.reduce((sum, r) => sum + Number(r.tax || 0), 0)
+    const avg = count > 0 ? revenue / count : 0
+    
+    // Calculate unique staff count - handle comma-separated staff names
+    const uniqueStaff = new Set(
+      filteredRows
+        .map(r => r.staff)
+        .filter(Boolean)
+        .flatMap(staff => staff!.split(',').map(name => name.trim()))
+        .filter(name => name.length > 0)
+    ).size
+    
+    // Calculate payment method breakdown
+    const paymentMethods = filteredRows.reduce((acc, r) => {
+      const method = (r.method || 'other').toLowerCase()
+      const amount = Number(r.totalPaid || 0)
+      
+      if (method.includes('cash')) {
+        acc.cash += amount
+      } else if (method.includes('card') || method.includes('credit') || method.includes('debit')) {
+        acc.card += amount
+      } else if (method.includes('gift')) {
+        acc.giftCard += amount
+      } else {
+        acc.other += amount
+      }
+      
+      return acc
+    }, { cash: 0, card: 0, giftCard: 0, other: 0 })
+    
+    return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods }
+  }, [filteredRows])
+
+  // Fetch transactions data
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/transactions?limit=100`)
+        const json = await res.json()
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
+        
+        const transactions = json.data || []
+        setRows(transactions)
+      } catch (e: unknown) {
+        console.error('Error loading payments:', e)
+      } finally {
+          setLoading(false)
+        }
+      }
+
+    if (isPinVerified) {
+      load()
+    }
+  }, [isPinVerified])
+
+  // Calculate staff performance
+  useEffect(() => {
+    if (rows.length === 0) return
+
+    // Group transactions by staff
+    const staffMap = new Map()
+    
+    rows.forEach(row => {
+      if (row.staff) {
+        // Split staff field by comma and process each staff member
+        const staffNames = row.staff.split(',').map(name => name.trim()).filter(name => name)
+        
+        staffNames.forEach(staffName => {
+          if (!staffMap.has(staffName)) {
+            staffMap.set(staffName, {
+              staffId: staffName,
+              staffName: staffName,
+              totalRevenue: 0,
+              totalServices: 0,
+              totalHours: 0,
+              ratings: []
+            })
+          }
+          
+          const staff = staffMap.get(staffName)
+          // Split revenue equally among staff members
+          staff.totalRevenue += (row.totalPaid || 0) / staffNames.length
+          staff.totalServices += 1 / staffNames.length // Split service count
+          
+          // Add rating if available (mock data for now)
+          if (Math.random() > 0.3) { // 70% chance of having a rating
+            staff.ratings.push(3.5 + Math.random() * 1.5) // Rating between 3.5-5.0
+          }
+        })
+      }
+    })
+
+    // Calculate performance metrics
+    const performance = Array.from(staffMap.values()).map(staff => {
+      const avgRating = staff.ratings.length > 0 
+        ? staff.ratings.reduce((sum: number, rating: number) => sum + rating, 0) / staff.ratings.length
+        : 4.0 // Default rating if no ratings
+
+      // Mock hours calculation (8 hours per day, 5 days per week)
+      const totalHours = Math.max(1, Math.floor(staff.totalServices / 2) * 8)
+      
+      // Efficiency = revenue per hour
+      const efficiency = totalHours > 0 ? Math.round((staff.totalRevenue / totalHours) * 100) / 100 : 0
+
+      return {
+        ...staff,
+        avgRating: Math.round(avgRating * 10) / 10, // Round to 1 decimal
+        totalHours,
+        efficiency: Math.min(100, Math.round(efficiency)) // Cap at 100%
+      }
+    })
+
+    // Sort by revenue descending
+    performance.sort((a, b) => b.totalRevenue - a.totalRevenue)
+    
+    setStaffPerformance(performance)
+  }, [rows])
 
   // Handle PIN verification
   const handlePinSubmit = () => {
@@ -427,8 +271,7 @@ export default function DashboardPage() {
   }
 
   const handleGoBack = () => {
-    // Navigate to a default page or the previous page
-    router.push('/appointments') // or router.back() if you prefer
+    router.push('/appointments')
   }
 
   // Check if user has access to dashboard
@@ -439,227 +282,6 @@ export default function DashboardPage() {
     setPinError("")
     setAttempts(0)
   }, [user])
-
-  // Scope data for barbers
-  const scopedAppointments = useMemo(() => {
-    if (user?.role === 'barber' && user.ghlId) {
-      return appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
-    }
-    return appointments
-  }, [appointments, user?.role, user?.ghlId])
-
-  const scopedStaff = useMemo(() => {
-    if (user?.role === 'barber' && user.ghlId) {
-      return staff.filter((s) => String((s as unknown as { ghl_id?: string }).ghl_id || '') === user.ghlId)
-    }
-    return staff
-  }, [staff, user?.role, user?.ghlId])
-
-  // Calculate KPIs
-  const kpis = useMemo(() => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const thisWeek = new Date(today.getTime() - (today.getDay() * 24 * 60 * 60 * 1000))
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    
-    // Appointment metrics
-    const totalAppointments = scopedAppointments.length
-    const confirmedAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'confirmed').length
-    const cancelledAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'cancelled').length
-    const pendingAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'pending').length
-    const completedAppointments = scopedAppointments.filter(a => getAppointmentStatus(a) === 'completed').length
-    
-    // Today's appointments
-    const todayAppointments = scopedAppointments.filter(a => {
-      if (!a.startTime) return false
-      const startDate = new Date(a.startTime)
-      return startDate >= today && startDate < new Date(today.getTime() + 24 * 60 * 60 * 1000)
-    }).length
-    
-    // Revenue estimation (assuming $50 average per appointment)
-    const estimatedRevenue = completedAppointments * 50
-    const thisMonthRevenue = appointments.filter(a => {
-      if (!a.startTime || getAppointmentStatus(a) !== 'completed') return false
-      const startDate = new Date(a.startTime)
-      return startDate >= thisMonth
-    }).length * 50
-    
-    // Customer metrics
-    const totalCustomers = contacts.length
-    const newCustomersThisMonth = contacts.filter(c => {
-      const addedDate = new Date(c.dateAdded)
-      return addedDate >= thisMonth
-    }).length
-    
-    // Staff metrics
-    const totalStaff = scopedStaff.length
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const dayName = days[new Date().getDay()]
-    const workingToday = staff.filter((s) => {
-      const start = String(s[`${dayName}/Start Value`] ?? '0')
-      const end = String(s[`${dayName}/End Value`] ?? '0')
-      return start !== '0' && end !== '0'
-    }).length
-    
-    // Calculate percentages
-    const confirmationRate = totalAppointments > 0 ? (confirmedAppointments / totalAppointments * 100) : 0
-    const cancellationRate = totalAppointments > 0 ? (cancelledAppointments / totalAppointments * 100) : 0
-    
-    return {
-      totalAppointments,
-      confirmedAppointments,
-      cancelledAppointments,
-      pendingAppointments,
-      completedAppointments,
-      todayAppointments,
-      estimatedRevenue,
-      thisMonthRevenue,
-      totalCustomers,
-      newCustomersThisMonth,
-      totalStaff,
-      workingToday,
-      confirmationRate,
-      cancellationRate
-    }
-  }, [scopedAppointments, contacts, scopedStaff])
-
-  // Service popularity data
-  const servicePopularity = useMemo(() => {
-    const serviceCounts = scopedAppointments.reduce((acc, appointment) => {
-      const service = appointment.serviceName || 'Unknown Service'
-      acc[service] = (acc[service] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
-    return Object.entries(serviceCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6)
-  }, [scopedAppointments])
-
-  // Customer growth data (last 6 months)
-  const customerGrowthData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const date = new Date()
-      date.setMonth(date.getMonth() - (5 - i))
-      date.setDate(1)
-      return {
-        month: date.toLocaleDateString('en-US', { month: 'short' }),
-        key: date.toISOString().slice(0, 7)
-      }
-    })
-    
-    return months.map(month => {
-      const monthCustomers = contacts.filter(c => {
-        return c.dateAdded.slice(0, 7) === month.key
-      }).length
-      
-      return {
-        month: month.month,
-        customers: monthCustomers
-      }
-    })
-  }, [contacts])
-
-  // Status distribution data for pie chart
-  const statusDistribution = useMemo(() => {
-    const confirmed = scopedAppointments.filter(a => getAppointmentStatus(a) === 'confirmed').length
-    const cancelled = scopedAppointments.filter(a => getAppointmentStatus(a) === 'cancelled').length
-    const pending = scopedAppointments.filter(a => getAppointmentStatus(a) === 'pending').length
-    const completed = scopedAppointments.filter(a => getAppointmentStatus(a) === 'completed').length
-    
-    return [
-      { name: 'Confirmed', value: confirmed, color: '#10b981' },
-      { name: 'Completed', value: completed, color: '#3b82f6' },
-      { name: 'Pending', value: pending, color: '#f59e0b' },
-      { name: 'Cancelled', value: cancelled, color: '#ef4444' }
-    ].filter(item => item.value > 0)
-  }, [scopedAppointments])
-
-  // Staff workload data for doughnut chart
-  const staffWorkloadData = useMemo(() => {
-    const staffCounts = scopedAppointments.reduce((acc, appointment) => {
-      const staffName = `${appointment.assignedStaffFirstName || ''} ${appointment.assignedStaffLastName || ''}`.trim() || 'Unassigned'
-      acc[staffName] = (acc[staffName] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
-    
-    return Object.entries(staffCounts)
-      .map(([name, count], index) => ({ 
-        name, 
-        count, 
-        color: colors[index % colors.length] 
-      }))
-      .sort((a, b) => b.count - a.count)
-  }, [scopedAppointments])
-
-  // Hourly booking patterns
-  const hourlyBookingData = useMemo(() => {
-    const hourCounts = Array.from({ length: 24 }, (_, hour) => ({
-      hour: hour,
-      timeLabel: `${hour.toString().padStart(2, '0')}:00`,
-      appointments: 0
-    }))
-    
-    scopedAppointments.forEach(appointment => {
-      if (appointment.startTime) {
-        const hour = new Date(appointment.startTime).getHours()
-        if (hour >= 0 && hour < 24) {
-          hourCounts[hour].appointments++
-        }
-      }
-    })
-    
-    // Filter to business hours (8 AM to 8 PM) or hours with appointments
-    return hourCounts.filter(item => 
-      (item.hour >= 8 && item.hour <= 20) || item.appointments > 0
-    )
-  }, [scopedAppointments])
-
-  // This week vs last week comparison
-  const weeklyComparisonData = useMemo(() => {
-    const now = new Date()
-    const thisWeekStart = new Date(now.getTime() - (now.getDay() * 24 * 60 * 60 * 1000))
-    const lastWeekStart = new Date(thisWeekStart.getTime() - (7 * 24 * 60 * 60 * 1000))
-    
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    
-    return days.map((day, index) => {
-      const thisWeekDay = new Date(thisWeekStart.getTime() + (index * 24 * 60 * 60 * 1000))
-      const lastWeekDay = new Date(lastWeekStart.getTime() + (index * 24 * 60 * 60 * 1000))
-      
-      const thisWeekCount = scopedAppointments.filter(a => {
-        if (!a.startTime) return false
-        const appointmentDate = new Date(a.startTime)
-        return appointmentDate.toDateString() === thisWeekDay.toDateString()
-      }).length
-      
-      const lastWeekCount = scopedAppointments.filter(a => {
-        if (!a.startTime) return false
-        const appointmentDate = new Date(a.startTime)
-        return appointmentDate.toDateString() === lastWeekDay.toDateString()
-      }).length
-      
-      return {
-        day,
-        thisWeek: thisWeekCount,
-        lastWeek: lastWeekCount
-      }
-    })
-  }, [scopedAppointments])
-
-  const chartConfig: ChartConfig = {
-    total: { label: "Total", color: "#3b82f6" },
-    confirmed: { label: "Confirmed", color: "#10b981" },
-    cancelled: { label: "Cancelled", color: "#ef4444" },
-    completed: { label: "Completed", color: "#8b5cf6" },
-    customers: { label: "New Customers", color: "#06b6d4" }
-  }
-
-  const loading = appointmentsLoading || contactsLoading || staffLoading
-  const hasErrors = appointmentsError || contactsError || staffError
 
   // If PIN not verified, show PIN entry dialog
   if (!isPinVerified) {
@@ -696,7 +318,7 @@ export default function DashboardPage() {
                         placeholder="Enter PIN"
                         value={pinInput}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, '').slice(0, 6) // Only numbers, max 6 digits
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 6)
                           setPinInput(value)
                           setPinError("")
                         }}
@@ -769,542 +391,431 @@ export default function DashboardPage() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <h1 className="text-xl font-semibold">Dashboard</h1>
               <Badge variant="secondary" className="ml-2">Analytics</Badge>
-              {hasErrors && (
-                <Badge variant="destructive" className="ml-2">
-                  Data Loading Issues
-                </Badge>
-              )}
-              <button
-                className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded border text-xs"
-                title="Refresh (bypass cache)"
-                onClick={() => { refreshAppointments(); refreshContacts(); refreshStaff(); }}
-              >
-                <RefreshCcw className="h-4 w-4" />
-              </button>
             </div>
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            {/* Error Messages */}
-            {hasErrors && (
-              <Card className="border-amber-200 bg-amber-50">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-2 text-amber-800">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="font-medium">Some data may be incomplete:</span>
+            {/* Date Filter Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant={selectedFilter === "today" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFilter("today")}
+                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                  selectedFilter === "today"
+                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                    : "hover:bg-[#601625]/5"
+                }`}
+              >
+                Today
+              </Button>
+              <Button
+                variant={selectedFilter === "thisWeek" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFilter("thisWeek")}
+                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                  selectedFilter === "thisWeek"
+                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                    : "hover:bg-[#601625]/5"
+                }`}
+              >
+                This Week
+              </Button>
+              <Button
+                variant={selectedFilter === "thisMonth" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFilter("thisMonth")}
+                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                  selectedFilter === "thisMonth"
+                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                    : "hover:bg-[#601625]/5"
+                }`}
+              >
+                This Month
+              </Button>
+              <Button
+                variant={selectedFilter === "thisYear" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFilter("thisYear")}
+                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                  selectedFilter === "thisYear"
+                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                    : "hover:bg-[#601625]/5"
+                }`}
+              >
+                This Year
+              </Button>
+              
+              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={selectedFilter === "custom" ? "default" : "outline"}
+                    size="sm"
+                    className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                      selectedFilter === "custom"
+                        ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                        : "hover:bg-[#601625]/5"
+                    }`}
+                  >
+                    <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                    {dateRange?.from && dateRange?.to
+                      ? `${format(dateRange.from, "MMM dd")} - ${format(dateRange.to, "MMM dd")}`
+                      : "Custom"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={(range) => {
+                      setDateRange(range)
+                      // Only close and apply filter when BOTH dates are selected
+                      if (range?.from && range?.to) {
+                        setSelectedFilter("custom")
+                        setIsCalendarOpen(false)
+                      }
+                    }}
+                    disabled={(date) => {
+                      // Disable future dates - only allow today and past dates
+                      return date > new Date()
+                    }}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
                   </div>
-                  <ul className="mt-2 text-sm text-amber-700 list-disc list-inside space-y-1">
-                    {appointmentsError && <li>Appointments: {appointmentsError}</li>}
-                    {contactsError && <li>Customers: {contactsError}</li>}
-                    {staffError && <li>Staff: {staffError}</li>}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
 
-            {/* Main KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-              <Card className="relative overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
+            {/* Enhanced KPI Cards - Cloned from Payments Page */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                   {loading ? (
-                    <Skeleton className="h-8 w-16" />
+                <>
+                  <Skeleton className="h-[88px] rounded-2xl" />
+                  <Skeleton className="h-[88px] rounded-2xl" />
+                  <Skeleton className="h-[88px] rounded-2xl" />
+                  <Skeleton className="h-[88px] rounded-2xl" />
+                  <Skeleton className="h-[88px] rounded-2xl" />
+                </>
                   ) : (
                     <>
-                      <div className="text-2xl font-bold">{kpis.totalAppointments}</div>
-                      <p className="text-xs text-muted-foreground">
-                        {kpis.todayAppointments} scheduled today
-                      </p>
-                    </>
-                  )}
+                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Total Revenue</div>
+                          <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.revenue)}</div>
+                        </div>
+                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                          <DollarSign className="h-5 w-5 text-[#601625]" />
+                        </div>
+                      </div>
                 </CardContent>
               </Card>
 
-              <Card className="relative overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold">{kpis.totalCustomers}</div>
-                      <p className="text-xs text-muted-foreground">
-                        +{kpis.newCustomersThisMonth} this month
-                      </p>
-                    </>
-                  )}
+                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Total Tips</div>
+                          <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.tips)}</div>
+                                    </div>
+                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                          <TrendingUp className="h-5 w-5 text-[#601625]" />
+                                    </div>
+                                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="relative overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Working Staff</CardTitle>
-                  <UserCheck className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold">{kpis.workingToday}</div>
-                      <p className="text-xs text-muted-foreground">
-                        of {kpis.totalStaff} total staff
-                      </p>
-                    </>
-                  )}
+                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Transactions</div>
+                          <div className="text-[24px] font-normal text-[#601625] mt-1">{kpis.count}</div>
+                                      </div>
+                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                          <CreditCard className="h-5 w-5 text-[#601625]" />
+                                      </div>
+                                    </div>
                 </CardContent>
               </Card>
+
+                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Active Staff</div>
+                          <div className="text-[24px] font-normal text-[#601625] mt-1">{kpis.uniqueStaff}</div>
+                                      </div>
+                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                          <Users className="h-5 w-5 text-[#601625]" />
+                                      </div>
+                                    </div>
+                </CardContent>
+              </Card>
+
+                  <Card className="rounded-xl border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">Avg. Ticket</div>
+                          <div className="text-[24px] font-normal text-[#601625] mt-1">{formatCurrency(kpis.avg)}</div>
+                                      </div>
+                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
+                          <CalendarIcon className="h-5 w-5 text-[#601625]" />
+                                      </div>
+                                    </div>
+                </CardContent>
+              </Card>
+                    </>
+                  )}
             </div>
 
-            {/* Secondary KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Confirmed</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-green-600">{kpis.confirmedAppointments}</div>
-                      <p className="text-xs text-muted-foreground">
-                        {kpis.confirmationRate.toFixed(1)}% rate
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                  <Activity className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-blue-600">{kpis.completedAppointments}</div>
-                      <p className="text-xs text-muted-foreground">
-                        Services delivered
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-amber-600">{kpis.pendingAppointments}</div>
-                      <p className="text-xs text-muted-foreground">
-                        Awaiting confirmation
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
-                  <XCircle className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-red-600">{kpis.cancelledAppointments}</div>
-                      <p className="text-xs text-muted-foreground">
-                        {kpis.cancellationRate.toFixed(1)}% rate
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Section */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Staff Workload Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <UserCheck className="h-5 w-5" />
-                    Staff Workload
-                  </CardTitle>
-                  <CardDescription>Appointments per staff member</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : staffWorkloadData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={staffWorkloadData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                          paddingAngle={2}
-                          dataKey="count"
-                        >
-                          {staffWorkloadData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+            {/* Staff Performance & Services Revenue Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Staff Performance Table - 50% */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-[#601625]">Staff Performance</h2>
+                  <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
+                    Top 5 Staff
+                  </Badge>
+                </div>
+                
+                <Card className="rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full table-fixed">
+                        <thead className="bg-[#601625]/5">
+                          <tr>
+                            <th className="text-left p-4 text-sm font-normal text-[#601625] w-2/5 border-r border-[#601625]/10">Staff Name</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/5 border-r border-[#601625]/10">Revenue</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6 border-r border-[#601625]/10">Services</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6 border-r border-[#601625]/10">Rating</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6">Efficiency</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {staffPerformance.slice(0, 5).map((staff, index) => (
+                            <tr 
+                              key={staff.staffId}
+                              className={`border-b border-[#601625]/10 hover:bg-[#601625]/5 cursor-pointer transition-colors ${
+                                selectedStaff === staff.staffId ? 'bg-[#601625]/10' : ''
+                              }`}
+                              onClick={() => setSelectedStaff(selectedStaff === staff.staffId ? null : staff.staffId)}
+                            >
+                              <td className="p-4 border-r border-[#601625]/10">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
+                                    <span className="text-white font-normal text-sm">
+                                      {staff.staffName.charAt(0).toUpperCase()}
+                                    </span>
+                                    </div>
+                                  <span className="font-normal text-slate-700">{staff.staffName}</span>
+                                    </div>
+                              </td>
+                              <td className="p-4 text-right border-r border-[#601625]/10">
+                                <span className="font-normal text-[#601625]">{formatCurrency(staff.totalRevenue)}</span>
+                              </td>
+                              <td className="p-4 text-right border-r border-[#601625]/10">
+                                <span className="font-normal text-slate-600">{Math.round(staff.totalServices)}</span>
+                              </td>
+                              <td className="p-4 text-right border-r border-[#601625]/10">
+                                <Badge 
+                                  variant={staff.avgRating >= 4.5 ? "default" : staff.avgRating >= 4.0 ? "secondary" : "outline"}
+                                  className="text-xs"
+                                >
+                                  {staff.avgRating.toFixed(1)}★
+                                </Badge>
+                              </td>
+                              <td className="p-4 text-right">
+                                <span className="font-normal text-slate-600">{staff.efficiency}%</span>
+                              </td>
+                            </tr>
                           ))}
-                        </Pie>
-                        <ChartTooltip
-                          content={({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name: string; count: number } }> }) => {
-                            if (active && payload && payload[0]) {
-                              const data = payload?.[0]?.payload as { name: string; count: number } | undefined
-                              if (!data) return null
-                              const total = staffWorkloadData.reduce((sum, item) => sum + item.count, 0)
-                              const percentage = total > 0 ? ((data.count / total) * 100).toFixed(1) : '0'
-                              return (
-                                <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                  <div className="font-semibold text-foreground">{data.name}</div>
-                                  <div className="space-y-1 mt-1">
-                                    <div className="text-sm text-muted-foreground">
-                                      <span className="font-medium">{data.count}</span> appointments
+                        </tbody>
+                      </table>
                                     </div>
-                                    <div className="text-sm text-muted-foreground">
-                                      <span className="font-medium">{percentage}%</span> of total workload
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            }
-                            return null
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <UserX className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <div>No staff assignments yet</div>
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
+              </div>
 
-              {/* Status Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Status Overview
-                  </CardTitle>
-                  <CardDescription>Appointment status breakdown</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : statusDistribution.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={statusDistribution}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                          label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        >
-                          {statusDistribution.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <ChartTooltip 
-                          content={({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name: string; value: number } }> }) => {
-                            if (active && payload && payload[0]) {
-                              const data = payload?.[0]?.payload as { name: string; value: number } | undefined
-                              if (!data) return null
-                              const total = statusDistribution.reduce((sum, item) => sum + item.value, 0)
-                              const percentage = total > 0 ? ((data.value / total) * 100).toFixed(1) : '0'
-                              return (
-                                <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                  <div className="font-semibold text-foreground">{data.name} Status</div>
-                                  <div className="space-y-1 mt-1">
-                                    <div className="text-sm text-muted-foreground">
-                                      <span className="font-medium">{data.value}</span> appointments
-                                    </div>
-                                    <div className="text-sm text-muted-foreground">
-                                      <span className="font-medium">{percentage}%</span> of all appointments
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            }
-                            return null
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <div>No appointments yet</div>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Hourly Booking Patterns */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    Peak Hours
-                  </CardTitle>
-                  <CardDescription>Busiest times of day</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : hourlyBookingData.some(item => item.appointments > 0) ? (
-                    <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={hourlyBookingData}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis 
-                            dataKey="timeLabel" 
-                            tick={{ fontSize: 10 }}
-                            interval={1}
-                            angle={-45}
-                            textAnchor="end"
-                            height={60}
-                          />
-                          <YAxis 
-                            tick={{ fontSize: 12 }}
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <ChartTooltip
-                            content={({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number }>; label?: string }) => {
-                              if (active && payload && payload[0]) {
-                                const value = payload[0].value as number
-                                const total = hourlyBookingData.reduce((sum, item) => sum + item.appointments, 0)
-                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
-                                return (
-                                  <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                    <div className="font-semibold text-foreground">{label}</div>
-                                    <div className="space-y-1 mt-1">
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">{value}</span> appointments
-                                      </div>
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">{percentage}%</span> of daily bookings
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
+              {/* Services Revenue - 50% */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-[#601625]">Services Revenue</h2>
+                  <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
+                    Top 5 Services
+                  </Badge>
+                </div>
+                
+                <Card className="rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full table-fixed">
+                        <thead className="bg-[#601625]/5">
+                          <tr>
+                            <th className="text-left p-4 text-sm font-normal text-[#601625] w-2/5 border-r border-[#601625]/10">Service Name</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/5 border-r border-[#601625]/10">Revenue</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6 border-r border-[#601625]/10">Bookings</th>
+                            <th className="text-right p-4 text-sm font-normal text-[#601625] w-1/6">Avg. Price</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            // Calculate services revenue from transaction data
+                            const servicesMap = new Map()
+                            
+                            rows.forEach(row => {
+                              if (row.services) {
+                                const services = row.services.split(',').map(s => s.trim()).filter(s => s)
+                                const revenuePerService = (row.totalPaid || 0) / services.length
+                                
+                                services.forEach(service => {
+                                  if (!servicesMap.has(service)) {
+                                    servicesMap.set(service, {
+                                      name: service,
+                                      revenue: 0,
+                                      count: 0
+                                    })
+                                  }
+                                  
+                                  const serviceData = servicesMap.get(service)
+                                  serviceData.revenue += revenuePerService
+                                  serviceData.count += 1
+                                })
                               }
-                              return null
-                            }}
-                          />
-                          <Bar 
-                            dataKey="appointments" 
-                            fill="#3b82f6" 
-                            radius={[4, 4, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <div>No time data available</div>
+                            })
+                            
+                            const topServices = Array.from(servicesMap.values())
+                              .sort((a, b) => b.revenue - a.revenue)
+                              .slice(0, 5)
+                            
+                            return topServices.map((service, index) => (
+                              <tr key={service.name} className="border-b border-[#601625]/10 hover:bg-[#601625]/5 transition-colors">
+                                <td className="p-4 border-r border-[#601625]/10">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
+                                      <span className="text-white font-normal text-sm">{index + 1}</span>
                       </div>
+                                    <span className="font-normal text-slate-700">{service.name}</span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Customer Growth */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Customer Growth (6 Months)
-                  </CardTitle>
-                  <CardDescription>New customer acquisitions over time</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : (
-                    <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={customerGrowthData}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis 
-                            dataKey="month" 
-                            tick={{ fontSize: 12 }}
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <YAxis 
-                            tick={{ fontSize: 12 }}
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <ChartTooltip 
-                            content={({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number }>; label?: string }) => {
-                              if (active && payload && payload[0]) {
-                                const value = payload[0].value as number
-                                const total = customerGrowthData.reduce((sum, item) => sum + item.customers, 0)
-                                const average = total / customerGrowthData.length
-                                const comparison = value > average ? 'above' : value < average ? 'below' : 'at'
-                                return (
-                                  <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                    <div className="font-semibold text-foreground">{label}</div>
-                                    <div className="space-y-1 mt-1">
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">{value}</span> new customers
-                                      </div>
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">{comparison}</span> average ({average.toFixed(1)})
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              }
-                              return null
-                            }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="customers"
-                            stroke="#06b6d4"
-                            strokeWidth={3}
-                            dot={{ fill: "#06b6d4", strokeWidth: 2, r: 6 }}
-                            activeDot={{ r: 8, stroke: "#06b6d4", strokeWidth: 2 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Service Popularity */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Popular Services
-                  </CardTitle>
-                  <CardDescription>Most requested services</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : servicePopularity.length > 0 ? (
-                    <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={servicePopularity} layout="horizontal">
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis type="number" tick={{ fontSize: 12 }} />
-                          <YAxis 
-                            dataKey="name" 
-                            type="category" 
-                            tick={{ fontSize: 11 }}
-                            width={100}
-                          />
-                          <ChartTooltip 
-                            content={({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name: string; count: number } }> }) => {
-                              if (active && payload && payload[0]) {
-                                const data = payload?.[0]?.payload as { name: string; count: number } | undefined
-                                if (!data) return null
-                                const total = servicePopularity.reduce((sum, item) => sum + item.count, 0)
-                                const percentage = total > 0 ? ((data.count / total) * 100).toFixed(1) : '0'
-                                const rank = servicePopularity.findIndex(item => item.name === data.name) + 1
-                                return (
-                                  <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                    <div className="font-semibold text-foreground">{data.name}</div>
-                                    <div className="space-y-1 mt-1">
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">{data.count}</span> bookings
-                                      </div>
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">{percentage}%</span> of all services
-                                      </div>
-                                      <div className="text-sm text-muted-foreground">
-                                        <span className="font-medium">#{rank}</span> most popular
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              }
-                              return null
-                            }}
-                          />
-                          <Bar dataKey="count" fill="#10b981" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <div>No service data available</div>
-                      </div>
+                                </td>
+                                <td className="p-4 text-right border-r border-[#601625]/10">
+                                  <span className="font-normal text-[#601625]">{formatCurrency(service.revenue)}</span>
+                                </td>
+                                <td className="p-4 text-right border-r border-[#601625]/10">
+                                  <span className="font-normal text-slate-600">{service.count}</span>
+                                </td>
+                                <td className="p-4 text-right">
+                                  <span className="font-normal text-slate-600">{formatCurrency(service.revenue / service.count)}</span>
+                                </td>
+                              </tr>
+                            ))
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
                 </CardContent>
               </Card>
+              </div>
             </div>
 
-            {/* Summary Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5" />
-                  Business Overview
-                </CardTitle>
-                <CardDescription>Key performance insights for Restyle Salon</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-                  <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-                    <div className="text-2xl font-bold text-green-700">{kpis.confirmationRate.toFixed(1)}%</div>
-                    <div className="text-sm text-green-600">Confirmation Rate</div>
+            {/* Expanded Staff Detail Card */}
+            {selectedStaff && (
+              <Card className="rounded-xl border-2 border-slate-300 shadow-lg bg-gradient-to-r from-slate-50 to-white">
+                <CardContent className="p-6">
+                  {(() => {
+                    const staff = staffPerformance.find(s => s.staffId === selectedStaff)
+                    if (!staff) return null
+                    
+                                return (
+                      <div className="space-y-6">
+                        {/* Staff Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-full bg-slate-600 flex items-center justify-center">
+                              <span className="text-white font-medium text-lg">
+                                {staff.staffName.charAt(0).toUpperCase()}
+                              </span>
+                                      </div>
+                            <div>
+                              <h3 className="text-xl font-medium text-slate-700">{staff.staffName}</h3>
+                              <p className="text-sm text-slate-500">Staff Member</p>
+                                      </div>
+                                    </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedStaff(null)}
+                            className="text-slate-600 border-slate-200 hover:bg-slate-50"
+                          >
+                            Close
+                          </Button>
+                                  </div>
+
+                        {/* Performance Metrics Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <div className="text-2xl font-medium text-slate-800">{formatCurrency(staff.totalRevenue)}</div>
+                            <div className="text-sm text-slate-500">Total Revenue</div>
+                                      </div>
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <div className="text-2xl font-medium text-slate-800">{Math.round(staff.totalServices)}</div>
+                            <div className="text-sm text-slate-500">Services Completed</div>
+                                      </div>
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <div className="text-2xl font-medium text-slate-800">{staff.totalHours}h</div>
+                            <div className="text-sm text-slate-500">Total Hours</div>
+                                      </div>
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <div className="text-2xl font-medium text-slate-800">{staff.efficiency}%</div>
+                            <div className="text-sm text-slate-500">Efficiency</div>
+                                    </div>
+                                  </div>
+
+                        {/* Rating & Performance Details */}
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div className="space-y-3">
+                            <h4 className="font-medium text-slate-700">Performance Rating</h4>
+                            <div className="flex items-center gap-2">
+                              <div className="flex">
+                                {[...Array(5)].map((_, i) => (
+                                  <span
+                                    key={i}
+                                    className={`text-lg ${
+                                      i < Math.floor(staff.avgRating) ? 'text-yellow-400' : 'text-gray-300'
+                                    }`}
+                                  >
+                                    ★
+                                  </span>
+                                ))}
+                      </div>
+                              <span className="font-medium text-slate-700">{staff.avgRating.toFixed(1)}/5.0</span>
+                    </div>
+            </div>
+
+                          <div className="space-y-3">
+                            <h4 className="font-medium text-slate-700">Performance Summary</h4>
+                            <div className="text-sm text-slate-600 space-y-1">
+                              <p>• Average revenue per service: {formatCurrency(staff.totalRevenue / staff.totalServices)}</p>
+                              <p>• Revenue per hour: {formatCurrency(staff.totalRevenue / staff.totalHours)}</p>
+                              <p>• Services per hour: {(staff.totalServices / staff.totalHours).toFixed(1)}</p>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <div className="text-2xl font-bold text-purple-700">{((kpis.workingToday / Math.max(1, kpis.totalStaff)) * 100).toFixed(0)}%</div>
-                    <div className="text-sm text-purple-600">Staff Utilization</div>
                   </div>
                 </div>
+                      </div>
+                    )
+                  })()}
               </CardContent>
             </Card>
+            )}
           </div>
         </SidebarInset>
       </SidebarProvider>
     </RoleGuard>
   )
 }
+
