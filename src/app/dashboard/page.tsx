@@ -1237,56 +1237,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Payment Methods Section - Full Width */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-[#601625]">Payment Methods</h2>
-                <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
-                  {sectionsLoading ? <Skeleton className="h-4 w-8" /> : `${paymentMethods.length} Methods`}
-                </Badge>
-              </div>
-              
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-3">
-                {sectionsLoading ? (
-                  Array.from({ length: 6 }).map((_, index) => (
-                    <Card key={index} className="rounded-xl border-neutral-200 shadow-sm">
-                      <CardContent className="p-3">
-                        <div className="flex flex-col items-center text-center space-y-2">
-                          <Skeleton className="h-8 w-8 rounded-lg" />
-                          <div className="space-y-1">
-                            <Skeleton className="h-3 w-12" />
-                            <Skeleton className="h-4 w-16" />
-                          </div>
-                        </div>
-                </CardContent>
-              </Card>
-                  ))
-                ) : (
-                  paymentMethods.map((method, index) => (
-                    <Card 
-                      key={method.type} 
-                      className="rounded-xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex flex-col items-center text-center space-y-2">
-                          <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
-                            {method.icon}
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide">
-                              {method.name}
-                            </div>
-                            <div className="text-[16px] font-bold text-neutral-900 mt-1">
-                              {formatCurrency(method.revenue)}
-                            </div>
-                          </div>
-                        </div>
-                </CardContent>
-              </Card>
-                  ))
-                )}
-              </div>
-            </div>
+            {/* Payment Methods section removed per request */}
 
             {/* Service Categories Section */}
             <div className="space-y-4">
