@@ -23,7 +23,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Search, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2, ArrowLeft, CheckCircle2, AlertCircle, Scissors } from "lucide-react"
+import { ArrowUpDown, Search, Calendar, Clock, User, Users, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2, ArrowLeft, CheckCircle2, AlertCircle, Scissors, Crown, Sparkles, Heart, Zap, Flame, Gem, Star as StarIcon } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -382,7 +382,7 @@ function BookingsPageInner() {
   const [newAppCurrentStep, setNewAppCurrentStep] = React.useState(1)
   const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id?: string; name?: string; label?: string; value?: string; description?: string; icon?: string }>>([])
   const [newAppSelectedDepartment, setNewAppSelectedDepartment] = React.useState<string>("")
-  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; price?: number; label?: string; value?: string; description?: string }>>([])
+  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; price?: number; label?: string; value?: string; description?: string; staffCount?: number }>>([])
   const [newAppSelectedService, setNewAppSelectedService] = React.useState<string>("")
   const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id?: string; name?: string; email?: string; label?: string; value?: string; badge?: string; icon?: string }>>([])
   const [newAppSelectedStaff, setNewAppSelectedStaff] = React.useState<string>("")
@@ -912,8 +912,20 @@ function BookingsPageInner() {
         description: group.description || '',
         icon: 'user'
       }))
-      
+
+      // Sort alphabetically by display label to match checkout UI
+      departments.sort((a: { label?: string }, b: { label?: string }) =>
+        String(a.label || '').localeCompare(String(b.label || ''), undefined, { sensitivity: 'base' })
+      )
+
       setNewAppDepartments(departments)
+
+      // Select first group by default and load its services
+      if (departments.length > 0) {
+        const firstId = String(departments[0].value || departments[0].label || '')
+        setNewAppSelectedDepartment(firstId)
+        fetchNewAppServices(firstId)
+      }
     } catch {
       console.error('Error fetching departments')
       setNewAppDepartments([])
@@ -948,7 +960,8 @@ function BookingsPageInner() {
           value: service.id,
           duration: durationInMins, // Store as number
           price: price, // Store price
-          description: `Duration: ${durationInMins} mins | Staff: ${service.teamMembers?.length ?? 0}`
+          description: `Duration: ${durationInMins} mins | Staff: ${service.teamMembers?.length ?? 0}`,
+          staffCount: service.teamMembers?.length ?? 0
         }
       })
       
@@ -2398,6 +2411,16 @@ function BookingsPageInner() {
                         <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
                           {newAppDepartments.map((dept) => {
                             const isSelected = newAppSelectedDepartment === (dept.value || dept.id)
+                            // mirror checkout icon mapping
+                            const name = String(dept.label || dept.name || '').toLowerCase()
+                            const GroupIcon = name.includes('bridal') ? Crown
+                              : name.includes('facial') ? Sparkles
+                              : name.includes('gents') ? User
+                              : name.includes('ladies') ? Heart
+                              : name.includes('laser') ? Zap
+                              : name.includes('threading') ? Scissors
+                              : name.includes('waxing') ? Flame
+                              : StarIcon
                             return (
                               <button
                                 key={dept.value || dept.id}
@@ -2412,7 +2435,7 @@ function BookingsPageInner() {
                                     : 'border-neutral-200 bg-white hover:bg-neutral-50'
                                 }`}
                               >
-                                <User className={`h-5 w-5 ${
+                                <GroupIcon className={`h-5 w-5 ${
                                   isSelected ? 'text-white' : 'text-neutral-600'
                                 }`} />
                                 <span className={`text-sm font-medium whitespace-nowrap ${
@@ -2437,6 +2460,14 @@ function BookingsPageInner() {
                                   {newAppServices.map((service) => {
                                     const serviceName = service.label || service.name || 'Service'
                                     const serviceDuration = service.duration || 0
+                                    // mirror checkout service icon mapping
+                                    const sName = serviceName.toLowerCase()
+                                    const ServiceIcon = sName.includes('makeup') ? Sparkles
+                                      : sName.includes('hair') ? Scissors
+                                      : sName.includes('facial') ? Heart
+                                      : sName.includes('massage') ? Gem
+                                      : sName.includes('nail') ? StarIcon
+                                      : Crown
                                     
                                     return (
                                       <div
@@ -2446,7 +2477,7 @@ function BookingsPageInner() {
                                       >
                                         <div className="flex items-start gap-4">
                                           <div className="p-3 rounded-xl bg-[#7b1d1d]/10">
-                                            <Scissors className="h-6 w-6 text-[#7b1d1d]" />
+                                            <ServiceIcon className="h-6 w-6 text-[#7b1d1d]" />
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <h4 className="font-semibold text-base text-neutral-900 group-hover:text-[#7b1d1d] transition-colors">
@@ -2457,6 +2488,19 @@ function BookingsPageInner() {
                                               <span className="text-sm text-neutral-600">
                                                 {serviceDuration} min
                                               </span>
+                                              <span className="text-neutral-300">•</span>
+                                              <span className="text-sm font-semibold text-[#7b1d1d]">
+                                                {typeof service.price === 'number' && service.price > 0 ? `CA$${service.price.toFixed(2)}` : ''}
+                                              </span>
+                                              {typeof service.staffCount === 'number' && (
+                                                <>
+                                                  <span className="text-neutral-300">•</span>
+                                                  <span className="text-xs text-neutral-500 flex items-center gap-1">
+                                                    <Users className="h-3 w-3 text-neutral-400" />
+                                                    {service.staffCount} staff available
+                                                  </span>
+                                                </>
+                                              )}
                                             </div>
                                           </div>
                                         </div>
