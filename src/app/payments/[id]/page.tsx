@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useParams, useRouter } from "next/navigation"
@@ -64,6 +65,7 @@ export default function PaymentDetailPage() {
   const [editCustomerDialog, setEditCustomerDialog] = useState(false)
   const [editPhoneDialog, setEditPhoneDialog] = useState(false)
   const [editPricesDialog, setEditPricesDialog] = useState(false)
+  const [editSheetOpen, setEditSheetOpen] = useState(false)
   const [editItemDialog, setEditItemDialog] = useState(false)
   const [editingItem, setEditingItem] = useState<any>(null)
   
@@ -230,7 +232,7 @@ export default function PaymentDetailPage() {
     if (!data) return
     setSaving(true)
     try {
-      // Update main transaction with current calculated values and customer info
+      // Update main transaction with current values and customer info (method included)
       const res = await fetch(`/api/transactions/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -240,7 +242,8 @@ export default function PaymentDetailPage() {
           tip, 
           totalPaid,
           customerName,
-          customerPhone
+          customerPhone,
+          method: data.method
         })
       })
       const json = await res.json().catch(() => ({}))
@@ -410,7 +413,7 @@ export default function PaymentDetailPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Button 
-                  onClick={() => setEditPricesDialog(true)}
+                  onClick={() => setEditSheetOpen(true)}
                   size="sm"
                   className="h-9 px-4 text-sm font-semibold bg-[#601625] hover:bg-[#751a29] text-white transition-all duration-200 rounded-lg shadow-sm"
                 >
@@ -711,120 +714,97 @@ export default function PaymentDetailPage() {
               </Card>
 
 
-            {/* Edit Transaction Dialog */}
-            <Dialog open={editPricesDialog} onOpenChange={setEditPricesDialog}>
-              <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Edit Transaction</DialogTitle>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Edit customer information, prices, and service items for this transaction.
-                  </p>
-                </DialogHeader>
-                <div className="space-y-6">
-                  {/* Customer Information */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Customer Information</h3>
-                    <div>
-                      <Label htmlFor="customerName">Customer Name</Label>
-                      <Input
-                        id="customerName"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="Enter customer name"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="customerPhone">Phone Number</Label>
-                      <Input
-                        id="customerPhone"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="Enter phone number"
-                      />
-                    </div>
+            {/* Edit Transaction Drawer */}
+            <Sheet open={editSheetOpen} onOpenChange={setEditSheetOpen}>
+              <SheetContent side="right" className="w-full sm:w-[640px] p-0">
+                <div className="h-full flex flex-col">
+                  <div className="px-6 py-5 border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+                    <SheetHeader className="space-y-1">
+                      <SheetTitle className="text-xl font-semibold text-gray-900">Edit Transaction</SheetTitle>
+                      <SheetDescription className="text-sm text-gray-600">Update payment method and customer details.</SheetDescription>
+                    </SheetHeader>
                   </div>
-
-                  {/* Financial details are calculated on the backend and not editable here */}
-
-                  {/* Service Items */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Service Items</h3>
+                  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+                    {/* Payment Method (tabs already on page; keep here for convenience) */}
                     <div className="space-y-3">
-                      {(data?.items || []).map((item: any, index: number) => (
-                        <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor={`serviceName-${index}`}>Service Name</Label>
-                              <Input
-                                id={`serviceName-${index}`}
-                                value={item.serviceName || ''}
-                                onChange={(e) => {
-                                  const updatedItems = [...(data?.items || [])]
-                                  updatedItems[index] = { ...updatedItems[index], serviceName: e.target.value }
-                                  setData({ ...data!, items: updatedItems })
-                                }}
-                                placeholder="Enter service name"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`servicePrice-${index}`}>Price</Label>
-                              <Input
-                                id={`servicePrice-${index}`}
-                                type="number"
-                                step="0.01"
-                                value={item.price || ''}
-                                onChange={(e) => {
-                                  const updatedItems = [...(data?.items || [])]
-                                  const newPrice = Number(e.target.value)
-                                  const newTip = Math.round(newPrice * 0.15 * 100) / 100
-                                  updatedItems[index] = { ...updatedItems[index], price: newPrice, staffTipCollected: newTip }
-                                  setData({ ...data!, items: updatedItems })
-                                }}
-                                placeholder="0.00"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`staffName-${index}`}>Staff Name</Label>
-                              <Input
-                                id={`staffName-${index}`}
-                                value={item.staffName || ''}
-                                onChange={(e) => {
-                                  const updatedItems = [...(data?.items || [])]
-                                  updatedItems[index] = { ...updatedItems[index], staffName: e.target.value }
-                                  setData({ ...data!, items: updatedItems })
-                                }}
-                                placeholder="Enter staff name"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`staffTip-${index}`}>Staff Tip (Auto-calculated 15%)</Label>
-                              <Input
-                                id={`staffTip-${index}`}
-                                type="number"
-                                step="0.01"
-                                value={item.staffTipCollected || ''}
-                                readOnly
-                                className="bg-gray-50"
-                                placeholder="0.00"
-                              />
+                      <label className="text-sm font-semibold text-gray-700">Payment Method</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 'cash', label: 'Cash' },
+                          { value: 'debit', label: 'Debit' },
+                          { value: 'visa', label: 'Visa' },
+                          { value: 'mastercard', label: 'Mastercard' },
+                          { value: 'amex', label: 'American Express' }
+                        ].map((method) => (
+                          <Button
+                            key={method.value}
+                            variant={data.method === method.value ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setData({ ...data, method: method.value })}
+                            className={`h-9 px-4 text-sm font-medium transition-all duration-200 ${
+                              data.method === method.value
+                                ? 'bg-[#601625] hover:bg-[#751a29] text-white shadow-md'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-[#601625]'
+                            }`}
+                          >
+                            {method.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Customer Info */}
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="customerName">Customer Name</Label>
+                        <Input id="customerName" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Enter customer name" />
+                      </div>
+                      <div>
+                        <Label htmlFor="customerPhone">Phone Number</Label>
+                        <Input id="customerPhone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Enter phone number" />
+                      </div>
+                    </div>
+
+                    {/* Services (price editable only) */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-700">Services in this transaction</h3>
+                      <p className="text-xs text-gray-500">Updating prices will recalculate totals automatically.</p>
+                      <div className="space-y-3">
+                        {(data.items || []).map((item, index) => (
+                          <div key={item.id} className="rounded-xl border border-gray-200/70 bg-white p-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">{item.serviceName || 'Service'}</div>
+                                <div className="mt-1 text-base font-semibold text-gray-900 truncate">{item.staffName || 'Staff'}</div>
+                              </div>
+                              <div className="text-right flex items-center gap-3">
+                                <div className="text-xs text-gray-500">Price</div>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.price ?? ''}
+                                  onChange={(e) => {
+                                    const updated = [...(data.items || [])]
+                                    updated[index] = { ...updated[index], price: Number(e.target.value) }
+                                    setData({ ...data, items: updated })
+                                  }}
+                                  className="w-28 text-right"
+                                  placeholder="0.00"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-
-                  <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button variant="outline" onClick={() => setEditPricesDialog(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={savePrices} disabled={saving}>
-                      {saving ? 'Saving...' : 'Save All Changes'}
-                    </Button>
+                  <div className="px-6 py-4 border-t bg-white flex items-center justify-end gap-2">
+                    <Button variant="outline" onClick={() => setEditSheetOpen(false)}>Cancel</Button>
+                    <Button onClick={savePrices} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button>
                   </div>
                 </div>
-              </DialogContent>
-            </Dialog>
+              </SheetContent>
+            </Sheet>
 
             {/* Service Item Edit Dialog */}
             <Dialog open={editItemDialog} onOpenChange={setEditItemDialog}>
