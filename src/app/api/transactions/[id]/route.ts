@@ -104,6 +104,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (body.tax !== undefined) update['Transaction/Tax'] = body.tax
     if (body.tip !== undefined) update['Transaction/Tip'] = body.tip
     if (body.services !== undefined) update['Service/Joined List'] = body.services
+    if (body.customerName !== undefined) update['Customer/Lookup'] = body.customerName
+    if (body.customerPhone !== undefined) update['Customer/Phone'] = body.customerPhone
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ ok: false, error: 'No fields to update' }, { status: 400 })

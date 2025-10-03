@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar, RefreshCw } from "lucide-react"
+import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
 import { CreditCard } from "lucide-react"
 import Link from "next/link"
 
@@ -50,9 +50,25 @@ export default function PaymentsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<TxRow | null>(null)
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
   const [currentPage, setCurrentPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
-  const itemsPerPage = 1000
+  const [loadingCustomers, setLoadingCustomers] = useState(false)
+  const [kpiData, setKpiData] = useState({
+    totalRevenue: 0,
+    totalTips: 0,
+    transactionsCount: 0,
+    activeStaff: 0,
+    totalTax: 0
+  })
+  const [loadingKpis, setLoadingKpis] = useState(false)
+  const [paymentMethodData, setPaymentMethodData] = useState<Array<{
+    method: string
+    totalRevenue: number
+    transactionCount: number
+  }>>([])
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false)
+  const itemsPerPage = 50
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -67,47 +83,153 @@ export default function PaymentsPage() {
   }, [rows, query])
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
-  const formatDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-CA') : "—")
-  
-  // Helper function to get customer display name
-  const getCustomerName = (transaction: TxRow) => {
-    if (transaction.customerLookup && customerNames[transaction.customerLookup]) {
-      return customerNames[transaction.customerLookup]
+  const formatDate = (s?: string | null) => {
+    if (!s) return "—"
+    try {
+      const date = new Date(s)
+      return date.toLocaleDateString('en-CA', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+      })
+    } catch {
+      return "—"
     }
-    return 'Unknown Customer'
   }
-
-  // Function to fetch customer names from GHL contacts API
-  const fetchCustomerNames = async (customerLookupIds: string[]) => {
-    if (customerLookupIds.length === 0) return {}
-    
-    const nameMap: Record<string, string> = {}
-    
-    // Fetch each contact individually using the getContact endpoint
-    await Promise.allSettled(
-      customerLookupIds.map(async (contactId) => {
-        try {
-          const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${encodeURIComponent(contactId)}`)
-          if (!res.ok) throw new Error(`Failed to fetch contact ${contactId}`)
+  
+  // Function to fetch customer name from Netlify API
+  const fetchCustomerFromAPI = async (customerId: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${encodeURIComponent(customerId)}`)
+      if (!res.ok) return null
+      
           const json = await res.json()
-          
           if (json?.contact) {
             const contact = json.contact
-            nameMap[contactId] = contact.contactName || 
+        return contact.contactName || 
               contact.name || 
               `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 
-              'Unknown Customer'
-          } else {
-            nameMap[contactId] = 'Unknown Customer'
+               null
           }
+      return null
         } catch (error) {
-          console.error(`Error fetching contact ${contactId}:`, error)
-          nameMap[contactId] = 'Unknown Customer'
+      console.error(`Error fetching contact ${customerId}:`, error)
+      return null
+    }
+  }
+
+  // Function to fetch customer names for transactions that need API lookup
+  const fetchCustomerNames = async (transactions: TxRow[]) => {
+    const customerIds = transactions
+      .map(tx => tx.customerLookup)
+      .filter(id => id && id.trim() !== '' && !customerNames[id])
+    
+    if (customerIds.length === 0) return
+
+    setLoadingCustomers(true)
+    const nameMap: Record<string, string> = {}
+    
+    // Fetch each customer individually
+    await Promise.allSettled(
+      customerIds.map(async (customerId) => {
+        if (customerId) {
+          const name = await fetchCustomerFromAPI(customerId)
+          if (name) {
+            nameMap[customerId] = name
+          }
         }
       })
     )
     
-    return nameMap
+    if (Object.keys(nameMap).length > 0) {
+      setCustomerNames(prev => ({ ...prev, ...nameMap }))
+    }
+    setLoadingCustomers(false)
+  }
+
+  // Helper function to get customer display name with API fallback
+  const getCustomerName = (transaction: TxRow) => {
+    // First try to get from customerLookup field (this contains the actual customer name)
+    if (transaction.customerLookup && transaction.customerLookup.trim() !== '') {
+      const lookupId = transaction.customerLookup.trim()
+      
+      // Check if we have the name from API
+      if (customerNames[lookupId]) {
+        return customerNames[lookupId]
+      }
+      
+      // If it looks like a customer ID (not a name), try to fetch from API
+      if (lookupId.length > 10 && !lookupId.includes(' ')) {
+        // This looks like a customer ID, fetch from API
+        fetchCustomerFromAPI(lookupId).then(name => {
+          if (name) {
+            setCustomerNames(prev => ({ ...prev, [lookupId]: name }))
+          }
+        })
+        return 'Loading...'
+      }
+      
+      // If it contains spaces, it's probably already a name
+      return lookupId
+    }
+    
+    // Fallback to phone number if no name available
+    if (transaction.customerPhone) {
+      return `Guest (${transaction.customerPhone})`
+    }
+    
+    return 'Walk-in Guest'
+  }
+
+  // Helper function to get service name with fallback
+  const getServiceName = (transaction: TxRow) => {
+    // First try to get from services field
+    if (transaction.services && transaction.services.trim() !== '') {
+      return transaction.services.trim()
+    }
+    
+    // Fallback to service names from items
+    if (transaction.items && transaction.items.length > 0) {
+      const serviceNames = transaction.items
+        .map(item => item.serviceName)
+        .filter(Boolean)
+        .join(', ')
+      if (serviceNames) {
+        return serviceNames
+      }
+    }
+    
+    return 'Service Not Specified'
+  }
+
+  // Helper function to get staff name with fallback
+  const getStaffName = (transaction: TxRow) => {
+    // First try to get from items (most accurate)
+    if (transaction.items && transaction.items.length > 0) {
+      const staffNames = transaction.items
+        .map(item => item.staffName)
+        .filter(Boolean)
+        .join(', ')
+      if (staffNames) {
+        return staffNames
+      }
+    }
+    
+    // Fallback to payment staff field
+    if (transaction.staff && transaction.staff.trim() !== '') {
+      return transaction.staff.trim()
+    }
+    
+    return 'Staff Not Assigned'
+  }
+
+  // Helper function to get customer phone with fallback
+  const getCustomerPhone = (transaction: TxRow) => {
+    if (transaction.customerPhone && transaction.customerPhone.trim() !== '') {
+      return transaction.customerPhone.trim()
+    }
+    
+    return 'No Phone Provided'
   }
 
   const kpis = useMemo(() => {
@@ -136,69 +258,111 @@ export default function PaymentsPage() {
     return { count, revenue, tips, avg, uniqueStaff, totalTipSplits }
   }, [filtered])
 
-  const loadTransactions = async (page: number = 1, append: boolean = false) => {
-    const isInitialLoad = page === 1 && !append
-    if (isInitialLoad) {
-      setLoading(true)
-    } else {
-      setLoadingMore(true)
-    }
+  const loadKpiData = async () => {
+    setLoadingKpis(true)
     
     try {
-      const offset = (page - 1) * itemsPerPage
-      const res = await fetch(`/api/transactions?limit=${itemsPerPage}&offset=${offset}`)
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
+      const [revenueRes, tipsRes, countRes, staffRes, taxRes] = await Promise.all([
+        fetch(`/api/kpi/total-revenue?filter=today`),
+        fetch(`/api/kpi/total-tips?filter=today`),
+        fetch(`/api/kpi/transactions-count?filter=today`),
+        fetch(`/api/kpi/active-staff?filter=today`),
+        fetch(`/api/kpi/total-tax?filter=today`)
+      ])
+
+      const [revenueData, tipsData, countData, staffData, taxData] = await Promise.all([
+        revenueRes.json(),
+        tipsRes.json(),
+        countRes.json(),
+        staffRes.json(),
+        taxRes.json()
+      ])
+
+      console.log('KPI API Responses:', { revenueData, tipsData, countData, staffData, taxData })
       
-      const transactions = json.data || []
-      
-      if (append) {
-        setRows(prev => [...prev, ...transactions])
+      if (revenueData.ok && tipsData.ok && countData.ok && staffData.ok && taxData.ok) {
+        setKpiData({
+          totalRevenue: revenueData.data.totalRevenue,
+          totalTips: tipsData.data.totalTips,
+          transactionsCount: countData.data.transactionsCount,
+          activeStaff: staffData.data.activeStaff,
+          totalTax: taxData.data.totalTax
+        })
       } else {
-        setRows(transactions)
-      }
-      
-      // Check if there are more transactions
-      setHasMore(transactions.length === itemsPerPage)
-      
-      // Extract unique customer lookup IDs and fetch names
-      const customerLookupIds = [...new Set(
-        transactions
-          .map((tx: TxRow) => tx.customerLookup)
-          .filter(Boolean)
-      )] as string[]
-      
-      if (customerLookupIds.length > 0) {
-        const names = await fetchCustomerNames(customerLookupIds)
-        setCustomerNames(prev => ({ ...prev, ...names }))
+        console.error('Error loading KPI data:', { revenueData, tipsData, countData, staffData, taxData })
       }
     } catch (e: unknown) {
-      console.error('Error loading payments:', e)
-      const errorMessage = e instanceof Error ? e.message : 'Unknown error'
-      toast.error('Failed to load payments: ' + errorMessage)
+      console.error('Error loading KPI data:', e)
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
+      setLoadingKpis(false)
     }
   }
 
+  const loadPaymentMethodData = async () => {
+    setLoadingPaymentMethods(true)
+    
+    try {
+      const response = await fetch(`/api/kpi/revenue-by-payment-method?filter=today`)
+      const data = await response.json()
+      
+      if (data.ok) {
+        setPaymentMethodData(data.data.paymentMethods)
+        console.log('Payment method data loaded:', data.data.paymentMethods)
+      } else {
+        console.error('Error loading payment method data:', data)
+      }
+    } catch (e: unknown) {
+      console.error('Error loading payment method data:', e)
+    } finally {
+      setLoadingPaymentMethods(false)
+    }
+  }
+
+  const loadTransactions = async (page: number = 1) => {
+      setLoading(true)
+    
+      try {
+      const offset = (page - 1) * itemsPerPage
+      const res = await fetch(`/api/transactions?limit=${itemsPerPage}&offset=${offset}`)
+        const json = await res.json()
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
+        
+        const transactions = json.data || []
+      const total = json.total || transactions.length
+      
+        setRows(transactions)
+      setTotalCount(total)
+      setTotalPages(Math.ceil(total / itemsPerPage))
+      setCurrentPage(page)
+      
+      // Fetch customer names for transactions that need API lookup
+      await fetchCustomerNames(transactions)
+      
+      } catch (e: unknown) {
+        console.error('Error loading payments:', e)
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error'
+        toast.error('Failed to load payments: ' + errorMessage)
+      } finally {
+        setLoading(false)
+      }
+    }
+
   useEffect(() => {
-    loadTransactions(1, false)
+    loadTransactions(1)
+    loadKpiData()
+    loadPaymentMethodData()
   }, [])
 
-  const loadMore = () => {
-    if (!loadingMore && hasMore) {
-      const nextPage = currentPage + 1
-      setCurrentPage(nextPage)
-      loadTransactions(nextPage, true)
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      loadTransactions(page)
     }
   }
 
   const resetAndReload = () => {
     setCurrentPage(1)
-    setHasMore(true)
     setQuery("")
-    loadTransactions(1, false)
+    loadTransactions(1)
   }
 
   const handleDeleteClick = (transaction: TxRow) => {
@@ -243,7 +407,7 @@ export default function PaymentsPage() {
     <RoleGuard>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="font-sans">
           <header className="flex flex-col gap-2 px-4 py-4">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">
@@ -255,14 +419,14 @@ export default function PaymentsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <input
-                    className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
-                    placeholder="Search services, staff, phone, ID"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <div className="relative">
+                <input
+                  className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
+                  placeholder="Search services, staff, phone, ID"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                 </div>
                 <Button
                   onClick={resetAndReload}
@@ -278,26 +442,36 @@ export default function PaymentsPage() {
             </div>
             <p className="text-sm text-muted-foreground ml-[4.5rem]">View and manage all customer payments and transactions</p>
           </header>
-          <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+          <div className="flex flex-1 flex-col gap-6 p-4 pt-0" style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
             <div className="w-full">
               <Card className="border-neutral-200 shadow-none">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-base font-semibold">Transaction History</CardTitle>
-                      <CardDescription className="text-sm">View all customer payments and transactions</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {/* KPI Section */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900">Key Performance Indicators</h3>
+                    <p className="text-sm text-gray-500">Track your business metrics</p>
+                  </div>
+
                   {/* Enhanced KPI Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                     <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Revenue</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.revenue)}</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Revenue</div>
+                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
+                              {loadingKpis ? (
+                                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+                              ) : (
+                                formatCurrency(kpiData.totalRevenue)
+                              )}
+                            </div>
                           </div>
                           <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                             <DollarSign className="h-5 w-5 text-[#601625]" />
@@ -310,8 +484,14 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Tips</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.tips)}</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Tips</div>
+                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
+                              {loadingKpis ? (
+                                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+                              ) : (
+                                formatCurrency(kpiData.totalTips)
+                              )}
+                            </div>
                           </div>
                           <div className="h-10 w-10 rounded-xl bg-[#751a29]/10 flex items-center justify-center">
                             <TrendingUp className="h-5 w-5 text-[#751a29]" />
@@ -324,8 +504,14 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Transactions</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.count}</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Transactions</div>
+                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
+                              {loadingKpis ? (
+                                <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
+                              ) : (
+                                kpiData.transactionsCount
+                              )}
+                            </div>
                           </div>
                           <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                             <CreditCard className="h-5 w-5 text-[#601625]" />
@@ -338,8 +524,14 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Active Staff</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.uniqueStaff}</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Staff</div>
+                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
+                              {loadingKpis ? (
+                                <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
+                              ) : (
+                                kpiData.activeStaff
+                              )}
+                            </div>
                           </div>
                           <div className="h-10 w-10 rounded-xl bg-[#751a29]/10 flex items-center justify-center">
                             <Users className="h-5 w-5 text-[#751a29]" />
@@ -352,8 +544,14 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Avg. Ticket</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.avg)}</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Tax</div>
+                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
+                              {loadingKpis ? (
+                                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+                              ) : (
+                                formatCurrency(kpiData.totalTax)
+                              )}
+                            </div>
                           </div>
                           <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
                             <Calendar className="h-5 w-5 text-[#601625]" />
@@ -362,6 +560,51 @@ export default function PaymentsPage() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  {/* Payment Method Breakdown */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Revenue by Payment Method</h3>
+                    {loadingPaymentMethods ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="bg-white rounded-lg border border-gray-200 p-3">
+                            <div className="animate-pulse">
+                              <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+                              <div className="h-5 bg-gray-200 rounded w-1/2 mb-1"></div>
+                              <div className="h-2 bg-gray-200 rounded w-1/3"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : paymentMethodData.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        {paymentMethodData.map((method, index) => (
+                          <div key={method.method} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-shadow">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className={`w-2 h-2 rounded-full ${
+                                index === 0 ? 'bg-green-500' :
+                                index === 1 ? 'bg-blue-500' :
+                                index === 2 ? 'bg-purple-500' :
+                                index === 3 ? 'bg-orange-500' :
+                                'bg-gray-500'
+                              }`}></div>
+                              <span className="text-xs font-medium text-gray-600 truncate capitalize">{method.method}</span>
+                            </div>
+                            <div className="text-lg font-bold text-gray-900 mb-1">
+                              {formatCurrency(method.totalRevenue)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {method.transactionCount} transaction{method.transactionCount !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <div className="text-sm">No payment data available for today</div>
+                      </div>
+                    )}
+                  </div>
                   {loading ? (
                     <div className="space-y-2">
                       {Array.from({ length: 8 }).map((_, i) => (
@@ -369,123 +612,127 @@ export default function PaymentsPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm bg-white">
-                      {/* Desktop Table Header */}
-                      <div className="hidden lg:grid grid-cols-12 bg-gradient-to-r from-neutral-50 via-neutral-100 to-neutral-50 px-6 py-5 text-[11px] font-bold text-neutral-800 uppercase tracking-wider border-b border-neutral-200">
-                        <div className="col-span-3 flex items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#601625]"></div>
-                            Services
+                    <div className="overflow-hidden rounded-xl border border-gray-200 shadow-lg bg-white">
+                  {/* Professional Table Header */}
+                  <div className="hidden lg:grid grid-cols-12 bg-white border-b-2 border-gray-100 px-6 py-4">
+                    <div className="col-span-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-[#601625] rounded-full"></div>
+                        <span className="text-sm font-semibold text-gray-700 tracking-wide">SERVICE</span>
                           </div>
                         </div>
-                        <div className="col-span-2 flex items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#751a29]"></div>
-                            Staff Name
+                    <div className="col-span-2">
+                      <span className="text-sm font-semibold text-gray-700 tracking-wide">STAFF</span>
+                          </div>
+                    <div className="col-span-2">
+                      <span className="text-sm font-semibold text-gray-700 tracking-wide">CUSTOMER</span>
+                        </div>
+                    <div className="col-span-2">
+                      <span className="text-sm font-semibold text-gray-700 tracking-wide">TIPS</span>
+                          </div>
+                    <div className="col-span-2">
+                      <span className="text-sm font-semibold text-gray-700 tracking-wide">PAYMENT</span>
+                        </div>
+                    <div className="col-span-1 text-right">
+                      <span className="text-sm font-semibold text-gray-700 tracking-wide">ACTIONS</span>
                           </div>
                         </div>
-                        <div className="col-span-2 flex items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#601625]"></div>
-                            Customer Name & Phone
-                          </div>
-                        </div>
-                        <div className="col-span-2 flex items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#751a29]"></div>
-                            Transaction Tips
-                          </div>
-                        </div>
-                        <div className="col-span-2 flex items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#601625]"></div>
-                            Total & Method
-                          </div>
-                        </div>
-                        <div className="col-span-1 text-right flex items-center justify-end">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#751a29]"></div>
-                            Actions
-                          </div>
-                        </div>
-                      </div>
-                      <div className="divide-y divide-neutral-100">
+                      <div className="divide-y divide-gray-100">
                         {filtered.map((r, index) => (
-                          <div key={r.id} className={`hidden lg:grid grid-cols-12 items-center px-6 py-5 hover:bg-gradient-to-r hover:from-neutral-50/80 hover:to-white transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/30'}`}>
+                          <div key={r.id} className={`hidden lg:grid grid-cols-12 items-center px-6 py-6 hover:bg-gray-50/50 transition-all duration-200 group ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                            {/* Service Column */}
                             <div className="col-span-3 min-w-0">
-                              <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
+                              <div className="flex items-center gap-4">
+                                <div className="w-2 h-2 bg-[#601625] rounded-full flex-shrink-0"></div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="truncate text-[15px] font-semibold text-neutral-900 leading-tight">{r.services || '—'}</div>
+                                  <div className="text-base font-semibold text-gray-900 truncate leading-tight">
+                                    {getServiceName(r)}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Transaction #{r.id.slice(-8)}
                                 </div>
                               </div>
                             </div>
+                            </div>
+
+                            {/* Staff Column */}
                             <div className="col-span-2">
-                              <div className="flex flex-col gap-1.5">
+                              <div className="flex flex-col gap-2">
                                 {r.items && r.items.length > 0 ? (
                                   r.items.map((item, idx) => (
-                                    <span key={idx} className="inline-flex items-center rounded-full border border-[#601625]/20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 px-3 py-1.5 text-[12px] font-semibold text-[#601625] shadow-sm">
-                                      <div className="w-2 h-2 rounded-full bg-[#751a29] mr-2"></div>
-                                      {item.staffName || '—'}
-                                    </span>
+                                    <div key={idx} className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 w-fit">
+                                      <span className="truncate">{item.staffName || 'Staff Not Assigned'}</span>
+                                    </div>
                                   ))
                                 ) : (
-                                  <span className="inline-flex items-center rounded-full border border-[#601625]/20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 px-3 py-1.5 text-[12px] font-semibold text-[#601625] shadow-sm">
-                                    <div className="w-2 h-2 rounded-full bg-[#751a29] mr-2"></div>
-                                    {r.staff || '—'}
-                                  </span>
+                                  <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 w-fit">
+                                    <span className="truncate">{getStaffName(r)}</span>
+                                  </div>
                                 )}
                               </div>
                             </div>
+
+                            {/* Customer Column */}
                             <div className="col-span-2 min-w-0">
-                              <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{getCustomerName(r)}</div>
+                                <div className="text-base font-semibold text-gray-900 truncate">
+                                  {getCustomerName(r)}
+                                  {loadingCustomers && getCustomerName(r) === 'Loading...' && (
+                                    <span className="ml-2 text-xs text-gray-500">⏳</span>
+                                  )}
+                                </div>
                                   <div className="mt-1">
-                                    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 border border-[#601625]/20 px-2.5 py-1 text-[11px] font-medium text-[#601625]">
-                                      {r.customerPhone || 'No phone'}
+                                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20">
+                                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-1.5"></div>
+                                    {getCustomerPhone(r)}
                                     </span>
                                   </div>
                                 </div>
                               </div>
-                            </div>
+
+                            {/* Tips Column */}
                             <div className="col-span-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-[#751a29] to-[#601625] rounded-full"></div>
                                 <div className="flex flex-col gap-1">
-                                  <div className="text-[16px] font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
+                                <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
                                   {r.items && r.items.length > 0 && (
-                                    <div className="text-[10px] text-neutral-500 space-y-0.5">
+                                  <div className="text-xs text-gray-500 space-y-1">
                                       {r.items.map((item, idx) => (
                                         <div key={idx} className="flex justify-between items-center">
-                                          <span className="truncate">{item.staffName}:</span>
-                                          <span className="font-semibold text-[#601625] ml-2">{formatCurrency(item.staffTipSplit)}</span>
+                                        <span className="truncate text-gray-600">{item.staffName}:</span>
+                                        <span className="font-semibold text-gray-900 ml-2">{formatCurrency(item.staffTipSplit)}</span>
                                         </div>
                                       ))}
                                     </div>
                                   )}
                                 </div>
                               </div>
-                            </div>
+
+                            {/* Payment Column */}
                             <div className="col-span-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gradient-to-b from-[#601625] to-[#751a29] rounded-full"></div>
                                 <div className="flex flex-col gap-1">
-                                  <div className="text-[18px] font-bold text-neutral-900">{formatCurrency(r.totalPaid)}</div>
-                                  <div className="text-[12px] text-[#601625] capitalize font-medium">{r.method || '—'}</div>
-                                  <div className="text-[10px] text-neutral-400 font-mono">{formatDate(r.paymentDate)}</div>
+                                <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></div>
+                                    {r.method || 'Unknown'}
+                                  </span>
+                                  <span className="text-xs text-gray-500 font-mono">{formatDate(r.paymentDate)}</span>
                                 </div>
                               </div>
                             </div>
+
+                            {/* Actions Column */}
                             <div className="col-span-1 flex justify-end gap-2">
-                              <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-9 items-center rounded-xl border border-neutral-200 bg-white px-3 text-[12px] font-semibold hover:bg-gradient-to-r hover:from-[#601625]/5 hover:to-[#751a29]/5 hover:border-[#601625]/30 hover:text-[#601625] transition-all duration-200 shadow-sm">
+                              <Link 
+                                href={`/payments/${encodeURIComponent(r.id)}`} 
+                                className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
+                              >
                                 <Eye className="h-4 w-4 mr-1.5" /> View
                               </Link>
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-9 rounded-xl px-3 text-[12px] font-semibold hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:text-red-700 hover:border-red-300 transition-all duration-200 shadow-sm" 
+                                className="h-9 rounded-lg px-3 text-sm font-medium text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 transition-all duration-200 shadow-sm" 
                                 onClick={() => handleDeleteClick(r)}
                               >
                                 <Trash2 className="h-4 w-4 mr-1.5" /> Delete
@@ -494,74 +741,99 @@ export default function PaymentsPage() {
                           </div>
                         ))}
                         
-                        {/* Mobile Card Layout */}
+                        {/* Professional Mobile Card Layout */}
                         {filtered.map((r) => (
-                          <div key={`mobile-${r.id}`} className="lg:hidden p-4 border-b border-neutral-100 last:border-b-0">
-                            <div className="bg-white rounded-xl border border-neutral-200 p-4 space-y-3">
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[14px] font-semibold text-neutral-900 truncate">{r.services || '—'}</div>
+                          <div key={`mobile-${r.id}`} className="lg:hidden p-4 border-b border-gray-100 last:border-b-0">
+                            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4 shadow-sm">
+                              {/* Header with Service and Amount */}
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-2 h-2 bg-[#601625] rounded-full flex-shrink-0"></div>
+                                  <div>
+                                    <div className="text-base font-semibold text-gray-900">{getServiceName(r)}</div>
+                                    <div className="text-xs text-gray-500 mt-1">Transaction #{r.id.slice(-8)}</div>
+                                  </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-[16px] font-bold text-neutral-900">{formatCurrency(r.totalPaid)}</div>
-                                  <div className="text-[12px] text-neutral-500 capitalize">{r.method || '—'}</div>
+                                  <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></div>
+                                      {r.method || 'Unknown'}
+                                    </span>
+                                    <span className="text-xs text-gray-500 font-mono">{formatDate(r.paymentDate)}</span>
+                                  </div>
                                 </div>
                               </div>
                               
-                              <div className="flex flex-wrap gap-2">
+                              {/* Staff and Customer Info */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Staff</div>
                                 {r.items && r.items.length > 0 ? (
-                                  r.items.map((item, idx) => (
-                                    <span key={idx} className="inline-flex items-center rounded-full border border-[#601625]/20 bg-[#601625]/5 px-2 py-1 text-[11px] font-medium text-[#601625]">
-                                      {item.staffName || '—'}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="inline-flex items-center rounded-full border border-[#601625]/20 bg-[#601625]/5 px-2 py-1 text-[11px] font-medium text-[#601625]">
-                                    {r.staff || '—'}
-                                  </span>
+                                    <div className="space-y-2">
+                                      {r.items.map((item, idx) => (
+                                        <div key={idx} className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 w-fit">
+                                          <span className="truncate">{item.staffName || 'Staff Not Assigned'}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 w-fit">
+                                      <span className="truncate">{getStaffName(r)}</span>
+                                    </div>
                                 )}
                               </div>
                               
-                              <div className="flex justify-between items-center">
                                 <div>
-                                  <div className="text-[12px] text-neutral-600">Customer</div>
-                                  <div className="text-[13px] font-medium text-neutral-900">{getCustomerName(r)}</div>
-                                  <span className="inline-flex items-center rounded-full bg-[#601625]/10 border border-[#601625]/20 px-2 py-0.5 text-[10px] font-medium text-[#601625] mt-1">
-                                    {r.customerPhone || 'No phone'}
+                                  <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Customer</div>
+                                  <div className="text-sm font-semibold text-gray-900 truncate">
+                                    {getCustomerName(r)}
+                                    {loadingCustomers && getCustomerName(r) === 'Loading...' && (
+                                      <span className="ml-2 text-xs text-gray-500">⏳</span>
+                                    )}
+                                  </div>
+                                  <div className="mt-2">
+                                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20">
+                                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-1.5"></div>
+                                      {getCustomerPhone(r)}
                                   </span>
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-[12px] text-neutral-600">Tips</div>
-                                  <div className="text-[14px] font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
                                 </div>
                               </div>
                               
+                              {/* Tips and Actions */}
+                              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Tips</div>
+                                  <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
                               {r.items && r.items.length > 0 && (
-                                <div className="bg-neutral-50 rounded-lg p-3">
-                                  <div className="text-[11px] font-medium text-neutral-600 mb-2">Staff Tip Splits:</div>
-                                  <div className="space-y-1">
+                                    <div className="text-xs text-gray-500 space-y-1 mt-2">
                                     {r.items.map((item, idx) => (
-                                      <div key={idx} className="flex justify-between text-[11px]">
-                                        <span className="text-neutral-600">{item.staffName}:</span>
-                                        <span className="font-medium text-neutral-900">{formatCurrency(item.staffTipSplit)}</span>
+                                        <div key={idx} className="flex justify-between items-center">
+                                          <span className="truncate text-gray-600">{item.staffName}:</span>
+                                          <span className="font-semibold text-gray-900 ml-2">{formatCurrency(item.staffTipSplit)}</span>
                                       </div>
                                     ))}
                                   </div>
+                                  )}
                                 </div>
-                              )}
-                              
-                              <div className="flex justify-end gap-2 pt-2">
-                                <Link href={`/payments/${encodeURIComponent(r.id)}`} className="inline-flex h-8 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium hover:bg-[#601625]/5 hover:border-[#601625]/30 hover:text-[#601625] transition-colors">
-                                  <Eye className="h-3.5 w-3.5 mr-1.5" /> View
+                                <div className="flex gap-2">
+                                  <Link 
+                                    href={`/payments/${encodeURIComponent(r.id)}`} 
+                                    className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
+                                  >
+                                    <Eye className="h-4 w-4 mr-1.5" /> View
                                 </Link>
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="h-8 rounded-lg px-3 text-[12px] font-medium hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors" 
+                                    className="h-9 rounded-lg px-3 text-sm font-medium text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 transition-all duration-200 shadow-sm" 
                                   onClick={() => handleDeleteClick(r)}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                                    <Trash2 className="h-4 w-4 mr-1.5" /> Delete
                                 </Button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -569,31 +841,108 @@ export default function PaymentsPage() {
                         
                         {filtered.length === 0 && !loading && (
                           <div className="p-12 text-center">
-                            <div className="text-[16px] font-medium text-neutral-500 mb-2">No transactions found</div>
-                            <div className="text-[14px] text-neutral-400">Try adjusting your search criteria</div>
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <div className="text-lg font-semibold text-gray-900 mb-2">No transactions found</div>
+                            <div className="text-sm text-gray-500">Try adjusting your search criteria or date range</div>
                           </div>
                         )}
                         
-                        {/* Load More Button */}
-                        {hasMore && !loading && (
-                          <div className="p-6 text-center border-t border-neutral-200">
-                            <Button
-                              onClick={loadMore}
-                              disabled={loadingMore}
-                              className="bg-gradient-to-r from-[#601625] to-[#751a29] hover:from-[#751a29] hover:to-[#601625] text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                            >
-                              {loadingMore ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                  Loading More...
-                                </>
-                              ) : (
-                                `Load More Transactions (${rows.length} loaded)`
-                              )}
-                            </Button>
-                            <p className="text-sm text-neutral-500 mt-2">
-                              Showing {rows.length} of your {rows.length > 0 ? '16,000+' : '0'} transactions
-                            </p>
+                        {/* Professional Pagination */}
+                        {totalPages > 1 && !loading && (
+                          <div className="px-6 py-6 border-t border-gray-200 bg-gray-50/50">
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                              {/* Page Info */}
+                              <div className="text-sm text-gray-600 font-medium">
+                                Showing <span className="font-semibold text-gray-900">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold text-gray-900">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="font-semibold text-gray-900">{totalCount.toLocaleString()}</span> transactions
+                              </div>
+                              
+                              {/* Pagination Controls */}
+                              <div className="flex items-center gap-2">
+                                {/* Previous Button */}
+                                <Button
+                                  onClick={() => goToPage(currentPage - 1)}
+                                  disabled={currentPage === 1}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 px-4 text-sm font-medium border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronLeft className="h-4 w-4 mr-1" />
+                                  Previous
+                                </Button>
+                                
+                                {/* Page Numbers */}
+                                <div className="flex items-center gap-1">
+                                  {/* First page */}
+                                  {currentPage > 3 && (
+                                    <>
+                                      <Button
+                                        onClick={() => goToPage(1)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-10 w-10 text-sm font-semibold border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                                      >
+                                        1
+                                      </Button>
+                                      {currentPage > 4 && <span className="text-gray-400 px-2">...</span>}
+                                    </>
+                                  )}
+                                  
+                                  {/* Pages around current page */}
+                                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    const startPage = Math.max(1, currentPage - 2)
+                                    const page = startPage + i
+                                    if (page > totalPages) return null
+                                    
+                                    return (
+                                      <Button
+                                        key={page}
+                                        onClick={() => goToPage(page)}
+                                        variant={page === currentPage ? "default" : "outline"}
+                                        size="sm"
+                                        className={`h-10 w-10 text-sm font-semibold transition-all duration-200 ${
+                                          page === currentPage
+                                            ? "bg-[#601625] text-white hover:bg-[#751a29] shadow-sm"
+                                            : "border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                                        }`}
+                                      >
+                                        {page}
+                                      </Button>
+                                    )
+                                  })}
+                                  
+                                  {/* Last page */}
+                                  {currentPage < totalPages - 2 && (
+                                    <>
+                                      {currentPage < totalPages - 3 && <span className="text-gray-400 px-2">...</span>}
+                                      <Button
+                                        onClick={() => goToPage(totalPages)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-10 w-10 text-sm font-semibold border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                                      >
+                                        {totalPages}
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                                
+                                {/* Next Button */}
+                                <Button
+                                  onClick={() => goToPage(currentPage + 1)}
+                                  disabled={currentPage === totalPages}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 px-4 text-sm font-medium border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Next
+                                  <ChevronRight className="h-4 w-4 ml-1" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>

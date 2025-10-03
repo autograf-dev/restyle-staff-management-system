@@ -128,11 +128,29 @@ export async function GET(req: Request) {
     const offset = Number(searchParams.get('offset') || 0)
     const appointmentId = searchParams.get('appointmentId')
 
+    // First get the total count
+    let countQuery = supabaseAdmin
+      .from('Transactions')
+      .select('*', { count: 'exact', head: true })
+    
+    if (appointmentId) {
+      countQuery = countQuery.eq('"Booking/ID"', appointmentId)
+    }
+
+    const { count, error: countError } = await countQuery
+
+    if (countError) {
+      console.error('Supabase count error:', countError)
+      return NextResponse.json({ ok: false, error: countError.message }, { status: 400 })
+    }
+
+    // Then get the actual data
     let query = supabaseAdmin
       .from('Transactions')
       .select('*')
       .range(offset, offset + limit - 1)
-      .order('"Payment/Date"', { ascending: false })
+      .order('"Payment/Date"', { ascending: false, nullsFirst: false })
+      .order('"🔒 Row ID"', { ascending: false })
     
     // Filter by appointment ID if provided
     if (appointmentId) {
@@ -169,6 +187,7 @@ export async function GET(req: Request) {
           "Staff/Tip Collected"
         `)
         .in('Payment/ID', transactionIds)
+        .order('"Payment/ID"', { ascending: true })
       
       if (itemsError) {
         console.error('Error fetching transaction items:', itemsError)
@@ -215,7 +234,7 @@ export async function GET(req: Request) {
       items: itemsByTransaction[String(row['🔒 Row ID'] || '')] || [],
     }))
 
-    return NextResponse.json({ ok: true, data: rows })
+    return NextResponse.json({ ok: true, data: rows, total: count || 0 })
   } catch (e: unknown) {
     console.error('Error fetching transactions:', e)
     return NextResponse.json({ ok: false, error: 'Failed to fetch transactions' }, { status: 500 })
