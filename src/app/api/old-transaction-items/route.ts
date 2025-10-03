@@ -19,8 +19,19 @@ export async function GET(req: Request) {
       .from('old_transaction_items')
       .select('*')
       .eq('paid_check', true) // Only get paid transactions
-      .order('idx', { ascending: false })
       .limit(limit)
+
+    console.log('🔍 Supabase query result:', {
+      success: !error,
+      error: error?.message,
+      dataCount: data?.length || 0,
+      sampleRow: data?.[0],
+      sampleDates: data?.slice(0, 5).map(row => ({
+        payment_date: row.payment_date,
+        payment_at: row.payment_at,
+        parsed_payment_at: row.payment_at ? new Date(row.payment_at).toISOString() : null
+      }))
+    })
 
     if (error) {
       console.error('❌ Supabase error fetching old transaction items:', error)
@@ -31,7 +42,6 @@ export async function GET(req: Request) {
 
     // Transform the data to a more usable format
     const rows = (data || []).map((row: Record<string, unknown>) => ({
-      idx: row.idx,
       rowId: row.row_id,
       paymentId: row['Payment/ID'],
       staffName: row['Staff/Name'],
@@ -46,6 +56,16 @@ export async function GET(req: Request) {
     }))
 
     console.log('📊 Sample transformed data:', rows.slice(0, 2))
+    console.log('💰 Revenue calculation check:', {
+      sampleRevenue: rows.slice(0, 3).map(r => ({ 
+        staffName: r.staffName, 
+        servicePrice: r.servicePrice, 
+        tipCollected: r.staffTipCollected 
+      })),
+      totalRevenueSum: rows.reduce((sum, r) => sum + (r.servicePrice || 0), 0),
+      totalTipsSum: rows.reduce((sum, r) => sum + (r.staffTipCollected || 0), 0),
+      totalItems: rows.length
+    })
 
     return NextResponse.json({ ok: true, data: rows })
   } catch (e: unknown) {

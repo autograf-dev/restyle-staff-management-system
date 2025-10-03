@@ -181,6 +181,51 @@ export default function DashboardPage() {
     }
   }
 
+  // Special date range function for V1 data (which is in 2025)
+  const getV1DateRange = (filter: FilterType): { start: Date; end: Date } => {
+    // V1 data is from 2025, so we need to adjust date ranges accordingly
+    const v1Year = 2025
+    const now = new Date()
+    const today = new Date(v1Year, now.getMonth(), now.getDate())
+    
+    switch (filter) {
+      case "today":
+        return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      case "thisWeek": {
+        const weekStart = new Date(today)
+        weekStart.setDate(today.getDate() - today.getDay())
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekStart.getDate() + 7)
+        return { start: weekStart, end: weekEnd }
+      }
+      case "thisMonth": {
+        const monthStart = new Date(v1Year, now.getMonth(), 1)
+        const monthEnd = new Date(v1Year, now.getMonth() + 1, 0, 23, 59, 59)
+        return { start: monthStart, end: monthEnd }
+      }
+      case "thisYear": {
+        // For V1 data, "thisYear" means all of 2025 since that's when the V1 data exists
+        const yearStart = new Date(v1Year, 0, 1)
+        const yearEnd = new Date(v1Year, 11, 31, 23, 59, 59)
+        return { start: yearStart, end: yearEnd }
+      }
+      case "custom":
+        if (dateRange?.from && dateRange?.to) {
+          // For custom ranges, use the selected dates but map them to 2025
+          const fromYear = v1Year
+          const toYear = v1Year
+          const start = new Date(fromYear, dateRange.from.getMonth(), dateRange.from.getDate())
+          const end = new Date(toYear, dateRange.to.getMonth(), dateRange.to.getDate(), 23, 59, 59)
+          return { start, end }
+        }
+        // Fallback to all of 2025
+        return { start: new Date(v1Year, 0, 1), end: new Date(v1Year, 11, 31, 23, 59, 59) }
+      default:
+        // Default to all of 2025 for V1 data
+        return { start: new Date(v1Year, 0, 1), end: new Date(v1Year, 11, 31, 23, 59, 59) }
+    }
+  }
+
   // Filter rows based on selected date range
   const filteredRows = useMemo(() => {
     const { start, end } = getDateRange(selectedFilter)
@@ -214,9 +259,9 @@ export default function DashboardPage() {
     return filtered
   }, [rows, selectedFilter, dateRange])
 
-  // Filter old transaction items based on selected date range
+  // Filter old transaction items based on selected date range (V1 data is in 2025)
   const filteredOldTxItems = useMemo(() => {
-    const { start, end } = getDateRange(selectedFilter)
+    const { start, end } = getV1DateRange(selectedFilter)
     
     // Normalize dates to compare only date parts (ignore time)
     const normalizeDate = (date: Date) => {
@@ -243,7 +288,7 @@ export default function DashboardPage() {
     })
     
     // Debug logging
-    console.log('📅 Old Transaction Items Filter Debug:', {
+    console.log('📅 V1 Transaction Items Filter Debug (2025 data):', {
       selectedFilter,
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
@@ -294,27 +339,51 @@ export default function DashboardPage() {
     return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods }
   }, [filteredRows])
 
-  // Calculate V1 metrics from old transaction items (like current Transaction Items)
+  // Calculate V1 metrics from old transaction items (comprehensive structure)
   const v1Metrics = useMemo(() => {
     if (filteredOldTxItems.length === 0) {
       return {
-        totalRevenue: 0,
-        totalTips: 0,
-        totalTransactions: 0,
-        staffRevenue: new Map<string, number>(),
-        staffTips: new Map<string, number>(),
-        staffTransactions: new Map<string, number>(),
-        uniqueStaffCount: 0
+        // Store Level Metrics
+        store: {
+          totalRevenue: 0,
+          totalTax: 0,
+          serviceRevenue: 0,
+          productRevenue: 0,
+          totalTips: 0,
+          totalTransactions: 0,
+          uniqueStaffCount: 0
+        },
+        // Per Employee Metrics
+        employees: new Map<string, {
+          staffName: string,
+          totalRevenue: number,
+          totalTax: number,
+          serviceRevenue: number,
+          productRevenue: number,
+          totalTips: number,
+          transactionCount: number
+        }>()
       }
     }
 
-    const staffRevenue = new Map<string, number>()
-    const staffTips = new Map<string, number>()
-    const staffTransactions = new Map<string, number>()
+    const employees = new Map<string, {
+      staffName: string,
+      totalRevenue: number,
+      totalTax: number,
+      serviceRevenue: number,
+      productRevenue: number,
+      totalTips: number,
+      transactionCount: number
+    }>()
+    
     const uniquePayments = new Set<string>()
     
-    let totalRevenue = 0
-    let totalTips = 0
+    // Store level totals
+    let storeTotalRevenue = 0
+    let storeTotalTax = 0  // V1 data doesn't have tax info, will be 0
+    let storeServiceRevenue = 0
+    let storeProductRevenue = 0  // V1 data doesn't have product info, will be 0
+    let storeTotalTips = 0
 
     // Process each transaction item
     filteredOldTxItems.forEach(item => {
@@ -324,42 +393,84 @@ export default function DashboardPage() {
       const servicePrice = item.servicePrice || 0
       const tipCollected = item.staffTipCollected || 0
       
-      // Track revenue per staff
-      totalRevenue += servicePrice
-      staffRevenue.set(staffName, (staffRevenue.get(staffName) || 0) + servicePrice)
+      // V1 data only has service revenue, no product revenue or tax breakdown
+      const itemTotalRevenue = servicePrice
+      const itemTax = 0  // Not available in V1 data
+      const itemServiceRevenue = servicePrice
+      const itemProductRevenue = 0  // Not available in V1 data
       
-      // Track tips per staff
-      totalTips += tipCollected
-      staffTips.set(staffName, (staffTips.get(staffName) || 0) + tipCollected)
+      // Update store level totals
+      storeTotalRevenue += itemTotalRevenue
+      storeTotalTax += itemTax
+      storeServiceRevenue += itemServiceRevenue
+      storeProductRevenue += itemProductRevenue
+      storeTotalTips += tipCollected
       
-      // Track unique transactions per staff (count unique payment IDs)
+      // Track unique payments for transaction count
       if (item.paymentId) {
         uniquePayments.add(item.paymentId)
-        staffTransactions.set(staffName, (staffTransactions.get(staffName) || 0) + 1)
+      }
+      
+      // Update or create employee metrics
+      if (!employees.has(staffName)) {
+        employees.set(staffName, {
+          staffName,
+          totalRevenue: 0,
+          totalTax: 0,
+          serviceRevenue: 0,
+          productRevenue: 0,
+          totalTips: 0,
+          transactionCount: 0
+        })
+      }
+      
+      const emp = employees.get(staffName)!
+      emp.totalRevenue += itemTotalRevenue
+      emp.totalTax += itemTax
+      emp.serviceRevenue += itemServiceRevenue
+      emp.productRevenue += itemProductRevenue
+      emp.totalTips += tipCollected
+      
+      // Count transactions per employee (each item is part of a transaction)
+      if (item.paymentId) {
+        emp.transactionCount += 1
       }
     })
 
     const totalTransactions = uniquePayments.size
-    const uniqueStaffCount = staffRevenue.size
+    const uniqueStaffCount = employees.size
 
-    console.log('📊 V1 Metrics Calculated from Transaction Items:', {
-      totalRevenue,
-      totalTips,
-      totalTransactions,
-      uniqueStaffCount,
-      totalItems: filteredOldTxItems.length,
-      sampleStaffRevenue: Array.from(staffRevenue.entries()).slice(0, 3),
-      sampleStaffTips: Array.from(staffTips.entries()).slice(0, 3)
+    console.log('📊 V1 Comprehensive Metrics Calculated:', {
+      storeLevel: {
+        totalRevenue: storeTotalRevenue,
+        totalTax: storeTotalTax,
+        serviceRevenue: storeServiceRevenue,
+        productRevenue: storeProductRevenue,
+        totalTips: storeTotalTips,
+        totalTransactions,
+        uniqueStaffCount
+      },
+      employeeCount: employees.size,
+      sampleEmployees: Array.from(employees.entries()).slice(0, 3).map(([name, data]) => ({
+        name,
+        revenue: data.totalRevenue,
+        tips: data.totalTips,
+        transactions: data.transactionCount
+      })),
+      totalItems: filteredOldTxItems.length
     })
 
     return {
-      totalRevenue,
-      totalTips,
-      totalTransactions,
-      staffRevenue,
-      staffTips,
-      staffTransactions,
-      uniqueStaffCount
+      store: {
+        totalRevenue: storeTotalRevenue,
+        totalTax: storeTotalTax,
+        serviceRevenue: storeServiceRevenue,
+        productRevenue: storeProductRevenue,
+        totalTips: storeTotalTips,
+        totalTransactions,
+        uniqueStaffCount
+      },
+      employees
     }
   }, [filteredOldTxItems])
 
@@ -975,101 +1086,129 @@ export default function DashboardPage() {
                   )}
             </div>
 
-            {/* Metrics from V1 Section */}
-            <div className="space-y-4">
+            {/* Metrics from V1 Section - Comprehensive Structure */}
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Receipt className="h-5 w-5 text-[#601625]" />
                   <h2 className="text-lg font-semibold text-[#601625]">Metrics from V1</h2>
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
-                    {sectionsLoading ? <Skeleton className="h-4 w-12" /> : `${v1Metrics.totalTransactions} Transactions`}
+                    {sectionsLoading ? <Skeleton className="h-4 w-12" /> : `${v1Metrics.store.totalTransactions} Transactions`}
                   </Badge>
                 </div>
                 <Badge variant="secondary" className="text-xs bg-[#601625]/10 text-[#601625] border-[#601625]/20">
                   Legacy Data
                 </Badge>
               </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {sectionsLoading ? (
-                  Array.from({ length: 4 }).map((_, index) => (
-                    <Card key={index} className="rounded-2xl border-neutral-200 shadow-sm">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-2">
-                            <Skeleton className="h-3 w-24" />
-                            <Skeleton className="h-6 w-20" />
-                          </div>
-                          <Skeleton className="h-10 w-10 rounded-xl" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  <>
-                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Total Revenue</div>
-                            <div className="text-[24px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.totalRevenue)}</div>
-                          </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
-                            <DollarSign className="h-5 w-5 text-[#601625]" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
 
-                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Total Tips</div>
-                            <div className="text-[24px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.totalTips)}</div>
+              {/* 1. STORE LEVEL METRICS */}
+              <div className="space-y-4">
+                <h3 className="text-md font-semibold text-[#601625] flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-[#601625] text-white flex items-center justify-center text-xs font-bold">1</div>
+                  Store Level Metrics
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  {sectionsLoading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <Card key={index} className="rounded-2xl border-neutral-200 shadow-sm">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-2">
+                              <Skeleton className="h-3 w-24" />
+                              <Skeleton className="h-6 w-20" />
+                            </div>
+                            <Skeleton className="h-10 w-10 rounded-xl" />
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
-                            <TrendingUp className="h-5 w-5 text-[#601625]" />
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <>
+                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Revenue</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.totalRevenue)}</div>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                              <DollarSign className="h-5 w-5 text-[#601625]" />
+                            </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Transactions</div>
-                            <div className="text-[24px] font-bold text-[#601625] mt-1">{v1Metrics.totalTransactions}</div>
+                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Tax</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.totalTax)}</div>
+                              <div className="text-[10px] text-[#601625]/60">Not tracked in V1</div>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                              <Receipt className="h-5 w-5 text-[#601625]" />
+                            </div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
-                            <Receipt className="h-5 w-5 text-[#601625]" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">V1 Staff Count</div>
-                            <div className="text-[24px] font-bold text-[#601625] mt-1">{v1Metrics.uniqueStaffCount}</div>
+                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Service Revenue</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.serviceRevenue)}</div>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                              <Scissors className="h-5 w-5 text-[#601625]" />
+                            </div>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
-                            <Users className="h-5 w-5 text-[#601625]" />
+                        </CardContent>
+                      </Card>
+
+                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Product Revenue</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.productRevenue)}</div>
+                              <div className="text-[10px] text-[#601625]/60">Not tracked in V1</div>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                              <Package className="h-5 w-5 text-[#601625]" />
+                            </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Tips</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.totalTips)}</div>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                              <TrendingUp className="h-5 w-5 text-[#601625]" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* V1 Staff Performance Table */}
-              {!sectionsLoading && v1Metrics.staffRevenue.size > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-medium text-[#601625] mb-4">V1 Staff Performance</h3>
+              {/* 2. PER EMPLOYEE METRICS */}
+              {!sectionsLoading && v1Metrics.employees.size > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-md font-semibold text-[#601625] flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-[#601625] text-white flex items-center justify-center text-xs font-bold">2</div>
+                    Per Employee Metrics ({v1Metrics.store.uniqueStaffCount} Staff Members)
+                  </h3>
+                  
                   <Card className="rounded-2xl border-[#601625]/20 shadow-sm bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
                     <CardContent className="p-6">
                       <div className="overflow-x-auto">
@@ -1077,43 +1216,47 @@ export default function DashboardPage() {
                           <thead>
                             <tr className="border-b border-[#601625]/20">
                               <th className="text-left py-3 px-4 text-sm font-semibold text-[#601625]">Staff Member</th>
-                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Revenue</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Total Revenue</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Total Tax</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Service Revenue</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Product Revenue</th>
                               <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Tips</th>
                               <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Transactions</th>
-                              <th className="text-right py-3 px-4 text-sm font-semibold text-[#601625]">Avg/Transaction</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {Array.from(v1Metrics.staffRevenue.entries())
-                              .sort(([,a], [,b]) => b - a) // Sort by revenue descending
-                              .slice(0, 10) // Show top 10 staff
-                              .map(([staffName, revenue]) => {
-                                const tips = v1Metrics.staffTips.get(staffName) || 0
-                                const transactions = v1Metrics.staffTransactions.get(staffName) || 0
-                                const avgPerTransaction = transactions > 0 ? revenue / transactions : 0
-                                
-                                return (
-                                  <tr key={staffName} className="border-b border-[#601625]/10 hover:bg-[#601625]/5 transition-colors">
-                                    <td className="py-3 px-4">
-                                      <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
-                                          <span className="text-white font-semibold text-sm">
-                                            {staffName.charAt(0).toUpperCase()}
-                                          </span>
-                                        </div>
-                                        <span className="font-medium text-[#601625]">{staffName}</span>
+                            {Array.from(v1Metrics.employees.entries())
+                              .sort(([,a], [,b]) => b.totalRevenue - a.totalRevenue) // Sort by total revenue descending
+                              .slice(0, 20) // Show top 20 staff
+                              .map(([staffName, empData]) => (
+                                <tr key={staffName} className="border-b border-[#601625]/10 hover:bg-[#601625]/5 transition-colors">
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="h-8 w-8 rounded-full bg-[#601625] flex items-center justify-center">
+                                        <span className="text-white font-semibold text-sm">
+                                          {staffName.charAt(0).toUpperCase()}
+                                        </span>
                                       </div>
-                                    </td>
-                                    <td className="py-3 px-4 text-right font-bold text-[#601625]">{formatCurrency(revenue)}</td>
-                                    <td className="py-3 px-4 text-right font-medium text-[#751a29]">{formatCurrency(tips)}</td>
-                                    <td className="py-3 px-4 text-right text-neutral-600">{Math.round(transactions)}</td>
-                                    <td className="py-3 px-4 text-right font-medium text-[#601625]">{formatCurrency(avgPerTransaction)}</td>
-                                  </tr>
-                                )
-                              })}
+                                      <span className="font-medium text-[#601625]">{staffName}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-bold text-[#601625]">{formatCurrency(empData.totalRevenue)}</td>
+                                  <td className="py-3 px-4 text-right text-gray-400">{formatCurrency(empData.totalTax)}</td>
+                                  <td className="py-3 px-4 text-right font-medium text-[#601625]">{formatCurrency(empData.serviceRevenue)}</td>
+                                  <td className="py-3 px-4 text-right text-gray-400">{formatCurrency(empData.productRevenue)}</td>
+                                  <td className="py-3 px-4 text-right font-medium text-[#751a29]">{formatCurrency(empData.totalTips)}</td>
+                                  <td className="py-3 px-4 text-right text-neutral-600">{empData.transactionCount}</td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       </div>
+                      
+                      {v1Metrics.employees.size > 20 && (
+                        <div className="mt-4 text-center text-sm text-[#601625]/60">
+                          Showing top 20 of {v1Metrics.employees.size} staff members
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
