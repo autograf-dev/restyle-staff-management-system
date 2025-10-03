@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     }
 
     // Helper: safe number and rounding
-    const toNumber = (v: any, d = 0) => {
+    const toNumber = (v: unknown, d = 0) => {
       const n = Number(v)
       return Number.isFinite(n) ? n : d
     }
