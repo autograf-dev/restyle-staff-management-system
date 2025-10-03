@@ -1426,11 +1426,25 @@ export default function DashboardPage() {
                         <CardContent className="p-5">
                           <div className="flex items-center justify-between">
                             <div>
-                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Revenue</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.revenue)}</div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Service Revenue</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.subtotal)}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
-                              <DollarSign className="h-5 w-5 text-[#601625]" />
+                              <Scissors className="h-5 w-5 text-[#601625]" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Transactions</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{kpis.count}</div>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
+                              <CreditCard className="h-5 w-5 text-[#601625]" />
                             </div>
                           </div>
                         </CardContent>
@@ -1445,20 +1459,6 @@ export default function DashboardPage() {
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <Receipt className="h-5 w-5 text-[#601625]" />
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
-                        <CardContent className="p-5">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Service Revenue</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.subtotal)}</div>
-                            </div>
-                            <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
-                              <Scissors className="h-5 w-5 text-[#601625]" />
                             </div>
                           </div>
                         </CardContent>
