@@ -607,18 +607,6 @@ export default function DashboardPage() {
       // Reset rows when doing a full reload so incremental append doesn't duplicate
       setRows([])
 
-      // fetch staff list from staff-hours
-      const staffRes = await fetch('/api/barber-hours')
-      const staffJson = await staffRes.json().catch(() => ({ ok: false }))
-      if (staffRes.ok && staffJson?.ok && Array.isArray(staffJson.data)) {
-        type StaffRow = { [key: string]: unknown; ghl_id?: string; ["🔒 Row ID"]?: string; ["ð Row ID"]?: string; ["Barber/Name"]?: string }
-        const list = (staffJson.data as StaffRow[]).map((row) => ({
-          id: String(row["🔒 Row ID"] || row["ð Row ID"] || row.ghl_id || ''),
-          name: String(row["Barber/Name"] || '').trim()
-        })).filter((s) => s.name)
-        setStaffList(list)
-      }
-
       // Fetch ALL current transactions with batched parallel paging and incremental append
       const fetchAllTransactionsParallel = async () => {
         const pageSize = 1000
@@ -667,6 +655,32 @@ export default function DashboardPage() {
       // ensure rows state is set if incremental appends didn't cover
       if (allTransactions.length > 0) setRows(allTransactions)
 
+      // Extract staff list from transactions and transaction items
+      const allStaff = new Set<string>()
+      
+      // Get staff from transaction items (most accurate)
+      allTransactions.forEach(row => {
+        if (row.items) {
+          row.items.forEach(item => {
+            if (item.staffName && item.staffName.trim()) {
+              allStaff.add(item.staffName.trim())
+            }
+          })
+        }
+        // Also check main staff field as fallback
+        if (row.staff && row.staff.trim()) {
+          const staffNames = row.staff.split(',').map(name => name.trim()).filter(name => name)
+          staffNames.forEach(name => allStaff.add(name))
+        }
+      })
+      
+      // Convert to staff list format
+      const list = Array.from(allStaff).map((name, index) => ({
+        id: `staff_${index}_${name.replace(/\s+/g, '_')}`,
+        name: name
+      }))
+      setStaffList(list)
+
       // Process old transaction items
       const oldItemsJson: { ok: boolean; data?: OldTxItemRow[]; error?: unknown } = await oldItemsRes.json()
       if (!oldItemsRes.ok || !oldItemsJson.ok) {
@@ -696,14 +710,7 @@ export default function DashboardPage() {
       DASHBOARD_CACHE = {
         rows: allTransactions,
         oldTxItems: oldItemsJson.ok ? (oldItemsJson.data || []) : [],
-        staffList: Array.isArray(staffJson?.data)
-          ? (staffJson.data as { [key: string]: unknown; ghl_id?: string; ["🔒 Row ID"]?: string; ["ð Row ID"]?: string; ["Barber/Name"]?: string }[])
-              .map((row) => ({
-                id: String(row["🔒 Row ID"] || row["ð Row ID"] || row.ghl_id || ''),
-                name: String(row["Barber/Name"] || '').trim()
-              }))
-              .filter((s) => s.name)
-          : [],
+        staffList: list,
         lastFetchedAt: Date.now(),
         targetRevenueAmount,
         targetPercentage
