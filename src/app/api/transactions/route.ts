@@ -12,17 +12,46 @@ export async function POST(req: Request) {
 
     const body = await req.json()
     const { transaction, items } = body as {
-      transaction: Record<string, unknown>
-      items: Record<string, unknown>[]
+      transaction: Record<string, any>
+      items: Record<string, any>[]
     }
 
     if (!transaction || !Array.isArray(items)) {
       return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 })
     }
 
-    // Insert into "Transactions" - Remove concatenated service/staff fields, use only Transaction Items
-    const txRow = {
-      "🔒 Row ID": transaction.id,
+    // Helper: safe number and rounding
+    const toNumber = (v: any, d = 0) => {
+      const n = Number(v)
+      return Number.isFinite(n) ? n : d
+    }
+    const round2 = (n: number) => Math.round(n * 100) / 100
+
+    // Extract split flags from transaction payload (UI embeds these inside transaction)
+    const isSplitPayment: boolean = Boolean(transaction.isSplitPayment)
+    const isServiceSplit: boolean = Boolean(transaction.isServiceSplit)
+    const splitPayments: Array<{ method: string; amount: number; percentage?: number }>
+      = Array.isArray(transaction.splitPayments) ? transaction.splitPayments.map((p: any) => ({
+        method: String(p.method || '').toLowerCase(),
+        amount: toNumber(p.amount, 0),
+        percentage: toNumber(p.percentage, 0)
+      })) : []
+    const serviceSplits: Array<{ serviceId: string; paymentMethod: string }>
+      = Array.isArray(transaction.serviceSplits) ? transaction.serviceSplits.map((s: any) => ({
+        serviceId: String(s.serviceId || ''),
+        paymentMethod: String(s.paymentMethod || '').toLowerCase()
+      })) : []
+
+    const originalId: string = String(transaction.id)
+    const paymentDate = transaction.paymentDate ?? new Date().toISOString()
+    const subtotal = toNumber(transaction.subtotal)
+    const tax = toNumber(transaction.tax)
+    const tip = toNumber(transaction.tip)
+    const totalPaid = toNumber(transaction.totalPaid)
+
+    // Function to map a transaction payload to Supabase row
+    const buildTxRow = (id: string, method: string, alloc: { subtotal: number; tax: number; tip: number; totalPaid: number }, sortIndex: number) => ({
+      "🔒 Row ID": id,
       "Booking/ID": transaction.bookingId ?? null,
       "Booking/Service Lookup": transaction.bookingServiceLookup ?? null,
       "Booking/Booked Rate": transaction.bookingBookedRate ?? null,
@@ -30,18 +59,17 @@ export async function POST(req: Request) {
       "Booking/Type": transaction.bookingType ?? null,
       "Customer/Phone": transaction.customerPhone ?? null,
       "Customer/Lookup": transaction.customerLookup ?? null,
-      "Payment/Date": transaction.paymentDate ?? null,
-      "Payment/Method": transaction.method ?? null,
-      "Payment/Sort": transaction.paymentSort ?? null,
+      "Payment/Date": paymentDate,
+      "Payment/Method": method || null,
+      "Payment/Sort": sortIndex || null,
       "Payment/Staff": transaction.paymentStaff ?? null,
-      "Payment/Subtotal": transaction.subtotal ?? null,
+      "Payment/Subtotal": alloc.subtotal,
       "Payment/Status": transaction.status ?? "Paid",
       "Transaction/Services": transaction.transactionServices ?? transaction.subtotal ?? null,
       "Transaction/Services Total": transaction.transactionServicesTotal ?? transaction.subtotal ?? null,
-      "Transaction/Tax": transaction.tax ?? null,
-      "Transaction/Total Paid": transaction.totalPaid ?? null,
+      "Transaction/Tax": alloc.tax,
+      "Transaction/Total Paid": alloc.totalPaid,
       "Service/Joined List": transaction.serviceNamesJoined ?? null,
-      // Store concatenated service IDs for the transaction (from payload)
       "Service/Acuity IDs": transaction.serviceAcuityIds ?? null,
       "DNU Service/Name": null,
       "DNU Service/Subtotal": null,
@@ -57,7 +85,7 @@ export async function POST(req: Request) {
       "Summary/YY": null,
       "Summary/Month ID": null,
       "Summary/Staff List": null,
-      "Transaction/Tip": transaction.tip ?? null,
+      "Transaction/Tip": alloc.tip,
       "DNU Service/Tip Split": null,
       "DNU Add-On/Subtotal": null,
       "DNU Add-On/Total": null,
@@ -74,20 +102,188 @@ export async function POST(req: Request) {
       "Transaction/Services New": null,
       "Transaction/Paid": transaction.transactionPaid ?? "Yes",
       "Transaction/Reward": null,
+    })
+
+    // Helper to insert items
+    const insertItems = async (rows: Array<Record<string, any>>) => {
+      if (rows.length === 0) return null
+      const { error } = await supabaseAdmin
+        .from("Transaction Items")
+        .insert(rows)
+      return error
     }
+
+    // Branch 1: Split by payment amounts (same items; multiple transactions)
+    if (isSplitPayment && splitPayments.length >= 2 && totalPaid > 0) {
+      const sumSplit = round2(splitPayments.reduce((s, p) => s + toNumber(p.amount, 0), 0))
+      if (Math.abs(sumSplit - round2(totalPaid)) > 0.05) {
+        return NextResponse.json({ ok: false, error: "Split amounts do not equal total" }, { status: 400 })
+      }
+
+      // Compute proportional allocations and fix rounding on the last entry
+      let remaining = { subtotal, tax, tip, totalPaid }
+      const txRows: any[] = []
+      const childIds: string[] = []
+      splitPayments.forEach((sp, idx) => {
+        const id = idx === 0 ? originalId : `${originalId}-${idx + 1}`
+        childIds.push(id)
+        const isLast = idx === splitPayments.length - 1
+        if (!isLast) {
+          const ratio = sp.amount / totalPaid
+          const alloc = {
+            subtotal: round2(subtotal * ratio),
+            tax: round2(tax * ratio),
+            tip: round2(tip * ratio),
+            totalPaid: round2(sp.amount)
+          }
+          remaining.subtotal = round2(remaining.subtotal - alloc.subtotal)
+          remaining.tax = round2(remaining.tax - alloc.tax)
+          remaining.tip = round2(remaining.tip - alloc.tip)
+          remaining.totalPaid = round2(remaining.totalPaid - alloc.totalPaid)
+          txRows.push(buildTxRow(id, sp.method, alloc, idx + 1))
+        } else {
+          // Assign all remainder to last split to ensure sums match exactly
+          const alloc = { ...remaining }
+          txRows.push(buildTxRow(id, sp.method, alloc, idx + 1))
+        }
+      })
+
+      const { error: splitTxError } = await supabaseAdmin
+        .from("Transactions")
+        .insert(txRows)
+      if (splitTxError) {
+        return NextResponse.json({ ok: false, error: splitTxError.message }, { status: 400 })
+      }
+
+      // Attach items ONLY to the first transaction to avoid double counting
+      const firstId = childIds[0]
+      const itemRows = items.map((it: Record<string, any>) => ({
+        "🔒 Row ID": it.id,
+        "Payment/ID": firstId,
+        "VALUES JOINED 2": it.valuesJoined2 ?? null,
+        "STATUS JOINED": it.statusJoined ?? null,
+        "Staff/Name": it.staffName ?? null,
+        "Staff/Tip Split": it.staffTipSplit ?? null,
+        "Staff/Tip Collected": it.staffTipCollected ?? null,
+        "Service/ID": it.serviceId ?? null,
+        "Service/Name": it.serviceName ?? null,
+        "Service/Price": it.price ?? null,
+      }))
+      const itemErr = await insertItems(itemRows)
+      if (itemErr) {
+        return NextResponse.json({ ok: false, error: itemErr.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ ok: true, id: firstId, splits: childIds })
+    }
+
+    // Branch 2: Service-based split (items partitioned by payment method)
+    if (isServiceSplit && serviceSplits.length > 0) {
+      const serviceToMethod = new Map<string, string>()
+      serviceSplits.forEach(s => {
+        if (s.serviceId) serviceToMethod.set(String(s.serviceId), s.paymentMethod)
+      })
+
+      // Group items by method via serviceId mapping
+      const methodToItems = new Map<string, Array<Record<string, any>>>()
+      items.forEach((it) => {
+        const method = serviceToMethod.get(String(it.serviceId || '')) || String(transaction.method || '').toLowerCase()
+        if (!methodToItems.has(method)) methodToItems.set(method, [])
+        methodToItems.get(method)!.push(it)
+      })
+
+      const methods = Array.from(methodToItems.keys())
+      if (methods.length === 0) {
+        // Fallback to single insert
+        methods.push(String(transaction.method || 'other'))
+        methodToItems.set(methods[0], items)
+      }
+
+      // Allocate totals proportionally by items price sum per method
+      const priceTotals = methods.map(m => methodToItems.get(m)!.reduce((s, it) => s + toNumber(it.price, 0), 0))
+      const totalPrice = priceTotals.reduce((a, b) => a + b, 0) || 1
+
+      let remaining = { subtotal, tax, tip, totalPaid }
+      const txRows: any[] = []
+      const childIds: string[] = []
+
+      methods.forEach((m, idx) => {
+        const id = idx === 0 ? originalId : `${originalId}-${idx + 1}`
+        childIds.push(id)
+        const isLast = idx === methods.length - 1
+        if (!isLast) {
+          const ratio = priceTotals[idx] / totalPrice
+          const alloc = {
+            subtotal: round2(subtotal * ratio),
+            tax: round2(tax * ratio),
+            tip: round2(tip * ratio),
+            totalPaid: round2(totalPaid * ratio)
+          }
+          remaining.subtotal = round2(remaining.subtotal - alloc.subtotal)
+          remaining.tax = round2(remaining.tax - alloc.tax)
+          remaining.tip = round2(remaining.tip - alloc.tip)
+          remaining.totalPaid = round2(remaining.totalPaid - alloc.totalPaid)
+          txRows.push(buildTxRow(id, m, alloc, idx + 1))
+        } else {
+          const alloc = { ...remaining }
+          txRows.push(buildTxRow(id, m, alloc, idx + 1))
+        }
+      })
+
+      const { error: splitTxError } = await supabaseAdmin
+        .from("Transactions")
+        .insert(txRows)
+      if (splitTxError) {
+        return NextResponse.json({ ok: false, error: splitTxError.message }, { status: 400 })
+      }
+
+      // Insert items for their respective transaction ids
+      const itemRows: Array<Record<string, any>> = []
+      methods.forEach((m, idx) => {
+        const id = idx === 0 ? originalId : `${originalId}-${idx + 1}`
+        methodToItems.get(m)!.forEach((it) => {
+          itemRows.push({
+            "🔒 Row ID": it.id,
+            "Payment/ID": id,
+            "VALUES JOINED 2": it.valuesJoined2 ?? null,
+            "STATUS JOINED": it.statusJoined ?? null,
+            "Staff/Name": it.staffName ?? null,
+            "Staff/Tip Split": it.staffTipSplit ?? null,
+            "Staff/Tip Collected": it.staffTipCollected ?? null,
+            "Service/ID": it.serviceId ?? null,
+            "Service/Name": it.serviceName ?? null,
+            "Service/Price": it.price ?? null,
+          })
+        })
+      })
+      const itemErr = await insertItems(itemRows)
+      if (itemErr) {
+        return NextResponse.json({ ok: false, error: itemErr.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ ok: true, id: originalId, splits: childIds })
+    }
+
+    // Default: single transaction
+    const singleRow = buildTxRow(originalId, String(transaction.method || '').toLowerCase(), {
+      subtotal,
+      tax,
+      tip,
+      totalPaid
+    }, 1)
 
     const { error: txError } = await supabaseAdmin
       .from("Transactions")
-      .insert([txRow])
+      .insert([singleRow])
 
     if (txError) {
       return NextResponse.json({ ok: false, error: txError.message }, { status: 400 })
     }
 
-    // Insert into "Transaction Items"
-    const itemRows = items.map((it: Record<string, unknown>) => ({
+    // Insert items for single transaction
+    const itemRows = items.map((it: Record<string, any>) => ({
       "🔒 Row ID": it.id,
-      "Payment/ID": it.paymentId,
+      "Payment/ID": originalId,
       "VALUES JOINED 2": it.valuesJoined2 ?? null,
       "STATUS JOINED": it.statusJoined ?? null,
       "Staff/Name": it.staffName ?? null,
@@ -107,7 +303,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, id: transaction.id })
+    return NextResponse.json({ ok: true, id: originalId })
   } catch (error: unknown) {
     console.error("/api/transactions error", error)
     return NextResponse.json({ ok: false, error: "Failed to create transaction" }, { status: 500 })
