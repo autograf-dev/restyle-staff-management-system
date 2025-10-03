@@ -694,16 +694,6 @@ export default function PaymentsPage() {
                             <div className="col-span-2">
                                 <div className="flex flex-col gap-1">
                                 <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
-                                  {r.items && r.items.length > 0 && (
-                                  <div className="text-xs text-gray-500 space-y-1">
-                                      {r.items.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between items-center">
-                                        <span className="truncate text-gray-600">{item.staffName}:</span>
-                                        <span className="font-semibold text-gray-900 ml-2">{formatCurrency(item.staffTipSplit)}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
 
@@ -807,16 +797,6 @@ export default function PaymentsPage() {
                                 <div>
                                   <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Tips</div>
                                   <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
-                              {r.items && r.items.length > 0 && (
-                                    <div className="text-xs text-gray-500 space-y-1 mt-2">
-                                    {r.items.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between items-center">
-                                          <span className="truncate text-gray-600">{item.staffName}:</span>
-                                          <span className="font-semibold text-gray-900 ml-2">{formatCurrency(item.staffTipSplit)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  )}
                                 </div>
                                 <div className="flex gap-2">
                                   <Link 
