@@ -1808,7 +1808,6 @@ export default function DashboardPage() {
                           <tbody>
                             {Array.from(employeeMetrics.employees.entries())
                               .sort(([,a], [,b]) => b.totalRevenue - a.totalRevenue) // Sort by total revenue descending
-                              .slice(0, 20) // Show top 20 staff
                               .map(([staffName, empData]) => (
                                 <tr key={staffName} className="border-b border-[#601625]/10 hover:bg-[#601625]/5 transition-colors">
                                   <td className="py-3 px-4">
@@ -1833,11 +1832,9 @@ export default function DashboardPage() {
                         </table>
                       </div>
                       
-                      {employeeMetrics.employees.size > 20 && (
-                        <div className="mt-4 text-center text-sm text-[#601625]/60">
-                          Showing top 20 of {employeeMetrics.employees.size} staff members
-                        </div>
-                      )}
+                      <div className="mt-4 text-center text-sm text-[#601625]/60">
+                        Showing {employeeMetrics.employees.size} staff members
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
