@@ -234,25 +234,28 @@ export default function DashboardPage() {
 
   // Filter rows based on selected date range
   const filteredRows = useMemo(() => {
+    // For alltime, include all rows (even those without Payment/Date)
+    if (selectedFilter === "alltime") {
+      console.log('📅 Date Filter Debug (alltime):', {
+        selectedFilter,
+        totalRows: rows.length
+      })
+      return rows
+    }
+
     const { start, end } = getDateRange(selectedFilter)
-    
-    // Normalize dates to compare only date parts (ignore time)
     const normalizeDate = (date: Date) => {
       const normalized = new Date(date)
       normalized.setHours(0, 0, 0, 0)
       return normalized
     }
-    
     const startDate = normalizeDate(start)
     const endDate = normalizeDate(end)
-    
     const filtered = rows.filter(row => {
       if (!row.paymentDate) return false
       const paymentDate = normalizeDate(new Date(row.paymentDate))
       return paymentDate >= startDate && paymentDate <= endDate
     })
-    
-    // Debug logging
     console.log('📅 Date Filter Debug:', {
       selectedFilter,
       startDate: startDate.toISOString().split('T')[0],
@@ -261,7 +264,6 @@ export default function DashboardPage() {
       filteredRows: filtered.length,
       samplePaymentDates: filtered.slice(0, 3).map(r => r.paymentDate)
     })
-    
     return filtered
   }, [rows, selectedFilter, dateRange])
 
@@ -311,7 +313,13 @@ export default function DashboardPage() {
     const count = filteredRows.length
     const revenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
     const tips = filteredRows.reduce((sum, r) => sum + Number(r.tip || 0), 0)
-    const subtotal = filteredRows.reduce((sum, r) => sum + Number(r.subtotal || 0), 0)
+    // Service revenue ONLY from Transaction Items → strict sum of item.price
+    const subtotal = filteredRows.reduce((sum, r) => {
+      const itemsTotal = Array.isArray(r.items)
+        ? r.items.reduce((s: number, it: any) => s + Number(it.price || 0), 0)
+        : 0
+      return sum + itemsTotal
+    }, 0)
     const tax = filteredRows.reduce((sum, r) => sum + Number(r.tax || 0), 0)
     const avg = count > 0 ? revenue / count : 0
     
@@ -486,34 +494,53 @@ export default function DashboardPage() {
     const load = async () => {
       setSectionsLoading(true)
       try {
-        // Fetch ALL current transactions by paging through the API (default limit=50)
-        const fetchAllTransactions = async () => {
+        // Fetch ALL current transactions with batched parallel paging and incremental append
+        const fetchAllTransactionsParallel = async () => {
           const pageSize = 1000
-          let offset = 0
+          // First call to read total
+          const headRes = await fetch(`/api/transactions?limit=1&offset=0`)
+          const headJson = await headRes.json()
+          if (!headRes.ok || !headJson.ok) {
+            console.warn('Failed to read transaction total:', headJson.error)
+            return [] as any[]
+          }
+          const total: number = Number(headJson.total || 0)
+          const pages = Math.ceil(total / pageSize)
+
+          const concurrency = 5
           let all: any[] = []
-          let total = Infinity
-          while (offset < total) {
-            const res = await fetch(`/api/transactions?limit=${pageSize}&offset=${offset}`)
-            const json = await res.json()
-            if (!res.ok || !json.ok) {
-              console.warn('Failed to load transactions page:', json.error)
-              break
+          for (let start = 0; start < pages; start += concurrency) {
+            const tasks = [] as Promise<any>[]
+            for (let p = start; p < Math.min(start + concurrency, pages); p++) {
+              const offset = p * pageSize
+              tasks.push(
+                fetch(`/api/transactions?limit=${pageSize}&offset=${offset}`)
+                  .then(r => r.json().then(j => ({ r, j })))
+                  .then(({ r, j }) => {
+                    if (!r.ok || !j.ok) {
+                      console.warn('Failed to load transactions page:', j.error)
+                      return []
+                    }
+                    const batch = j.data || []
+                    // Incrementally append so UI renders while loading
+                    setRows(prev => prev.concat(batch))
+                    return batch
+                  })
+              )
             }
-            const batch = json.data || []
-            total = Number(json.total || 0)
-            all = all.concat(batch)
-            if (batch.length < pageSize) break
-            offset += pageSize
+            const results = await Promise.all(tasks)
+            results.forEach(b => { all = all.concat(b) })
           }
           return all
         }
 
         const [allTransactions, oldItemsRes] = await Promise.all([
-          fetchAllTransactions(),
+          fetchAllTransactionsParallel(),
           fetch(`/api/old-transaction-items?limit=1000`)
         ])
-
-        setRows(allTransactions)
+        
+        // ensure rows state is set if incremental appends didn't cover
+        if (allTransactions.length > 0) setRows(allTransactions)
         
         // Process old transaction items
         const oldItemsJson = await oldItemsRes.json()
