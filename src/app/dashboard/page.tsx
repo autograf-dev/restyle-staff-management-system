@@ -118,7 +118,7 @@ export default function DashboardPage() {
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "alltime"
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>("alltime")
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>("today")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [customDateDialogOpen, setCustomDateDialogOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState<Date | undefined>()
