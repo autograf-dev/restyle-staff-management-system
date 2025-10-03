@@ -171,28 +171,33 @@ export async function GET(req: Request) {
     // Get transaction IDs to fetch items
     const transactionIds = (data || []).map((row: Record<string, unknown>) => row['🔒 Row ID'])
     
-    // Fetch transaction items for all transactions
+    // Fetch transaction items for all transactions (chunk to avoid oversized filters)
     let itemsData: Record<string, unknown>[] = []
     if (transactionIds.length > 0) {
-      const { data: items, error: itemsError } = await supabaseAdmin
-        .from('Transaction Items')
-        .select(`
-          "🔒 Row ID",
-          "Payment/ID",
-          "Service/ID",
-          "Service/Name",
-          "Service/Price",
-          "Staff/Name",
-          "Staff/Tip Split",
-          "Staff/Tip Collected"
-        `)
-        .in('Payment/ID', transactionIds)
-        .order('"Payment/ID"', { ascending: true })
-      
-      if (itemsError) {
-        console.error('Error fetching transaction items:', itemsError)
-      } else {
-        itemsData = items || []
+      const chunkSize = 400
+      for (let i = 0; i < transactionIds.length; i += chunkSize) {
+        const chunk = transactionIds.slice(i, i + chunkSize)
+        const { data: items, error: itemsError } = await supabaseAdmin
+          .from('Transaction Items')
+          .select(`
+            "🔒 Row ID",
+            "Payment/ID",
+            "Service/ID",
+            "Service/Name",
+            "Service/Price",
+            "Staff/Name",
+            "Staff/Tip Split",
+            "Staff/Tip Collected"
+          `)
+          .in('"Payment/ID"', chunk)
+          .order('"Payment/ID"', { ascending: true })
+        if (itemsError) {
+          console.error('Error fetching transaction items:', itemsError)
+          break
+        }
+        if (items && items.length > 0) {
+          itemsData = itemsData.concat(items)
+        }
       }
     }
 

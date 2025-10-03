@@ -97,8 +97,8 @@ export default function DashboardPage() {
   const [sectionsLoading, setSectionsLoading] = useState(true)
   
   // Date Filter State
-  type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom"
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>("thisYear")
+  type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "alltime"
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>("alltime")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [customDateDialogOpen, setCustomDateDialogOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState<Date | undefined>()
@@ -171,6 +171,9 @@ export default function DashboardPage() {
         const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59)
         return { start: yearStart, end: yearEnd }
       }
+      case "alltime": {
+        return { start: new Date(1970, 0, 1), end: new Date(2100, 0, 1) }
+      }
       case "custom":
         if (dateRange?.from && dateRange?.to) {
           return { start: dateRange.from, end: dateRange.to }
@@ -208,6 +211,9 @@ export default function DashboardPage() {
         const yearStart = new Date(v1Year, 0, 1)
         const yearEnd = new Date(v1Year, 11, 31, 23, 59, 59)
         return { start: yearStart, end: yearEnd }
+      }
+      case "alltime": {
+        return { start: new Date(v1Year, 0, 1), end: new Date(v1Year, 11, 31, 23, 59, 59) }
       }
       case "custom":
         if (dateRange?.from && dateRange?.to) {
@@ -480,20 +486,34 @@ export default function DashboardPage() {
     const load = async () => {
       setSectionsLoading(true)
       try {
-        // Fetch both current transactions and old transaction items
-        const [currentRes, oldItemsRes] = await Promise.all([
-          fetch(`/api/transactions?limit=100`),
+        // Fetch ALL current transactions by paging through the API (default limit=50)
+        const fetchAllTransactions = async () => {
+          const pageSize = 1000
+          let offset = 0
+          let all: any[] = []
+          let total = Infinity
+          while (offset < total) {
+            const res = await fetch(`/api/transactions?limit=${pageSize}&offset=${offset}`)
+            const json = await res.json()
+            if (!res.ok || !json.ok) {
+              console.warn('Failed to load transactions page:', json.error)
+              break
+            }
+            const batch = json.data || []
+            total = Number(json.total || 0)
+            all = all.concat(batch)
+            if (batch.length < pageSize) break
+            offset += pageSize
+          }
+          return all
+        }
+
+        const [allTransactions, oldItemsRes] = await Promise.all([
+          fetchAllTransactions(),
           fetch(`/api/old-transaction-items?limit=1000`)
         ])
-        
-        // Process current transactions
-        const currentJson = await currentRes.json()
-        if (!currentRes.ok || !currentJson.ok) {
-          console.warn('Failed to load current transactions:', currentJson.error)
-        } else {
-          const transactions = currentJson.data || []
-          setRows(transactions)
-        }
+
+        setRows(allTransactions)
         
         // Process old transaction items
         const oldItemsJson = await oldItemsRes.json()
@@ -936,6 +956,18 @@ export default function DashboardPage() {
             {/* Date Filter Buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               <Button
+                variant={selectedFilter === "alltime" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedFilter("alltime")}
+                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
+                  selectedFilter === "alltime"
+                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
+                    : "hover:bg-[#601625]/5"
+                }`}
+              >
+                All Time
+              </Button>
+              <Button
                 variant={selectedFilter === "today" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedFilter("today")}
@@ -1001,103 +1033,20 @@ export default function DashboardPage() {
               </Button>
                   </div>
 
-            {/* Enhanced KPI Cards - Cloned from Payments Page */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {sectionsLoading ? (
-                <>
-                  <Skeleton className="h-[88px] rounded-2xl" />
-                  <Skeleton className="h-[88px] rounded-2xl" />
-                  <Skeleton className="h-[88px] rounded-2xl" />
-                  <Skeleton className="h-[88px] rounded-2xl" />
-                  <Skeleton className="h-[88px] rounded-2xl" />
-                </>
-                  ) : (
-                    <>
-                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Revenue</div>
-                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.revenue)}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                          <DollarSign className="h-5 w-5 text-[#601625]" />
-                        </div>
-                      </div>
-                </CardContent>
-              </Card>
-
-                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Total Tips</div>
-                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.tips)}</div>
-            </div>
-                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                          <TrendingUp className="h-5 w-5 text-[#601625]" />
-                        </div>
-                      </div>
-                </CardContent>
-              </Card>
-
-                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Transactions</div>
-                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.count}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                          <CreditCard className="h-5 w-5 text-[#601625]" />
-                        </div>
-                      </div>
-                </CardContent>
-              </Card>
-
-                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Active Staff</div>
-                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{kpis.uniqueStaff}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                          <Users className="h-5 w-5 text-[#601625]" />
-                        </div>
-                      </div>
-                </CardContent>
-              </Card>
-
-                  <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Avg. Ticket</div>
-                          <div className="text-[24px] font-bold text-neutral-900 mt-1">{formatCurrency(kpis.avg)}</div>
-                        </div>
-                        <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                          <CalendarIcon className="h-5 w-5 text-[#601625]" />
-                        </div>
-                      </div>
-                </CardContent>
-              </Card>
-                    </>
-                  )}
-            </div>
+            {/* KPI Summary removed as requested */}
 
             {/* Metrics from V1 Section - Comprehensive Structure */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Receipt className="h-5 w-5 text-[#601625]" />
-                  <h2 className="text-lg font-semibold text-[#601625]">Metrics from V1</h2>
+                  <h2 className="text-lg font-semibold text-[#601625]">Matrix</h2>
                   <Badge variant="outline" className="text-xs border-[#601625]/20 text-[#601625] px-3 py-1">
-                    {sectionsLoading ? <Skeleton className="h-4 w-12" /> : `${v1Metrics.store.totalTransactions} Transactions`}
+                    {sectionsLoading ? <Skeleton className="h-4 w-12" /> : `${kpis.count} Transactions`}
                   </Badge>
                 </div>
                 <Badge variant="secondary" className="text-xs bg-[#601625]/10 text-[#601625] border-[#601625]/20">
-                  Legacy Data
+                  Current Data
                 </Badge>
               </div>
 
@@ -1130,7 +1079,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Revenue</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.totalRevenue)}</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.revenue)}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <DollarSign className="h-5 w-5 text-[#601625]" />
@@ -1144,8 +1093,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Tax</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.totalTax)}</div>
-                              <div className="text-[10px] text-[#601625]/60">Not tracked in V1</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.tax)}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <Receipt className="h-5 w-5 text-[#601625]" />
@@ -1159,7 +1107,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Service Revenue</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.serviceRevenue)}</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.subtotal)}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <Scissors className="h-5 w-5 text-[#601625]" />
@@ -1173,8 +1121,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Product Revenue</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.productRevenue)}</div>
-                              <div className="text-[10px] text-[#601625]/60">Not tracked in V1</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(Math.max(0, kpis.revenue - kpis.subtotal))}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <Package className="h-5 w-5 text-[#601625]" />
@@ -1188,7 +1135,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Total Tips</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(v1Metrics.store.totalTips)}</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.tips)}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <TrendingUp className="h-5 w-5 text-[#601625]" />
