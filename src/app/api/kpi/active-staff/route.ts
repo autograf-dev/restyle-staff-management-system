@@ -65,8 +65,8 @@ export async function GET(req: Request) {
       data
         ?.map(transaction => transaction['Payment/Staff'])
         .filter(Boolean)
-        .flatMap(staff => staff!.split(',').map(name => name.trim()))
-        .filter(name => name.length > 0) || []
+        .flatMap((staff: string) => staff!.split(',').map((name: string) => name.trim()))
+        .filter((name: string) => name.length > 0) || []
     ).size
 
     return NextResponse.json({ 

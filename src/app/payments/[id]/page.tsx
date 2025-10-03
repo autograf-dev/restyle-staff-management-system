@@ -67,7 +67,7 @@ export default function PaymentDetailPage() {
   const [editPricesDialog, setEditPricesDialog] = useState(false)
   const [editSheetOpen, setEditSheetOpen] = useState(false)
   const [editItemDialog, setEditItemDialog] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<TransactionData['items'][number] | null>(null)
   
   // Form states
   const [customerName, setCustomerName] = useState('')
@@ -368,7 +368,7 @@ export default function PaymentDetailPage() {
     }
   }
 
-  const openEditItem = (item: any) => {
+  const openEditItem = (item: TransactionData['items'][number]) => {
     setEditingItem({ ...item })
     setEditItemDialog(true)
   }
@@ -378,7 +378,7 @@ export default function PaymentDetailPage() {
     if (editingItem && editingItem.price !== undefined) {
       const itemTip = Math.round((Number(editingItem.price) || 0) * 0.15 * 100) / 100
       if (editingItem.staffTipCollected !== itemTip) {
-        setEditingItem((prev: any) => ({ ...prev, staffTipCollected: itemTip }))
+        setEditingItem((prev) => (prev ? { ...prev, staffTipCollected: itemTip } : prev))
       }
     }
   }, [editingItem?.price])

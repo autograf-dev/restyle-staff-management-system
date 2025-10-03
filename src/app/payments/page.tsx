@@ -464,7 +464,7 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Revenue</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Revenue</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">
                               {loadingKpis ? (
                                 <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
@@ -484,7 +484,7 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Tips</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Tips</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">
                               {loadingKpis ? (
                                 <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
@@ -504,7 +504,7 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Transactions</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Transactions</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">
                               {loadingKpis ? (
                                 <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
@@ -524,7 +524,7 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Staff</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Staff</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">
                               {loadingKpis ? (
                                 <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
@@ -544,7 +544,7 @@ export default function PaymentsPage() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today's Tax</div>
+                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Tax</div>
                             <div className="text-[24px] font-bold text-neutral-900 mt-1">
                               {loadingKpis ? (
                                 <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
@@ -563,7 +563,7 @@ export default function PaymentsPage() {
 
                   {/* Payment Method Breakdown */}
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Revenue by Payment Method</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Today&apos;s Revenue by Payment Method</h3>
                     {loadingPaymentMethods ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {Array.from({ length: 5 }).map((_, i) => (
