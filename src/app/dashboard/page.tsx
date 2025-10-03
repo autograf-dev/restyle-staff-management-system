@@ -1528,7 +1528,7 @@ export default function DashboardPage() {
 
               {/* Matrix Section (cloned from Matrix page) */}
               {!sectionsLoading && filteredRows.length > 0 && (
-              <div className="space-y-6">
+              <div className="space-y-6 hidden">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Gauge className="h-5 w-5 text-[#601625]" />
