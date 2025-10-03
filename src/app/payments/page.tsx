@@ -352,13 +352,13 @@ export default function PaymentsPage() {
           >
             {/* ===== Overview (single clean card with 2 horizontal panels) ===== */}
             <Card className="border-neutral-200 shadow-none">
-              <CardHeader className="py-3 px-4">
+              <CardHeader className="py-1.5 px-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-[#601625] rounded-full" />
                   <h3 className="text-sm font-semibold text-gray-900">Overview</h3>
                 </div>
               </CardHeader>
-              <CardContent className="px-4 pb-4">
+              <CardContent className="px-4 pb-2">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* KPIs */}
                   <section className="rounded-xl border border-neutral-200 bg-white p-3 lg:p-4">
