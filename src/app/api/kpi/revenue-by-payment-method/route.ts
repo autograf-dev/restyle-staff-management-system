@@ -14,29 +14,36 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const filter = searchParams.get('filter') || 'today' // today, last7days, alltime
+    const startParam = searchParams.get('start')
+    const endParam = searchParams.get('end')
 
-    // Calculate date ranges
+    // Calculate date ranges (server fallback)
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     
     let startDate: Date | null = null
     let endDate: Date | null = null
 
-    switch (filter) {
-      case 'today':
-        startDate = today
-        endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000) // End of today
-        break
-      case 'last7days':
-        startDate = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 7 days ago
-        endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000) // End of today
-        break
-      case 'alltime':
-        // No date filter for all time
-        break
-      default:
-        startDate = today
-        endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+    if (startParam && endParam) {
+      startDate = new Date(startParam)
+      endDate = new Date(endParam)
+    } else {
+      switch (filter) {
+        case 'today':
+          startDate = today
+          endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000) // End of today
+          break
+        case 'last7days':
+          startDate = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000) // 7 days ago
+          endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000) // End of today
+          break
+        case 'alltime':
+          // No date filter for all time
+          break
+        default:
+          startDate = today
+          endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+      }
     }
 
     // Build query
@@ -45,7 +52,7 @@ export async function GET(req: Request) {
       .select('"Payment/Date", "Payment/Method", "Transaction/Total Paid"')
 
     // Apply date filter if not all time
-    if (filter !== 'alltime' && startDate && endDate) {
+    if ((filter !== 'alltime' || (startParam && endParam)) && startDate && endDate) {
       query = query
         .not('"Payment/Date"', 'is', null)
         .gte('"Payment/Date"', startDate.toISOString())

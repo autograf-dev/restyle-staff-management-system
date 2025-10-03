@@ -262,12 +262,17 @@ export default function PaymentsPage() {
     setLoadingKpis(true)
     
     try {
+      // Compute browser-local start/end of today and pass to server
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+      const end = new Date(new Date(start).getTime() + 24 * 60 * 60 * 1000).toISOString()
+      const rangeQuery = `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
       const [revenueRes, tipsRes, countRes, staffRes, taxRes] = await Promise.all([
-        fetch(`/api/kpi/total-revenue?filter=today`),
-        fetch(`/api/kpi/total-tips?filter=today`),
-        fetch(`/api/kpi/transactions-count?filter=today`),
-        fetch(`/api/kpi/active-staff?filter=today`),
-        fetch(`/api/kpi/total-tax?filter=today`)
+        fetch(`/api/kpi/total-revenue?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/total-tips?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/transactions-count?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/active-staff?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/total-tax?filter=today${rangeQuery}`)
       ])
 
       const [revenueData, tipsData, countData, staffData, taxData] = await Promise.all([
@@ -302,7 +307,10 @@ export default function PaymentsPage() {
     setLoadingPaymentMethods(true)
     
     try {
-      const response = await fetch(`/api/kpi/revenue-by-payment-method?filter=today`)
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+      const end = new Date(new Date(start).getTime() + 24 * 60 * 60 * 1000).toISOString()
+      const response = await fetch(`/api/kpi/revenue-by-payment-method?filter=today&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
       const data = await response.json()
       
       if (data.ok) {
