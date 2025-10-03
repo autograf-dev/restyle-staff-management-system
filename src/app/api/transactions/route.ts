@@ -37,6 +37,10 @@ export async function POST(req: Request) {
       walkInCustomerId?: string | null
       walkInPhone?: string | null
       transactionPaid?: string | null
+      // Guest checkout fields
+      guestCustomerName?: string | null
+      guestCustomerPhone?: string | null
+      isGuestCheckout?: boolean
       // split fields
       isSplitPayment?: boolean
       isServiceSplit?: boolean
@@ -137,8 +141,8 @@ export async function POST(req: Request) {
       "DNU Add-On/Total": null,
       "DNU Add-On/Tip Split": null,
       "DNU Add-On/Staff": null,
-      "Walk-In/Customer ID": transaction.walkInCustomerId ?? null,
-      "Walk-In/Phone": transaction.walkInPhone ?? null,
+      "Walk-In/Customer ID": transaction.isGuestCheckout ? transaction.guestCustomerName : transaction.walkInCustomerId ?? null,
+      "Walk-In/Phone": transaction.isGuestCheckout ? transaction.guestCustomerPhone : transaction.walkInPhone ?? null,
       "DNU Service/Discount": null,
       "DNU Add-On/Discount": null,
       "Transaction/Product": null,
@@ -486,6 +490,9 @@ export async function GET(req: Request) {
       staff: row['Payment/Staff'],
       customerPhone: row['Customer/Phone'],
       customerLookup: row['Customer/Lookup'],
+      // Walk-in guest fields
+      walkInCustomerId: row['Walk-In/Customer ID'],
+      walkInPhone: row['Walk-In/Phone'],
       // Add payment status fields without breaking existing structure
       status: row['Payment/Status'],
       paymentStatus: row['Payment/Status'], 

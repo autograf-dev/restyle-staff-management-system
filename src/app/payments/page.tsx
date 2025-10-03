@@ -26,6 +26,9 @@ interface TxRow {
   staff: string | null
   customerPhone: string | null
   customerLookup: string | null
+  // Walk-in guest fields
+  walkInCustomerId: string | null
+  walkInPhone: string | null
   status?: string | null
   paymentStatus?: string | null
   paid?: string | null
@@ -132,6 +135,17 @@ export default function PaymentsPage() {
   }
 
   const getCustomerName = (transaction: TxRow) => {
+    // Check for walk-in guest name first
+    if (transaction.walkInCustomerId && transaction.walkInCustomerId.trim() !== "") {
+      const walkInName = transaction.walkInCustomerId.trim()
+      // If it looks like a name (contains spaces or common name patterns), return it
+      if (walkInName.includes(' ') || walkInName.length < 20) {
+        const phone = transaction.walkInPhone || transaction.customerPhone
+        return phone ? `${walkInName} (${phone})` : walkInName
+      }
+    }
+    
+    // Then check regular customer lookup
     if (transaction.customerLookup && transaction.customerLookup.trim() !== "") {
       const lookupId = transaction.customerLookup.trim()
       if (customerNames[lookupId]) return customerNames[lookupId]
@@ -141,6 +155,8 @@ export default function PaymentsPage() {
       }
       return lookupId
     }
+    
+    // Fallback to phone-based guest
     if (transaction.customerPhone) return `Guest (${transaction.customerPhone})`
     return "Walk-in Guest"
   }
