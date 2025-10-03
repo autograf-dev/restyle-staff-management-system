@@ -24,6 +24,7 @@ let DASHBOARD_CACHE: {
   rows: TxRow[]
   oldTxItems: OldTxItemRow[]
   staffList: Array<{ id: string; name: string; source: string }>
+  barberHoursStaff: string[]
   lastFetchedAt: number | null
   targetRevenueAmount: number | null
   targetPercentage: number
@@ -96,6 +97,7 @@ export default function DashboardPage() {
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string; source: string }>>([])
+  const [barberHoursStaff, setBarberHoursStaff] = useState<string[]>([])
   const [serviceCategories, setServiceCategories] = useState<Array<{
     id: string;
     name: string;
@@ -522,17 +524,17 @@ export default function DashboardPage() {
       txSet: Set<string>
     }>()
 
-    // Build a case-insensitive lookup of actual staff from staff-hours
+    // Build a case-insensitive lookup of actual staff from barber-hours only
     const canonicalByNormName = new Map<string, string>()
-    const staffCanonicalList = staffList
-      .map(s => (s?.name || '').trim())
+    const staffCanonicalList = barberHoursStaff
+      .map(name => name.trim())
       .filter(Boolean)
 
     staffCanonicalList.forEach(name => {
       canonicalByNormName.set(name.toLowerCase(), name)
     })
 
-    // seed with canonical staff list (so all appear even with 0 tx)
+    // seed with barber-hours staff list (so all appear even with 0 tx)
     staffCanonicalList.forEach(name => {
       employees.set(name, {
         staffName: name,
@@ -593,7 +595,7 @@ export default function DashboardPage() {
       store: { uniqueStaffCount: employees.size },
       employees
     }
-  }, [filteredRows, staffList])
+  }, [filteredRows, barberHoursStaff])
 
 
   // Unified data loader usable for initial, manual, and scheduled refreshes
@@ -647,9 +649,10 @@ export default function DashboardPage() {
         return all
       }
 
-      const [allTransactions, oldItemsRes] = await Promise.all([
+      const [allTransactions, oldItemsRes, barberHoursRes] = await Promise.all([
         fetchAllTransactionsParallel(),
-        fetch(`/api/old-transaction-items?limit=1000`)
+        fetch(`/api/old-transaction-items?limit=1000`),
+        fetch('/api/barber-hours', { cache: 'no-store' as RequestCache })
       ])
 
       // ensure rows state is set if incremental appends didn't cover
@@ -736,6 +739,16 @@ export default function DashboardPage() {
       
       setStaffList(combinedList)
 
+      // Process barber-hours staff data
+      const barberHoursJson: { ok: boolean; data?: Array<{ "Barber/Name": string }>; error?: unknown } = await barberHoursRes.json()
+      let barberHoursStaffList: string[] = []
+      if (barberHoursJson.ok && barberHoursJson.data) {
+        barberHoursStaffList = barberHoursJson.data
+          .map(item => item["Barber/Name"])
+          .filter(name => name && name.trim())
+        setBarberHoursStaff(barberHoursStaffList)
+      }
+
       // Process old transaction items
       const oldItemsJson: { ok: boolean; data?: OldTxItemRow[]; error?: unknown } = await oldItemsRes.json()
       if (!oldItemsRes.ok || !oldItemsJson.ok) {
@@ -766,6 +779,7 @@ export default function DashboardPage() {
         rows: allTransactions,
         oldTxItems: oldItemsJson.ok ? (oldItemsJson.data || []) : [],
         staffList: combinedList,
+        barberHoursStaff: barberHoursStaffList,
         lastFetchedAt: Date.now(),
         targetRevenueAmount,
         targetPercentage
@@ -795,6 +809,7 @@ export default function DashboardPage() {
         setRows(DASHBOARD_CACHE.rows)
         setOldTxItems(DASHBOARD_CACHE.oldTxItems)
         setStaffList(DASHBOARD_CACHE.staffList)
+        setBarberHoursStaff(DASHBOARD_CACHE.barberHoursStaff)
         setTargetRevenueAmount(DASHBOARD_CACHE.targetRevenueAmount)
         setTargetPercentage(DASHBOARD_CACHE.targetPercentage)
         setLastFetchedAt(new Date(DASHBOARD_CACHE.lastFetchedAt))
@@ -1862,9 +1877,6 @@ export default function DashboardPage() {
                                       </div>
                                       <div className="flex flex-col">
                                         <span className="font-medium text-[#601625]">{staffName}</span>
-                                        <span className="text-xs text-gray-500">
-                                          {staffList.find(s => s.name === staffName)?.source || 'Unknown'}
-                                        </span>
                                       </div>
                                     </div>
                                   </td>
@@ -1882,11 +1894,6 @@ export default function DashboardPage() {
                       
                       <div className="mt-4 text-center text-sm text-[#601625]/60">
                         Showing {employeeMetrics.employees.size} staff members
-                        <div className="text-xs text-gray-500 mt-1">
-                          Transaction Items: {staffList.filter(s => s.source === 'Transaction Items').length} | 
-                          Transactions: {staffList.filter(s => s.source === 'Transactions').length} |
-                          Both Tables: {staffList.filter(s => s.source === 'Both Tables').length}
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
