@@ -18,6 +18,16 @@ import { type PaymentMethod } from "@/components/payment-methods-section"
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, Scissors, RefreshCw, Gauge, Info, Target } from "lucide-react"
+
+// Module-scoped cache to persist data across client-side navigations (no reload on link change)
+let DASHBOARD_CACHE: {
+  rows: TxRow[]
+  oldTxItems: OldTxItemRow[]
+  staffList: Array<{ id: string; name: string }>
+  lastFetchedAt: number | null
+  targetRevenueAmount: number | null
+  targetPercentage: number
+} | null = null
 import { useUser } from "@/contexts/user-context"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -587,8 +597,9 @@ export default function DashboardPage() {
 
 
   // Unified data loader usable for initial, manual, and scheduled refreshes
-  const load = useCallback(async (options?: { showSkeleton?: boolean }) => {
+  const load = useCallback(async (options?: { showSkeleton?: boolean, force?: boolean }) => {
     const showSkeleton = options?.showSkeleton ?? false
+    const force = options?.force ?? false
     try {
       if (showSkeleton) setSectionsLoading(true)
       setIsRefreshing(true)
@@ -668,7 +679,7 @@ export default function DashboardPage() {
 
       // Fetch stored target revenue settings
       try {
-        const trRes = await fetch(`/api/settings/target-revenue`)
+        const trRes = await fetch(`/api/settings/target-revenue`, { cache: 'no-store' as RequestCache })
         const trJson = await trRes.json()
         if (trRes.ok && trJson.ok) {
           if (typeof trJson.value === 'number') setTargetRevenueAmount(trJson.value)
@@ -680,6 +691,23 @@ export default function DashboardPage() {
       } catch {}
 
       setLastFetchedAt(new Date())
+
+      // write to module cache so client nav doesn't refetch
+      DASHBOARD_CACHE = {
+        rows: allTransactions,
+        oldTxItems: oldItemsJson.ok ? (oldItemsJson.data || []) : [],
+        staffList: Array.isArray(staffJson?.data)
+          ? (staffJson.data as { [key: string]: unknown; ghl_id?: string; ["🔒 Row ID"]?: string; ["ð Row ID"]?: string; ["Barber/Name"]?: string }[])
+              .map((row) => ({
+                id: String(row["🔒 Row ID"] || row["ð Row ID"] || row.ghl_id || ''),
+                name: String(row["Barber/Name"] || '').trim()
+              }))
+              .filter((s) => s.name)
+          : [],
+        lastFetchedAt: Date.now(),
+        targetRevenueAmount,
+        targetPercentage
+      }
     } catch (e: unknown) {
       console.error('Error loading data:', e)
     } finally {
@@ -697,8 +725,23 @@ export default function DashboardPage() {
     if (!isPinVerified) return
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true
-      load({ showSkeleton: true })
-      // 30 minutes interval
+
+      // If cache is fresh within 30 mins, hydrate from cache instead of fetching
+      const now = Date.now()
+      const thirtyMins = 30 * 60 * 1000
+      if (DASHBOARD_CACHE && DASHBOARD_CACHE.lastFetchedAt && (now - DASHBOARD_CACHE.lastFetchedAt) < thirtyMins) {
+        setRows(DASHBOARD_CACHE.rows)
+        setOldTxItems(DASHBOARD_CACHE.oldTxItems)
+        setStaffList(DASHBOARD_CACHE.staffList)
+        setTargetRevenueAmount(DASHBOARD_CACHE.targetRevenueAmount)
+        setTargetPercentage(DASHBOARD_CACHE.targetPercentage)
+        setLastFetchedAt(new Date(DASHBOARD_CACHE.lastFetchedAt))
+        setSectionsLoading(false)
+      } else {
+        load({ showSkeleton: true })
+      }
+
+      // 30 minutes interval auto-refresh only
       const id = window.setInterval(() => {
         load({ showSkeleton: false })
       }, 30 * 60 * 1000)
@@ -714,8 +757,20 @@ export default function DashboardPage() {
 
   const handleManualRefresh = () => {
     if (isRefreshing) return
-    load({ showSkeleton: true })
+    load({ showSkeleton: true, force: true })
   }
+
+  // Background prefetch while on PIN screen to warm cache (no skeleton, no interval)
+  useEffect(() => {
+    if (isPinVerified) return
+    const now = Date.now()
+    const thirtyMins = 30 * 60 * 1000
+    const needsFetch = !DASHBOARD_CACHE || !DASHBOARD_CACHE.lastFetchedAt || (now - DASHBOARD_CACHE.lastFetchedAt) >= thirtyMins
+    if (needsFetch && !isRefreshing) {
+      // silent prefetch
+      load({ showSkeleton: false })
+    }
+  }, [isPinVerified, load, isRefreshing])
 
   const saveTargetRevenue = async () => {
     setSavingTarget(true)
@@ -727,6 +782,29 @@ export default function DashboardPage() {
       })
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed')
+      // Re-fetch from DB to ensure state matches database
+      try {
+        const trRes = await fetch('/api/settings/target-revenue')
+        const trJson = await trRes.json()
+        if (trRes.ok && trJson.ok) {
+          if (typeof trJson.value === 'number') setTargetRevenueAmount(trJson.value)
+          if (trJson.value && typeof trJson.value === 'object') {
+            if (typeof trJson.value.amount === 'number') setTargetRevenueAmount(trJson.value.amount)
+            if (typeof trJson.value.targetPercentage === 'number') setTargetPercentage(trJson.value.targetPercentage)
+          }
+          // update cache
+          if (DASHBOARD_CACHE) {
+            DASHBOARD_CACHE.targetRevenueAmount = typeof trJson.value === 'object' && trJson.value
+              ? Number(trJson.value.amount || 0)
+              : Number(trJson.value || 0)
+            DASHBOARD_CACHE.targetPercentage = (trJson.value && typeof trJson.value === 'object' && typeof trJson.value.targetPercentage === 'number')
+              ? trJson.value.targetPercentage
+              : targetPercentage
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to refresh target settings from DB after save:', e)
+      }
       setTargetDialogOpen(false)
     } catch (e) {
       console.error('Failed saving target revenue', e)
@@ -851,42 +929,37 @@ export default function DashboardPage() {
       'other': 'Other'
     }
     
-    // Debug: Log unique payment methods found in data
-    const uniqueMethods = [...new Set(filteredRows.map(row => row.method || 'null'))]
-    console.log('📊 Payment methods found in data:', uniqueMethods)
-    console.log('📊 Total transactions:', filteredRows.length)
-    
-    // Debug: Show sample transactions with different methods
-    const methodSamples: Record<string, { count: number; totalRevenue: number; sample: TxRow }> = {}
-    filteredRows.forEach(row => {
-      const method = row.method || 'null'
-      if (!methodSamples[method]) {
-        methodSamples[method] = {
-          count: 0,
-          totalRevenue: 0,
-          sample: row
-        }
+    // Normalize payment methods to canonical keys to avoid duplicates (e.g., AMEX vs American Express)
+    const normalizePaymentMethod = (raw: string): { key: keyof typeof checkoutMethods | 'other'; name: string } => {
+      const val = (raw || '').toLowerCase().trim()
+      if (!val) return { key: 'other', name: 'Other' }
+      if (val.includes('cash')) return { key: 'cash', name: checkoutMethods['cash'] }
+      if (val.includes('visa')) return { key: 'visa', name: checkoutMethods['visa'] }
+      if (val.includes('master')) return { key: 'mastercard', name: checkoutMethods['mastercard'] }
+      if (val.includes('amex') || val.includes('american express')) return { key: 'amex', name: checkoutMethods['amex'] }
+      if (val.includes('debit')) return { key: 'debit', name: checkoutMethods['debit'] }
+      if (val.includes('gift')) return { key: 'gift_card', name: checkoutMethods['gift_card'] }
+      if (val.includes('service') && val.includes('split')) return { key: 'service_split', name: checkoutMethods['service_split'] }
+      if (val.includes('split')) return { key: 'split_payment', name: checkoutMethods['split_payment'] }
+      if (val.includes('card')) {
+        // Unknown card brand – bucket under other card
+        return { key: 'other', name: 'Other' }
       }
-      methodSamples[method].count++
-      methodSamples[method].totalRevenue += row.totalPaid || 0
-    })
-    console.log('📊 Method breakdown:', methodSamples)
-    
+      return { key: 'other', name: 'Other' }
+    }
+
     filteredRows.forEach(row => {
       const rawMethod = row.method || 'other'
-      const method = rawMethod.toLowerCase()
-      
-      // Map to proper display name
-      const displayName = checkoutMethods[method as keyof typeof checkoutMethods] || rawMethod
-      const methodKey = method
+      const { key, name } = normalizePaymentMethod(rawMethod)
+      const methodKey = key
       
       if (!paymentMethodsMap.has(methodKey)) {
         paymentMethodsMap.set(methodKey, {
-          name: displayName,
-          type: method,
+          name,
+          type: methodKey,
           revenue: 0,
           count: 0,
-          icon: getPaymentIcon(method)
+          icon: getPaymentIcon(methodKey)
         })
       }
       
@@ -894,8 +967,6 @@ export default function DashboardPage() {
       methodData.revenue += row.totalPaid || 0
       methodData.count += 1
     })
-    
-    console.log('📊 Final payment methods calculated:', Array.from(paymentMethodsMap.values()))
 
     const totalRevenue = Array.from(paymentMethodsMap.values()).reduce((sum, method) => sum + method.revenue, 0)
     
@@ -1359,42 +1430,54 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Payment Methods KPIs (compact) */}
-                <div className="mt-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
-                    {sectionsLoading ? (
-                      Array.from({ length: 6 }).map((_, index) => (
-                        <Card key={index} className="rounded-lg border-neutral-200 shadow-sm">
-                          <CardContent className="p-2">
-                            <div className="flex items-center justify-between">
-                              <Skeleton className="h-5 w-5 rounded-lg" />
-                              <Skeleton className="h-3 w-14" />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    ) : (
-                      paymentMethods.map((method) => (
-                        <Card key={method.type} className="rounded-lg border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                          <CardContent className="p-2">
-                            <div className="flex items-center justify-between">
-                              <div className="h-6 w-6 rounded-md bg-[#601625]/10 flex items-center justify-center">
-                                {method.icon}
-                              </div>
-                              <div className="text-right">
-                                <div className="text-[9px] font-medium text-neutral-500 uppercase tracking-wide truncate max-w-[88px]">{method.name}</div>
-                                <div className="text-[12px] font-bold text-neutral-900">{formatCurrency(method.revenue)}</div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
-                  </div>
+                {/* Payment Methods - professional design aligned with Payments page */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue by Payment Method</h3>
+                  {sectionsLoading ? (
+                    <div className="flex gap-3 overflow-x-auto pb-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="bg-white rounded-lg border border-gray-200 p-3 min-w-[260px]">
+                          <div className="animate-pulse">
+                            <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+                            <div className="h-5 bg-gray-200 rounded w-1/2 mb-1"></div>
+                            <div className="h-2 bg-gray-200 rounded w-1/3"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : paymentMethods.length > 0 ? (
+                    <div className="flex gap-3 overflow-x-auto pb-1">
+                      {paymentMethods.map((method, index) => (
+                        <div key={method.type} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-shadow min-w-[260px]">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              index === 0 ? 'bg-green-500' :
+                              index === 1 ? 'bg-blue-500' :
+                              index === 2 ? 'bg-purple-500' :
+                              index === 3 ? 'bg-orange-500' :
+                              'bg-gray-500'
+                            }`}></div>
+                            <span className="text-xs font-medium text-gray-600 truncate capitalize">{method.name}</span>
+                          </div>
+                          <div className="text-lg font-bold text-gray-900 mb-1">
+                            {formatCurrency(method.revenue)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {method.count} transaction{method.count !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="text-sm">No payment data available</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Matrix Section (cloned from Matrix page) */}
+              {!sectionsLoading && filteredRows.length > 0 && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1435,7 +1518,7 @@ export default function DashboardPage() {
                                 const totalRevenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
                                 const serviceRevenue = filteredRows.reduce((sum, r) => {
                                   const itemsTotal = Array.isArray(r.items)
-                                    ? r.items.reduce((s: number, it: any) => s + Number(it.price || 0), 0)
+                                    ? r.items.reduce((s: number, it: { price?: unknown }) => s + Number(it.price || 0), 0)
                                     : 0
                                   return sum + itemsTotal
                                 }, 0)
@@ -1537,31 +1620,140 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
 
-                    {/* Staff Performance compact */}
+                    {/* Staff Performance Chart (Top 6 by actual metrics) */}
                     <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-all duration-300">
                       <CardHeader className="pb-6">
-                        <div className="flex items-center gap-4">
-                          <CardTitle className="flex items-center gap-3 text-xl font-semibold text-[#601625]">
-                            <div className="p-2 bg-[#601625]/10 rounded-lg">
-                              <Users className="h-6 w-6 text-[#601625]" />
-                            </div>
-                            Staff Performance
-                          </CardTitle>
-                          <div className="text-sm text-neutral-500 font-medium ml-auto">{filteredRows.length} transactions</div>
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-4">
+                            <CardTitle className="flex items-center gap-3 text-xl font-semibold text-[#601625]">
+                              <div className="p-2 bg-[#601625]/10 rounded-lg">
+                                <Users className="h-6 w-6 text-[#601625]" />
+                              </div>
+                              Staff Performance
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-4 w-4 text-neutral-400 hover:text-[#601625] cursor-help ml-1" />
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-[#601625] text-white border-[#601625]">
+                                  <p className="text-white">Based on service price + proportional tax + tips from transaction items. Limited to actual staff-hours members.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </CardTitle>
+                            <div className="text-sm text-neutral-500 font-medium ml-auto">{filteredRows.length} transactions</div>
+                          </div>
                         </div>
                       </CardHeader>
                       <CardContent className="pt-0">
-                        <div className="grid grid-cols-2 gap-6">
-                          <div className="text-center p-6 bg-[#601625]/5 rounded-xl">
-                            <div className="text-4xl font-bold text-[#601625] mb-2">
+                        <div className="h-96 flex items-center justify-center">
+                          <div className="w-full h-72 relative">
+                            <svg className="w-full h-full" viewBox="0 0 480 240">
+                              <defs>
+                                <pattern id="staffGridDash" width="40" height="40" patternUnits="userSpaceOnUse">
+                                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
+                                </pattern>
+                              </defs>
+                              <rect width="100%" height="100%" fill="url(#staffGridDash)" />
+
+                              <text x="16" y="40" fontSize="12" fill="#6b7280">$10K</text>
+                              <text x="16" y="70" fontSize="12" fill="#6b7280">$8K</text>
+                              <text x="16" y="100" fontSize="12" fill="#6b7280">$6K</text>
+                              <text x="16" y="130" fontSize="12" fill="#6b7280">$4K</text>
+                              <text x="16" y="160" fontSize="12" fill="#6b7280">$2K</text>
+                              <text x="16" y="190" fontSize="12" fill="#6b7280">$0</text>
+
                               {(() => {
-                                const staffSet = new Set<string>()
+                                // Build days per staff for avg/day using item staff mapping
+                                const daysByStaff = new Map<string, Set<string>>()
                                 filteredRows.forEach(row => {
-                                  if (row.staff) row.staff.split(',').map(n => n.trim()).filter(Boolean).forEach(n => staffSet.add(n))
+                                  const dateKey = row.paymentDate ? new Date(row.paymentDate).toDateString() : null
+                                  const items = Array.isArray(row.items) ? row.items : []
+                                  const itemsTotal = items.reduce((s: number, it: { price?: unknown }) => s + Number(it.price || 0), 0)
+                                  items.forEach((it: { staffName?: unknown }) => {
+                                    const staffName = (it.staffName || '').toString()
+                                    const canonical = staffName ? staffName.trim() : ''
+                                    if (!canonical) return
+                                    if (dateKey) {
+                                      if (!daysByStaff.has(canonical)) daysByStaff.set(canonical, new Set())
+                                      daysByStaff.get(canonical)!.add(dateKey)
+                                    }
+                                  })
                                 })
-                                return staffSet.size
+
+                                // Use computed employeeMetrics for accurate totals, top 6
+                                const perf = Array.from(employeeMetrics.employees.values())
+                                  .map(emp => {
+                                    const uniqueDays = daysByStaff.get(emp.staffName)?.size || 0
+                                    const avgPerDay = uniqueDays > 0 ? emp.transactionCount / uniqueDays : 0
+                                    return {
+                                      name: emp.staffName,
+                                      totalRevenue: emp.totalRevenue,
+                                      totalServices: emp.serviceRevenue, // proxy count not available
+                                      avgTransactionsPerDay: Math.round(avgPerDay * 10) / 10,
+                                      uniqueDays
+                                    }
+                                  })
+                                  .sort((a, b) => b.totalRevenue - a.totalRevenue)
+                                  .slice(0, 6)
+
+                                const maxRevenue = Math.max(...perf.map(s => s.totalRevenue), 1)
+                                if (perf.length === 0) {
+                                  return (
+                                    <text x="240" y="120" fontSize="16" fill="#6b7280" textAnchor="middle">No staff data available</text>
+                                  )
+                                }
+
+                                // dynamic spacing
+                                const left = 70
+                                const right = 40
+                                const bottom = 200
+                                const maxBarHeight = 150
+                                const innerWidth = 480 - left - right
+                                const gap = innerWidth / perf.length
+                                const barWidth = Math.min(56, gap * 0.65)
+
+                                return perf.map((s, index) => {
+                                  const barHeight = (s.totalRevenue / maxRevenue) * maxBarHeight
+                                  const x = left + index * gap + (gap - barWidth) / 2
+                                  const y = bottom - barHeight
+                                  return (
+                                    <g key={s.name}>
+                                      <rect x={x} y={bottom - maxBarHeight} width={barWidth} height={maxBarHeight} fill="#f3f4f6" rx="4" opacity="0.3" />
+                                      <rect x={x} y={y} width={barWidth} height={barHeight} fill="url(#staffGradientDash)" rx="4" className="hover:opacity-80 transition-opacity cursor-pointer" stroke="#601625" strokeWidth="1" />
+                                      <text x={x + barWidth/2} y="210" fontSize="11" fill="#6b7280" textAnchor="middle" fontWeight="500">{s.name.split(' ')[0]}</text>
+                                      <text x={x + barWidth/2} y={y - 10} fontSize="11" fill="#601625" textAnchor="middle" fontWeight="bold">${Math.round(s.totalRevenue).toLocaleString()}</text>
+                                      <text x={x + barWidth/2} y={y - 24} fontSize="10" fill="#8B2635" textAnchor="middle" fontWeight="600">{s.avgTransactionsPerDay}/day</text>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <rect x={x} y={y} width={barWidth} height={barHeight} fill="transparent" className="cursor-pointer" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="bg-[#601625] text-white border-[#601625]">
+                                          <div className="text-white text-sm">
+                                            <div className="font-bold">{s.name}</div>
+                                            <div>Revenue: ${Math.round(s.totalRevenue).toLocaleString()}</div>
+                                            <div>Days Active: {s.uniqueDays}</div>
+                                            <div>Avg/Day: {s.avgTransactionsPerDay} transactions</div>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </g>
+                                  )
+                                })
                               })()}
-                            </div>
+
+                              <defs>
+                                <linearGradient id="staffGradientDash" x1="0%" y1="0%" x2="0%" y2="100%">
+                                  <stop offset="0%" stopColor="#601625" />
+                                  <stop offset="100%" stopColor="#8B2635" />
+                                </linearGradient>
+                              </defs>
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Bottom Stats under chart */}
+                        <div className="mt-8 grid grid-cols-2 gap-6">
+                          <div className="text-center p-6 bg-[#601625]/5 rounded-xl">
+                            <div className="text-4xl font-bold text-[#601625] mb-2">{employeeMetrics.employees.size}</div>
                             <div className="text-sm font-semibold text-neutral-600">Active Staff</div>
                           </div>
                           <div className="text-center p-6 bg-green-50 rounded-xl">
@@ -1581,6 +1773,7 @@ export default function DashboardPage() {
                   </div>
                 </TooltipProvider>
               </div>
+              )}
 
               {/* 2. PER EMPLOYEE METRICS (current dataset, respects filters) */}
               {!sectionsLoading && employeeMetrics.employees.size > 0 && (
