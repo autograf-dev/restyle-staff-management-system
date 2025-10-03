@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Card, CardContent } from "@/components/ui/card"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
@@ -16,7 +17,7 @@ import { ServicesRevenueTable, type ServiceRevenue } from "@/components/services
 import { type PaymentMethod } from "@/components/payment-methods-section"
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, Scissors, RefreshCw } from "lucide-react"
+import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, Scissors, RefreshCw, Gauge, Info, Target } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -100,6 +101,10 @@ export default function DashboardPage() {
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null)
   const hasLoadedRef = useRef(false)
   const refreshTimerRef = useRef<number | null>(null)
+  const [targetRevenueAmount, setTargetRevenueAmount] = useState<number | null>(null)
+  const [targetPercentage, setTargetPercentage] = useState<number>(49)
+  const [savingTarget, setSavingTarget] = useState(false)
+  const [targetDialogOpen, setTargetDialogOpen] = useState(false)
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "alltime"
@@ -661,6 +666,19 @@ export default function DashboardPage() {
         setOldTxItems(oldItems)
       }
 
+      // Fetch stored target revenue settings
+      try {
+        const trRes = await fetch(`/api/settings/target-revenue`)
+        const trJson = await trRes.json()
+        if (trRes.ok && trJson.ok) {
+          if (typeof trJson.value === 'number') setTargetRevenueAmount(trJson.value)
+          if (trJson.value && typeof trJson.value === 'object') {
+            if (typeof trJson.value.amount === 'number') setTargetRevenueAmount(trJson.value.amount)
+            if (typeof trJson.value.targetPercentage === 'number') setTargetPercentage(trJson.value.targetPercentage)
+          }
+        }
+      } catch {}
+
       setLastFetchedAt(new Date())
     } catch (e: unknown) {
       console.error('Error loading data:', e)
@@ -697,6 +715,24 @@ export default function DashboardPage() {
   const handleManualRefresh = () => {
     if (isRefreshing) return
     load({ showSkeleton: true })
+  }
+
+  const saveTargetRevenue = async () => {
+    setSavingTarget(true)
+    try {
+      const res = await fetch('/api/settings/target-revenue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: { amount: targetRevenueAmount, targetPercentage, weights: { revenue: 100 } } })
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed')
+      setTargetDialogOpen(false)
+    } catch (e) {
+      console.error('Failed saving target revenue', e)
+    } finally {
+      setSavingTarget(false)
+    }
   }
 
   // Calculate staff performance
@@ -1358,6 +1394,194 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Matrix Section (cloned from Matrix page) */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gauge className="h-5 w-5 text-[#601625]" />
+                    <h2 className="text-lg font-semibold text-[#601625]">Business Performance</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="default" onClick={() => setTargetDialogOpen(true)} className="bg-[#601625] hover:bg-[#751a29]">Set Targets</Button>
+                  </div>
+                </div>
+
+                <TooltipProvider>
+                  <div className="grid gap-8 md:grid-cols-2">
+                    {/* Gauge */}
+                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-all duration-300">
+                      <CardHeader className="pb-6">
+                        <CardTitle className="flex items-center gap-3 text-xl font-semibold text-[#601625]">
+                          <div className="p-2 bg-[#601625]/10 rounded-lg">
+                            <Gauge className="h-6 w-6 text-[#601625]" />
+                          </div>
+                          Business Performance
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 text-neutral-400 hover:text-[#601625] cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-[#601625] text-white border-[#601625]">
+                              <p className="text-white">Revenue achievement vs target</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="relative w-full h-80 flex items-center justify-center">
+                          <div className="relative w-80 h-80">
+                            <svg className="w-full h-full" viewBox="0 0 200 200">
+                              <circle cx="100" cy="100" r="80" fill="none" stroke="#e5e7eb" strokeWidth="20" />
+                              {(() => {
+                                const totalRevenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
+                                const serviceRevenue = filteredRows.reduce((sum, r) => {
+                                  const itemsTotal = Array.isArray(r.items)
+                                    ? r.items.reduce((s: number, it: any) => s + Number(it.price || 0), 0)
+                                    : 0
+                                  return sum + itemsTotal
+                                }, 0)
+                                const tax = filteredRows.reduce((sum, r) => sum + Number(r.tax || 0), 0)
+                                // Use dashboard logic for actual revenue inputs
+                                const actualRevenue = totalRevenue
+                                const targetRevenue = typeof targetRevenueAmount === 'number' && targetRevenueAmount > 0
+                                  ? targetRevenueAmount
+                                  : Math.max(1, serviceRevenue) // fallback so gauge renders
+                                const performancePercentage = targetRevenue > 0 ? Math.min(Math.round((actualRevenue / targetRevenue) * 100), 100) : 0
+                                const targetPct = targetPercentage
+                                const dash = 2 * Math.PI * 80
+                                const offset = `${dash * (1 - performancePercentage / 100)}`
+                                const targetOffset = `${dash * (1 - targetPct / 100)}`
+                                return (
+                                  <g>
+                                    <circle cx="100" cy="100" r="80" fill="none" stroke="url(#progressGradient)" strokeWidth="20" strokeLinecap="round" strokeDasharray={`${dash}`} strokeDashoffset={offset} transform="rotate(-90 100 100)" className="transition-all duration-1000 ease-out" />
+                                    <circle cx="100" cy="100" r="80" fill="none" stroke="#fbbf24" strokeWidth="3" strokeDasharray="8 4" strokeDashoffset={targetOffset} transform="rotate(-90 100 100)" opacity="0.7" />
+                                    <defs>
+                                      <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stopColor="#ef4444" />
+                                        <stop offset="50%" stopColor="#f59e0b" />
+                                        <stop offset="100%" stopColor="#10b981" />
+                                      </linearGradient>
+                                    </defs>
+                                    <text x="100" y="100" fontSize="36" fill="#601625" textAnchor="middle" dominantBaseline="middle" className="font-bold">{performancePercentage}%</text>
+                                    <text x="100" y="125" fontSize="14" fill="#6b7280" textAnchor="middle" className="font-medium">Performance</text>
+                                    <text x="100" y="145" fontSize="12" fill="#9ca3af" textAnchor="middle">Target: {targetPct}%</text>
+                                  </g>
+                                )
+                              })()}
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div className="mt-8 grid grid-cols-2 gap-4">
+                          <div className="flex justify-center">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex flex-col items-center p-4 bg-[#601625]/5 rounded-xl hover:bg-[#601625]/10 transition-colors cursor-pointer w-full">
+                                  <div className="w-6 h-6 rounded-full bg-[#601625] mb-3 flex items-center justify-center">
+                                    <DollarSign className="h-3 w-3 text-white" />
+                                  </div>
+                                  <div className="text-sm font-medium text-neutral-700 mb-1">Revenue Performance</div>
+                                  <div className="text-2xl font-bold text-[#601625] mb-1">
+                                    {(() => {
+                                      const totalRevenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
+                                      const tgt = typeof targetRevenueAmount === 'number' && targetRevenueAmount > 0 ? targetRevenueAmount : Math.max(1, totalRevenue)
+                                      const pct = Math.min(Math.round((totalRevenue / tgt) * 100), 100)
+                                      return `${pct}%`
+                                    })()}
+                                  </div>
+                                  <div className="text-xs text-neutral-500 text-center">
+                                    <div>Actual: {formatCurrency(filteredRows.reduce((s, r) => s + Number(r.totalPaid || 0), 0))}</div>
+                                    <div>Target: {formatCurrency(Number(targetRevenueAmount || 0))}</div>
+                                  </div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-[#601625] text-white border-[#601625]">
+                                <p className="text-white">Revenue achievement vs target</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+
+                          <div className="flex justify-center">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex flex-col items-center p-4 bg-green-50 rounded-xl hover:bg-green-100 transition-colors cursor-pointer w-full">
+                                  <div className="w-6 h-6 rounded-full bg-green-500 mb-3 flex items-center justify-center">
+                                    <Target className="h-3 w-3 text-white" />
+                                  </div>
+                                  <div className="text-sm font-medium text-neutral-700 mb-1">Target Achievement</div>
+                                  <div className="text-2xl font-bold text-green-600 mb-1">{targetPercentage}%</div>
+                                  <div className="text-xs text-neutral-500 text-center">
+                                    <div className="font-semibold">Target: {targetPercentage}%</div>
+                                    <div className="font-semibold">Achieved: {(() => {
+                                      const totalRevenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
+                                      const tgt = typeof targetRevenueAmount === 'number' && targetRevenueAmount > 0 ? targetRevenueAmount : Math.max(1, totalRevenue)
+                                      const pct = Math.min(Math.round((totalRevenue / tgt) * 100), 100)
+                                      return `${pct}%`
+                                    })()}</div>
+                                    <div className="mt-1 text-green-600">
+                                      {(() => {
+                                        const totalRevenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
+                                        const tgt = Number(targetRevenueAmount || 0)
+                                        const pct = tgt > 0 ? (totalRevenue / tgt) * 100 : 0
+                                        return pct >= targetPercentage ? '✅ Goal Reached!' : '📈 In Progress'
+                                      })()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-[#601625] text-white border-[#601625]">
+                                <p className="text-white">Compare achieved vs target percentage</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Staff Performance compact */}
+                    <Card className="rounded-2xl border-[#601625]/20 shadow-sm hover:shadow-md transition-all duration-300">
+                      <CardHeader className="pb-6">
+                        <div className="flex items-center gap-4">
+                          <CardTitle className="flex items-center gap-3 text-xl font-semibold text-[#601625]">
+                            <div className="p-2 bg-[#601625]/10 rounded-lg">
+                              <Users className="h-6 w-6 text-[#601625]" />
+                            </div>
+                            Staff Performance
+                          </CardTitle>
+                          <div className="text-sm text-neutral-500 font-medium ml-auto">{filteredRows.length} transactions</div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="text-center p-6 bg-[#601625]/5 rounded-xl">
+                            <div className="text-4xl font-bold text-[#601625] mb-2">
+                              {(() => {
+                                const staffSet = new Set<string>()
+                                filteredRows.forEach(row => {
+                                  if (row.staff) row.staff.split(',').map(n => n.trim()).filter(Boolean).forEach(n => staffSet.add(n))
+                                })
+                                return staffSet.size
+                              })()}
+                            </div>
+                            <div className="text-sm font-semibold text-neutral-600">Active Staff</div>
+                          </div>
+                          <div className="text-center p-6 bg-green-50 rounded-xl">
+                            <div className="text-4xl font-bold text-green-600 mb-2">
+                              {(() => {
+                                const totalRevenue = filteredRows.reduce((sum, row) => sum + Number(row.totalPaid || 0), 0)
+                                const totalTransactions = filteredRows.length
+                                const avg = totalTransactions > 0 ? totalRevenue / totalTransactions : 0
+                                return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(avg)
+                              })()}
+                            </div>
+                            <div className="text-sm font-semibold text-neutral-600">Avg Transaction</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TooltipProvider>
+              </div>
+
               {/* 2. PER EMPLOYEE METRICS (current dataset, respects filters) */}
               {!sectionsLoading && employeeMetrics.employees.size > 0 && (
                 <div className="space-y-4">
@@ -1627,6 +1851,42 @@ export default function DashboardPage() {
               Apply Filter
             </Button>
                                     </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Target Dialog */}
+      <Dialog open={targetDialogOpen} onOpenChange={setTargetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Targets</DialogTitle>
+            <DialogDescription>Configure target revenue and target percentage.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-neutral-700">Target Revenue (amount)</label>
+              <Input
+                type="number"
+                min={0}
+                value={targetRevenueAmount ?? ''}
+                onChange={(e) => setTargetRevenueAmount(Number(e.target.value))}
+                placeholder="e.g. 50000"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-neutral-700">Target %</label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={targetPercentage}
+                onChange={(e) => setTargetPercentage(Number(e.target.value))}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setTargetDialogOpen(false)}>Cancel</Button>
+              <Button onClick={saveTargetRevenue} disabled={savingTarget}>{savingTarget ? 'Saving...' : 'Save'}</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
