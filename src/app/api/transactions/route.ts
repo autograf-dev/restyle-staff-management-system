@@ -10,11 +10,55 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json()
-    const { transaction, items } = body as {
-      transaction: Record<string, any>
-      items: Record<string, any>[]
+    interface SplitPayment { method: string; amount: number; percentage?: number }
+    interface ServiceSplit { serviceId: string; paymentMethod: string }
+    interface TransactionPayload {
+      id: string
+      paymentDate?: string
+      method?: string
+      bookingId?: string | null
+      bookingServiceLookup?: string | null
+      bookingBookedRate?: number | null
+      bookingCustomerPhone?: string | null
+      bookingType?: string | null
+      customerPhone?: string | null
+      customerLookup?: string | null
+      paymentSort?: number | null
+      paymentStaff?: string | null
+      status?: string | null
+      transactionServices?: number | null
+      transactionServicesTotal?: number | null
+      tax?: number
+      subtotal?: number
+      tip?: number
+      totalPaid?: number
+      serviceNamesJoined?: string | null
+      serviceAcuityIds?: string | null
+      walkInCustomerId?: string | null
+      walkInPhone?: string | null
+      transactionPaid?: string | null
+      // split fields
+      isSplitPayment?: boolean
+      isServiceSplit?: boolean
+      splitPayments?: SplitPayment[]
+      serviceSplits?: ServiceSplit[]
     }
+
+    interface ItemPayload {
+      id: string
+      paymentId?: string
+      valuesJoined2?: string | null
+      statusJoined?: string | null
+      staffName?: string | null
+      staffTipSplit?: number | null
+      staffTipCollected?: number | null
+      serviceId?: string | null
+      serviceName?: string | null
+      price?: number | null
+    }
+
+    const body = await req.json() as { transaction: TransactionPayload; items: ItemPayload[] }
+    const { transaction, items } = body
 
     if (!transaction || !Array.isArray(items)) {
       return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 })
@@ -30,17 +74,19 @@ export async function POST(req: Request) {
     // Extract split flags from transaction payload (UI embeds these inside transaction)
     const isSplitPayment: boolean = Boolean(transaction.isSplitPayment)
     const isServiceSplit: boolean = Boolean(transaction.isServiceSplit)
-    const splitPayments: Array<{ method: string; amount: number; percentage?: number }>
-      = Array.isArray(transaction.splitPayments) ? transaction.splitPayments.map((p: any) => ({
-        method: String(p.method || '').toLowerCase(),
-        amount: toNumber(p.amount, 0),
-        percentage: toNumber(p.percentage, 0)
-      })) : []
-    const serviceSplits: Array<{ serviceId: string; paymentMethod: string }>
-      = Array.isArray(transaction.serviceSplits) ? transaction.serviceSplits.map((s: any) => ({
-        serviceId: String(s.serviceId || ''),
-        paymentMethod: String(s.paymentMethod || '').toLowerCase()
-      })) : []
+    const splitPayments: SplitPayment[] = Array.isArray(transaction.splitPayments)
+      ? transaction.splitPayments.map((p) => ({
+          method: String(p.method || '').toLowerCase(),
+          amount: toNumber(p.amount, 0),
+          percentage: toNumber(p.percentage, 0)
+        }))
+      : []
+    const serviceSplits: ServiceSplit[] = Array.isArray(transaction.serviceSplits)
+      ? transaction.serviceSplits.map((s) => ({
+          serviceId: String(s.serviceId || ''),
+          paymentMethod: String(s.paymentMethod || '').toLowerCase()
+        }))
+      : []
 
     const originalId: string = String(transaction.id)
     const paymentDate = transaction.paymentDate ?? new Date().toISOString()
@@ -105,7 +151,19 @@ export async function POST(req: Request) {
     })
 
     // Helper to insert items
-    const insertItems = async (rows: Array<Record<string, any>>) => {
+    type TransactionItemRow = {
+      "🔒 Row ID": string | null
+      "Payment/ID": string | null
+      "VALUES JOINED 2": string | null
+      "STATUS JOINED": string | null
+      "Staff/Name": string | null
+      "Staff/Tip Split": number | null
+      "Staff/Tip Collected": number | null
+      "Service/ID": string | null
+      "Service/Name": string | null
+      "Service/Price": number | null
+    }
+    const insertItems = async (rows: TransactionItemRow[]) => {
       if (rows.length === 0) return null
       const { error } = await supabaseAdmin
         .from("Transaction Items")
@@ -121,8 +179,8 @@ export async function POST(req: Request) {
       }
 
       // Compute proportional allocations and fix rounding on the last entry
-      let remaining = { subtotal, tax, tip, totalPaid }
-      const txRows: any[] = []
+      const remaining = { subtotal, tax, tip, totalPaid }
+      const txRows: ReturnType<typeof buildTxRow>[] = []
       const childIds: string[] = []
       splitPayments.forEach((sp, idx) => {
         const id = idx === 0 ? originalId : `${originalId}-${idx + 1}`
@@ -157,17 +215,17 @@ export async function POST(req: Request) {
 
       // Attach items ONLY to the first transaction to avoid double counting
       const firstId = childIds[0]
-      const itemRows = items.map((it: Record<string, any>) => ({
-        "🔒 Row ID": it.id,
-        "Payment/ID": firstId,
+      const itemRows: TransactionItemRow[] = items.map((it) => ({
+        "🔒 Row ID": it.id || null,
+        "Payment/ID": firstId || null,
         "VALUES JOINED 2": it.valuesJoined2 ?? null,
         "STATUS JOINED": it.statusJoined ?? null,
         "Staff/Name": it.staffName ?? null,
-        "Staff/Tip Split": it.staffTipSplit ?? null,
-        "Staff/Tip Collected": it.staffTipCollected ?? null,
-        "Service/ID": it.serviceId ?? null,
+        "Staff/Tip Split": (it.staffTipSplit as number | null) ?? null,
+        "Staff/Tip Collected": (it.staffTipCollected as number | null) ?? null,
+        "Service/ID": (it.serviceId as string | null) ?? null,
         "Service/Name": it.serviceName ?? null,
-        "Service/Price": it.price ?? null,
+        "Service/Price": (it.price as number | null) ?? null,
       }))
       const itemErr = await insertItems(itemRows)
       if (itemErr) {
@@ -185,7 +243,7 @@ export async function POST(req: Request) {
       })
 
       // Group items by method via serviceId mapping
-      const methodToItems = new Map<string, Array<Record<string, any>>>()
+      const methodToItems = new Map<string, ItemPayload[]>()
       items.forEach((it) => {
         const method = serviceToMethod.get(String(it.serviceId || '')) || String(transaction.method || '').toLowerCase()
         if (!methodToItems.has(method)) methodToItems.set(method, [])
@@ -203,8 +261,8 @@ export async function POST(req: Request) {
       const priceTotals = methods.map(m => methodToItems.get(m)!.reduce((s, it) => s + toNumber(it.price, 0), 0))
       const totalPrice = priceTotals.reduce((a, b) => a + b, 0) || 1
 
-      let remaining = { subtotal, tax, tip, totalPaid }
-      const txRows: any[] = []
+      const remaining = { subtotal, tax, tip, totalPaid }
+      const txRows: ReturnType<typeof buildTxRow>[] = []
       const childIds: string[] = []
 
       methods.forEach((m, idx) => {
@@ -238,21 +296,21 @@ export async function POST(req: Request) {
       }
 
       // Insert items for their respective transaction ids
-      const itemRows: Array<Record<string, any>> = []
+      const itemRows: TransactionItemRow[] = []
       methods.forEach((m, idx) => {
         const id = idx === 0 ? originalId : `${originalId}-${idx + 1}`
         methodToItems.get(m)!.forEach((it) => {
           itemRows.push({
-            "🔒 Row ID": it.id,
-            "Payment/ID": id,
+            "🔒 Row ID": it.id || null,
+            "Payment/ID": id || null,
             "VALUES JOINED 2": it.valuesJoined2 ?? null,
             "STATUS JOINED": it.statusJoined ?? null,
             "Staff/Name": it.staffName ?? null,
-            "Staff/Tip Split": it.staffTipSplit ?? null,
-            "Staff/Tip Collected": it.staffTipCollected ?? null,
-            "Service/ID": it.serviceId ?? null,
+            "Staff/Tip Split": (it.staffTipSplit as number | null) ?? null,
+            "Staff/Tip Collected": (it.staffTipCollected as number | null) ?? null,
+            "Service/ID": (it.serviceId as string | null) ?? null,
             "Service/Name": it.serviceName ?? null,
-            "Service/Price": it.price ?? null,
+            "Service/Price": (it.price as number | null) ?? null,
           })
         })
       })
@@ -281,17 +339,17 @@ export async function POST(req: Request) {
     }
 
     // Insert items for single transaction
-    const itemRows = items.map((it: Record<string, any>) => ({
-      "🔒 Row ID": it.id,
-      "Payment/ID": originalId,
+    const itemRows: TransactionItemRow[] = items.map((it) => ({
+      "🔒 Row ID": it.id || null,
+      "Payment/ID": originalId || null,
       "VALUES JOINED 2": it.valuesJoined2 ?? null,
       "STATUS JOINED": it.statusJoined ?? null,
       "Staff/Name": it.staffName ?? null,
-      "Staff/Tip Split": it.staffTipSplit ?? null,
-      "Staff/Tip Collected": it.staffTipCollected ?? null,
-      "Service/ID": it.serviceId ?? null,
+      "Staff/Tip Split": (it.staffTipSplit as number | null) ?? null,
+      "Staff/Tip Collected": (it.staffTipCollected as number | null) ?? null,
+      "Service/ID": (it.serviceId as string | null) ?? null,
       "Service/Name": it.serviceName ?? null,
-      "Service/Price": it.price ?? null,
+      "Service/Price": (it.price as number | null) ?? null,
     }))
 
     if (itemRows.length > 0) {
