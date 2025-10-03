@@ -14,9 +14,9 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { StaffPerformanceTable, type StaffPerformance } from "@/components/staff-performance-table"
 import { ServicesRevenueTable, type ServiceRevenue } from "@/components/services-revenue-table"
 import { type PaymentMethod } from "@/components/payment-methods-section"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, Scissors } from "lucide-react"
+import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar as CalendarIcon, CreditCard, Package, Receipt, Gift, Smartphone, Scissors, RefreshCw } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -84,6 +84,7 @@ export default function DashboardPage() {
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [staffList, setStaffList] = useState<Array<{ id: string; name: string }>>([])
   const [serviceCategories, setServiceCategories] = useState<Array<{
     id: string;
     name: string;
@@ -95,6 +96,10 @@ export default function DashboardPage() {
   }>>([])
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [sectionsLoading, setSectionsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null)
+  const hasLoadedRef = useRef(false)
+  const refreshTimerRef = useRef<number | null>(null)
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "alltime"
@@ -310,13 +315,14 @@ export default function DashboardPage() {
 
   // Calculate KPIs from filtered data
   const kpis = useMemo(() => {
+    type TxItem = NonNullable<TxRow['items']>[number]
     const count = filteredRows.length
     const revenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
     const tips = filteredRows.reduce((sum, r) => sum + Number(r.tip || 0), 0)
     // Service revenue ONLY from Transaction Items → strict sum of item.price
     const subtotal = filteredRows.reduce((sum, r) => {
       const itemsTotal = Array.isArray(r.items)
-        ? r.items.reduce((s: number, it: any) => s + Number(it.price || 0), 0)
+        ? r.items.reduce((s: number, it: TxItem) => s + Number(it.price || 0), 0)
         : 0
       return sum + itemsTotal
     }, 0)
@@ -488,84 +494,210 @@ export default function DashboardPage() {
     }
   }, [filteredOldTxItems])
 
+  // Per-employee metrics based on CURRENT filtered transactions (all-time or by filter)
+  const employeeMetrics = useMemo(() => {
+    const employees = new Map<string, {
+      staffName: string,
+      totalRevenue: number,
+      totalTax: number,
+      serviceRevenue: number,
+      productRevenue: number,
+      totalTips: number,
+      transactionCount: number,
+      txSet: Set<string>
+    }>()
 
-  // Fetch transactions data
-  useEffect(() => {
-    const load = async () => {
-      setSectionsLoading(true)
-      try {
-        // Fetch ALL current transactions with batched parallel paging and incremental append
-        const fetchAllTransactionsParallel = async () => {
-          const pageSize = 1000
-          // First call to read total
-          const headRes = await fetch(`/api/transactions?limit=1&offset=0`)
-          const headJson = await headRes.json()
-          if (!headRes.ok || !headJson.ok) {
-            console.warn('Failed to read transaction total:', headJson.error)
-            return [] as any[]
-          }
-          const total: number = Number(headJson.total || 0)
-          const pages = Math.ceil(total / pageSize)
+    // Build a case-insensitive lookup of actual staff from staff-hours
+    const canonicalByNormName = new Map<string, string>()
+    const staffCanonicalList = staffList
+      .map(s => (s?.name || '').trim())
+      .filter(Boolean)
 
-          const concurrency = 5
-          let all: any[] = []
-          for (let start = 0; start < pages; start += concurrency) {
-            const tasks = [] as Promise<any>[]
-            for (let p = start; p < Math.min(start + concurrency, pages); p++) {
-              const offset = p * pageSize
-              tasks.push(
-                fetch(`/api/transactions?limit=${pageSize}&offset=${offset}`)
-                  .then(r => r.json().then(j => ({ r, j })))
-                  .then(({ r, j }) => {
-                    if (!r.ok || !j.ok) {
-                      console.warn('Failed to load transactions page:', j.error)
-                      return []
-                    }
-                    const batch = j.data || []
-                    // Incrementally append so UI renders while loading
-                    setRows(prev => prev.concat(batch))
-                    return batch
-                  })
-              )
-            }
-            const results = await Promise.all(tasks)
-            results.forEach(b => { all = all.concat(b) })
-          }
-          return all
+    staffCanonicalList.forEach(name => {
+      canonicalByNormName.set(name.toLowerCase(), name)
+    })
+
+    // seed with canonical staff list (so all appear even with 0 tx)
+    staffCanonicalList.forEach(name => {
+      employees.set(name, {
+        staffName: name,
+        totalRevenue: 0,
+        totalTax: 0,
+        serviceRevenue: 0,
+        productRevenue: 0,
+        totalTips: 0,
+        transactionCount: 0,
+        txSet: new Set<string>()
+      })
+    })
+
+    const resolveCanonical = (raw: string): string | null => {
+      const n = (raw || '').trim().toLowerCase()
+      if (!n) return null
+      // 1) exact match
+      const exact = canonicalByNormName.get(n)
+      if (exact) return exact
+      // 2) contains match (handles variants like "Argument regarding payment")
+      for (const [norm, canonical] of canonicalByNormName.entries()) {
+        if (n.includes(norm)) return canonical
+      }
+      // 3) try prefix of raw up to first non-letter chunk
+      const firstWordish = n.split(/[^a-zA-Z]+/).filter(Boolean).slice(0, 2).join(' ')
+      if (firstWordish && canonicalByNormName.has(firstWordish)) {
+        return canonicalByNormName.get(firstWordish) || null
+      }
+      return null
+    }
+
+    type TxItem = NonNullable<TxRow['items']>[number]
+    filteredRows.forEach(row => {
+      const items = Array.isArray(row.items) ? row.items : []
+      const itemsTotal = items.reduce((s: number, it: TxItem) => s + Number(it.price || 0), 0)
+      items.forEach((it: TxItem) => {
+        const canonicalName = resolveCanonical(String(it.staffName || ''))
+        if (!canonicalName) return // skip non-staff-hours names
+        const price = Number(it.price || 0)
+        const tip = Number(it.staffTipCollected || 0)
+        const taxShare = itemsTotal > 0 ? Number(row.tax || 0) * (price / itemsTotal) : 0
+        const totalRevenueShare = price + taxShare + tip
+        const emp = employees.get(canonicalName)!
+        emp.totalRevenue += totalRevenueShare
+        emp.totalTax += taxShare
+        emp.serviceRevenue += price
+        emp.totalTips += tip
+        // Count unique transactions per staff
+        const txId = String(row.id)
+        if (!emp.txSet.has(txId)) {
+          emp.txSet.add(txId)
+          emp.transactionCount += 1
         }
+      })
+    })
 
-        const [allTransactions, oldItemsRes] = await Promise.all([
-          fetchAllTransactionsParallel(),
-          fetch(`/api/old-transaction-items?limit=1000`)
-        ])
-        
-        // ensure rows state is set if incremental appends didn't cover
-        if (allTransactions.length > 0) setRows(allTransactions)
-        
-        // Process old transaction items
-        const oldItemsJson = await oldItemsRes.json()
-        if (!oldItemsRes.ok || !oldItemsJson.ok) {
-          console.warn('Failed to load old transaction items:', oldItemsJson.error)
-        } else {
-          const oldItems = oldItemsJson.data || []
-          console.log('📊 Loaded old transaction items:', oldItems.length)
-          setOldTxItems(oldItems)
+    return {
+      store: { uniqueStaffCount: employees.size },
+      employees
+    }
+  }, [filteredRows, staffList])
+
+
+  // Unified data loader usable for initial, manual, and scheduled refreshes
+  const load = useCallback(async (options?: { showSkeleton?: boolean }) => {
+    const showSkeleton = options?.showSkeleton ?? false
+    try {
+      if (showSkeleton) setSectionsLoading(true)
+      setIsRefreshing(true)
+
+      // Reset rows when doing a full reload so incremental append doesn't duplicate
+      setRows([])
+
+      // fetch staff list from staff-hours
+      const staffRes = await fetch('/api/barber-hours')
+      const staffJson = await staffRes.json().catch(() => ({ ok: false }))
+      if (staffRes.ok && staffJson?.ok && Array.isArray(staffJson.data)) {
+        type StaffRow = { [key: string]: unknown; ghl_id?: string; ["🔒 Row ID"]?: string; ["ð Row ID"]?: string; ["Barber/Name"]?: string }
+        const list = (staffJson.data as StaffRow[]).map((row) => ({
+          id: String(row["🔒 Row ID"] || row["ð Row ID"] || row.ghl_id || ''),
+          name: String(row["Barber/Name"] || '').trim()
+        })).filter((s) => s.name)
+        setStaffList(list)
+      }
+
+      // Fetch ALL current transactions with batched parallel paging and incremental append
+      const fetchAllTransactionsParallel = async () => {
+        const pageSize = 1000
+        // First call to read total
+        const headRes = await fetch(`/api/transactions?limit=1&offset=0`)
+        const headJson = await headRes.json()
+        if (!headRes.ok || !headJson.ok) {
+          console.warn('Failed to read transaction total:', headJson.error)
+          return [] as TxRow[]
         }
-        
-        // Add 0.5 second delay for skeleton loading
+        const total: number = Number(headJson.total || 0)
+        const pages = Math.ceil(total / pageSize)
+
+        const concurrency = 5
+        let all: TxRow[] = []
+        for (let start = 0; start < pages; start += concurrency) {
+          const tasks = [] as Promise<TxRow[]>[]
+          for (let p = start; p < Math.min(start + concurrency, pages); p++) {
+            const offset = p * pageSize
+            tasks.push(
+              fetch(`/api/transactions?limit=${pageSize}&offset=${offset}`)
+                .then(r => r.json().then(j => ({ r, j } as { r: Response, j: { ok: boolean; data?: TxRow[]; error?: unknown } })))
+                .then(({ r, j }) => {
+                  if (!r.ok || !j.ok) {
+                    console.warn('Failed to load transactions page:', j.error)
+                    return [] as TxRow[]
+                  }
+                  const batch = (j.data || []) as TxRow[]
+                  // Incrementally append so UI renders while loading
+                  setRows(prev => prev.concat(batch))
+                  return batch
+                })
+            )
+          }
+          const results = await Promise.all(tasks)
+          results.forEach(b => { all = all.concat(b) })
+        }
+        return all
+      }
+
+      const [allTransactions, oldItemsRes] = await Promise.all([
+        fetchAllTransactionsParallel(),
+        fetch(`/api/old-transaction-items?limit=1000`)
+      ])
+
+      // ensure rows state is set if incremental appends didn't cover
+      if (allTransactions.length > 0) setRows(allTransactions)
+
+      // Process old transaction items
+      const oldItemsJson: { ok: boolean; data?: OldTxItemRow[]; error?: unknown } = await oldItemsRes.json()
+      if (!oldItemsRes.ok || !oldItemsJson.ok) {
+        console.warn('Failed to load old transaction items:', oldItemsJson.error)
+      } else {
+        const oldItems = oldItemsJson.data || []
+        console.log('📊 Loaded old transaction items:', oldItems.length)
+        setOldTxItems(oldItems)
+      }
+
+      setLastFetchedAt(new Date())
+    } catch (e: unknown) {
+      console.error('Error loading data:', e)
+    } finally {
+      setIsRefreshing(false)
+      if (showSkeleton) {
         setTimeout(() => {
           setSectionsLoading(false)
         }, 500)
-      } catch (e: unknown) {
-        console.error('Error loading data:', e)
-        setSectionsLoading(false)
       }
     }
+  }, [])
 
-    if (isPinVerified) {
-      load()
+  // Initial load after PIN verify and schedule 30-min auto-refresh
+  useEffect(() => {
+    if (!isPinVerified) return
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true
+      load({ showSkeleton: true })
+      // 30 minutes interval
+      const id = window.setInterval(() => {
+        load({ showSkeleton: false })
+      }, 30 * 60 * 1000)
+      refreshTimerRef.current = id
     }
-  }, [isPinVerified])
+    return () => {
+      if (refreshTimerRef.current) {
+        window.clearInterval(refreshTimerRef.current)
+        refreshTimerRef.current = null
+      }
+    }
+  }, [isPinVerified, load])
+
+  const handleManualRefresh = () => {
+    if (isRefreshing) return
+    load({ showSkeleton: true })
+  }
 
   // Calculate staff performance
   useEffect(() => {
@@ -977,6 +1109,23 @@ export default function DashboardPage() {
               <h1 className="text-xl font-semibold">Dashboard</h1>
               <Badge variant="secondary" className="ml-2">Analytics</Badge>
             </div>
+            <div className="ml-auto flex items-center gap-2 pr-4">
+              {lastFetchedAt && (
+                <span className="text-xs text-neutral-500">
+                  Updated {format(lastFetchedAt, 'PPpp')}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="rounded-full h-8 px-3"
+                title="Refresh data"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
@@ -1173,14 +1322,48 @@ export default function DashboardPage() {
                     </>
                   )}
                 </div>
+
+                {/* Payment Methods KPIs (compact) */}
+                <div className="mt-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
+                    {sectionsLoading ? (
+                      Array.from({ length: 6 }).map((_, index) => (
+                        <Card key={index} className="rounded-lg border-neutral-200 shadow-sm">
+                          <CardContent className="p-2">
+                            <div className="flex items-center justify-between">
+                              <Skeleton className="h-5 w-5 rounded-lg" />
+                              <Skeleton className="h-3 w-14" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    ) : (
+                      paymentMethods.map((method) => (
+                        <Card key={method.type} className="rounded-lg border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
+                          <CardContent className="p-2">
+                            <div className="flex items-center justify-between">
+                              <div className="h-6 w-6 rounded-md bg-[#601625]/10 flex items-center justify-center">
+                                {method.icon}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[9px] font-medium text-neutral-500 uppercase tracking-wide truncate max-w-[88px]">{method.name}</div>
+                                <div className="text-[12px] font-bold text-neutral-900">{formatCurrency(method.revenue)}</div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* 2. PER EMPLOYEE METRICS */}
-              {!sectionsLoading && v1Metrics.employees.size > 0 && (
+              {/* 2. PER EMPLOYEE METRICS (current dataset, respects filters) */}
+              {!sectionsLoading && employeeMetrics.employees.size > 0 && (
                 <div className="space-y-4">
                   <h3 className="text-md font-semibold text-[#601625] flex items-center gap-2">
                     <div className="h-6 w-6 rounded-full bg-[#601625] text-white flex items-center justify-center text-xs font-bold">2</div>
-                    Per Employee Metrics ({v1Metrics.store.uniqueStaffCount} Staff Members)
+                    Per Employee Metrics ({employeeMetrics.store.uniqueStaffCount} Staff Members)
                   </h3>
                   
                   <Card className="rounded-2xl border-[#601625]/20 shadow-sm bg-gradient-to-br from-[#601625]/5 to-[#751a29]/5">
@@ -1199,7 +1382,7 @@ export default function DashboardPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {Array.from(v1Metrics.employees.entries())
+                            {Array.from(employeeMetrics.employees.entries())
                               .sort(([,a], [,b]) => b.totalRevenue - a.totalRevenue) // Sort by total revenue descending
                               .slice(0, 20) // Show top 20 staff
                               .map(([staffName, empData]) => (
@@ -1226,9 +1409,9 @@ export default function DashboardPage() {
                         </table>
                       </div>
                       
-                      {v1Metrics.employees.size > 20 && (
+                      {employeeMetrics.employees.size > 20 && (
                         <div className="mt-4 text-center text-sm text-[#601625]/60">
-                          Showing top 20 of {v1Metrics.employees.size} staff members
+                          Showing top 20 of {employeeMetrics.employees.size} staff members
                         </div>
                       )}
                     </CardContent>
