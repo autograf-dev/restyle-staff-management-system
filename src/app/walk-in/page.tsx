@@ -822,10 +822,18 @@ export default function WalkInPage() {
 
   // Process walk-in checkout
   const processWalkIn = async () => {
-    if (!selectedCustomer) {
-      toast.error('Please select a customer')
-      return
+    // Use default guest customer if none selected
+    const effectiveCustomer = selectedCustomer || {
+      id: null,
+      fullName: 'Guest',
+      firstName: 'Guest',
+      lastName: '',
+      phone: '7807093875',
+      email: null
     }
+    
+    // Set guest checkout flag if no customer was selected
+    const effectiveIsGuestCheckout = !selectedCustomer || isGuestCheckout
 
     if (selectedServices.length === 0 && additionalServices.length === 0) {
       toast.error('Please add at least one service')
@@ -955,22 +963,22 @@ export default function WalkInPage() {
             .filter((v) => Boolean(v))
             .join(', ') || null,
           bookingBookedRate: totalPaid,
-          bookingCustomerPhone: selectedCustomer.phone || null,
-          bookingType: isGuestCheckout ? 'Walk-in Guest' : 'Walk-in',
-          customerLookup: isGuestCheckout ? null : selectedCustomer.id,
-          customerPhone: selectedCustomer.phone || null,
+          bookingCustomerPhone: effectiveCustomer.phone || null,
+          bookingType: effectiveIsGuestCheckout ? 'Walk-in Guest' : 'Walk-in',
+          customerLookup: effectiveIsGuestCheckout ? null : effectiveCustomer.id,
+          customerPhone: effectiveCustomer.phone || null,
           paymentStaff: items.map((i) => i.staffName).filter((name) => Boolean(name)).join(', ') || null,
           status: 'Paid',
           // Guest-specific fields
-          guestCustomerName: isGuestCheckout ? selectedCustomer.fullName : null,
-          guestCustomerPhone: isGuestCheckout ? selectedCustomer.phone : null,
-          isGuestCheckout: isGuestCheckout,
+          guestCustomerName: effectiveIsGuestCheckout ? effectiveCustomer.fullName : null,
+          guestCustomerPhone: effectiveIsGuestCheckout ? effectiveCustomer.phone : null,
+          isGuestCheckout: effectiveIsGuestCheckout,
         },
         items: itemsWithTip.map((i) => ({ ...i, paymentId: transactionId })),
         meta: {
-          customerFirstName: selectedCustomer.firstName,
-          customerName: selectedCustomer.fullName,
-          isGuestCheckout: isGuestCheckout,
+          customerFirstName: effectiveCustomer.firstName,
+          customerName: effectiveCustomer.fullName,
+          isGuestCheckout: effectiveIsGuestCheckout,
         }
       }
 
@@ -2053,7 +2061,7 @@ export default function WalkInPage() {
                 )}
 
                 {/* Complete Checkout Button */}
-                {selectedCustomer && (selectedServices.length > 0 || additionalServices.length > 0) && (
+                {(selectedServices.length > 0 || additionalServices.length > 0) && (
                   <Card className="rounded-2xl border-neutral-200 shadow-none">
                     <CardContent className="pt-6">
                         <Button

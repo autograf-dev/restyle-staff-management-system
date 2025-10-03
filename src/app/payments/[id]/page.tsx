@@ -518,7 +518,7 @@ export default function PaymentDetailPage() {
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 bg-[#601625] rounded-full"></div>
                       <h2 className="text-3xl font-bold text-gray-900">
-                        Transaction {data.id.slice(-8)} by {data.customerName || 'Unknown Customer'}
+                        Transaction - {data.customerName || 'Unknown Customer'}
                         {data.customerPhone && ` (${data.customerPhone})`}
                       </h2>
                     </div>
