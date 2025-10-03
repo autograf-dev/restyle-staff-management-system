@@ -23,7 +23,7 @@ import { Lock, Eye, EyeOff, ArrowLeft, DollarSign, TrendingUp, Users, Calendar a
 let DASHBOARD_CACHE: {
   rows: TxRow[]
   oldTxItems: OldTxItemRow[]
-  staffList: Array<{ id: string; name: string }>
+  staffList: Array<{ id: string; name: string; source: string }>
   lastFetchedAt: number | null
   targetRevenueAmount: number | null
   targetPercentage: number
@@ -95,7 +95,7 @@ export default function DashboardPage() {
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
-  const [staffList, setStaffList] = useState<Array<{ id: string; name: string }>>([])
+  const [staffList, setStaffList] = useState<Array<{ id: string; name: string; source: string }>>([])
   const [serviceCategories, setServiceCategories] = useState<Array<{
     id: string;
     name: string;
@@ -118,7 +118,7 @@ export default function DashboardPage() {
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "alltime"
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>("alltime")
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>("today")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [customDateDialogOpen, setCustomDateDialogOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState<Date | undefined>()
@@ -655,31 +655,86 @@ export default function DashboardPage() {
       // ensure rows state is set if incremental appends didn't cover
       if (allTransactions.length > 0) setRows(allTransactions)
 
-      // Extract staff list from transactions and transaction items
-      const allStaff = new Set<string>()
+      // Function to normalize staff names for deduplication
+      const normalizeStaffName = (name: string): string => {
+        return name
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+          .replace(/[^\w\s]/g, '') // Remove special characters except spaces
+          .trim()
+      }
       
-      // Get staff from transaction items (most accurate)
+      // Function to get canonical name (prefer the most complete version)
+      const getCanonicalName = (names: string[]): string => {
+        // Sort by length (longer names are usually more complete) and then alphabetically
+        return names.sort((a, b) => {
+          if (a.length !== b.length) return b.length - a.length
+          return a.localeCompare(b)
+        })[0]
+      }
+      
+      // Extract staff from both tables with normalization
+      const transactionItemsStaff = new Map<string, string>() // normalized -> original
+      const transactionsStaff = new Map<string, string>() // normalized -> original
+      
+      // Get staff from transaction items table
       allTransactions.forEach(row => {
         if (row.items) {
           row.items.forEach(item => {
             if (item.staffName && item.staffName.trim()) {
-              allStaff.add(item.staffName.trim())
+              const normalized = normalizeStaffName(item.staffName)
+              const original = item.staffName.trim()
+              if (!transactionItemsStaff.has(normalized)) {
+                transactionItemsStaff.set(normalized, original)
+              }
             }
           })
         }
-        // Also check main staff field as fallback
+      })
+      
+      // Get staff from transactions table
+      allTransactions.forEach(row => {
         if (row.staff && row.staff.trim()) {
           const staffNames = row.staff.split(',').map(name => name.trim()).filter(name => name)
-          staffNames.forEach(name => allStaff.add(name))
+          staffNames.forEach(name => {
+            const normalized = normalizeStaffName(name)
+            if (!transactionsStaff.has(normalized)) {
+              transactionsStaff.set(normalized, name)
+            }
+          })
         }
       })
       
-      // Convert to staff list format
-      const list = Array.from(allStaff).map((name, index) => ({
-        id: `staff_${index}_${name.replace(/\s+/g, '_')}`,
-        name: name
-      }))
-      setStaffList(list)
+      // Combine both lists with deduplication
+      const allNormalizedNames = new Set([...transactionItemsStaff.keys(), ...transactionsStaff.keys()])
+      const combinedList = Array.from(allNormalizedNames).map((normalized, index) => {
+        const transactionItemsOriginal = transactionItemsStaff.get(normalized)
+        const transactionsOriginal = transactionsStaff.get(normalized)
+        
+        // Determine source and canonical name
+        let source = 'Unknown'
+        let canonicalName = normalized
+        
+        if (transactionItemsOriginal && transactionsOriginal) {
+          source = 'Both Tables'
+          canonicalName = getCanonicalName([transactionItemsOriginal, transactionsOriginal])
+        } else if (transactionItemsOriginal) {
+          source = 'Transaction Items'
+          canonicalName = transactionItemsOriginal
+        } else if (transactionsOriginal) {
+          source = 'Transactions'
+          canonicalName = transactionsOriginal
+        }
+        
+        return {
+          id: `staff_${index}_${normalized.replace(/\s+/g, '_')}`,
+          name: canonicalName,
+          source: source
+        }
+      })
+      
+      setStaffList(combinedList)
 
       // Process old transaction items
       const oldItemsJson: { ok: boolean; data?: OldTxItemRow[]; error?: unknown } = await oldItemsRes.json()
@@ -710,7 +765,7 @@ export default function DashboardPage() {
       DASHBOARD_CACHE = {
         rows: allTransactions,
         oldTxItems: oldItemsJson.ok ? (oldItemsJson.data || []) : [],
-        staffList: list,
+        staffList: combinedList,
         lastFetchedAt: Date.now(),
         targetRevenueAmount,
         targetPercentage
@@ -1817,7 +1872,12 @@ export default function DashboardPage() {
                                           {staffName.charAt(0).toUpperCase()}
                                         </span>
                                       </div>
-                                      <span className="font-medium text-[#601625]">{staffName}</span>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium text-[#601625]">{staffName}</span>
+                                        <span className="text-xs text-gray-500">
+                                          {staffList.find(s => s.name === staffName)?.source || 'Unknown'}
+                                        </span>
+                                      </div>
                                     </div>
                                   </td>
                                   <td className="py-3 px-4 text-right font-bold text-[#601625]">{formatCurrency(empData.totalRevenue)}</td>
@@ -1834,6 +1894,11 @@ export default function DashboardPage() {
                       
                       <div className="mt-4 text-center text-sm text-[#601625]/60">
                         Showing {employeeMetrics.employees.size} staff members
+                        <div className="text-xs text-gray-500 mt-1">
+                          Transaction Items: {staffList.filter(s => s.source === 'Transaction Items').length} | 
+                          Transactions: {staffList.filter(s => s.source === 'Transactions').length} |
+                          Both Tables: {staffList.filter(s => s.source === 'Both Tables').length}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
