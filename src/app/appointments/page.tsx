@@ -2483,6 +2483,7 @@ function BookingsPageInner() {
                                             <h4 className="font-semibold text-base text-neutral-900 group-hover:text-[#7b1d1d] transition-colors">
                                               {serviceName}
                                             </h4>
+                                            {/* Row 1: Duration + Price */}
                                             <div className="flex items-center gap-2 mt-2">
                                               <Clock className="h-4 w-4 text-neutral-500" />
                                               <span className="text-sm text-neutral-600">
@@ -2492,16 +2493,16 @@ function BookingsPageInner() {
                                               <span className="text-sm font-semibold text-[#7b1d1d]">
                                                 {typeof service.price === 'number' && service.price > 0 ? `CA$${service.price.toFixed(2)}` : ''}
                                               </span>
-                                              {typeof service.staffCount === 'number' && (
-                                                <>
-                                                  <span className="text-neutral-300">•</span>
-                                                  <span className="text-xs text-neutral-500 flex items-center gap-1">
-                                                    <Users className="h-3 w-3 text-neutral-400" />
-                                                    {service.staffCount} staff available
-                                                  </span>
-                                                </>
-                                              )}
                                             </div>
+                                            {/* Row 2: Staff availability */}
+                                            {typeof service.staffCount === 'number' && (
+                                              <div className="flex items-center gap-1 mt-1">
+                                                <Users className="h-3 w-3 text-neutral-400" />
+                                                <span className="text-xs text-neutral-500">
+                                                  {service.staffCount} staff available
+                                                </span>
+                                              </div>
+                                            )}
                                           </div>
                                         </div>
                                       </div>
