@@ -73,11 +73,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: IconDashboard,
       },
       {
-        title: "Matrix",
-        url: `${prefix}/matrix`,
-        icon: BarChart3,
-      },
-      {
         title: "Calendar",
         url: `${prefix}/calendar`,
         icon: CalendarIcon,
