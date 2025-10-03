@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar } from "lucide-react"
+import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar, RefreshCw } from "lucide-react"
 import { CreditCard } from "lucide-react"
 import Link from "next/link"
 
@@ -49,6 +49,10 @@ export default function PaymentsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<TxRow | null>(null)
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const itemsPerPage = 1000
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -132,38 +136,70 @@ export default function PaymentsPage() {
     return { count, revenue, tips, avg, uniqueStaff, totalTipSplits }
   }, [filtered])
 
-  useEffect(() => {
-    const load = async () => {
+  const loadTransactions = async (page: number = 1, append: boolean = false) => {
+    const isInitialLoad = page === 1 && !append
+    if (isInitialLoad) {
       setLoading(true)
-      try {
-        const res = await fetch(`/api/transactions?limit=100`)
-        const json = await res.json()
-        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
-        
-        const transactions = json.data || []
-        setRows(transactions)
-        
-        // Extract unique customer lookup IDs and fetch names
-        const customerLookupIds = [...new Set(
-          transactions
-            .map((tx: TxRow) => tx.customerLookup)
-            .filter(Boolean)
-        )] as string[]
-        
-        if (customerLookupIds.length > 0) {
-          const names = await fetchCustomerNames(customerLookupIds)
-          setCustomerNames(names)
-        }
-      } catch (e: unknown) {
-        console.error('Error loading payments:', e)
-        const errorMessage = e instanceof Error ? e.message : 'Unknown error'
-        toast.error('Failed to load payments: ' + errorMessage)
-      } finally {
-        setLoading(false)
-      }
+    } else {
+      setLoadingMore(true)
     }
-    load()
+    
+    try {
+      const offset = (page - 1) * itemsPerPage
+      const res = await fetch(`/api/transactions?limit=${itemsPerPage}&offset=${offset}`)
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
+      
+      const transactions = json.data || []
+      
+      if (append) {
+        setRows(prev => [...prev, ...transactions])
+      } else {
+        setRows(transactions)
+      }
+      
+      // Check if there are more transactions
+      setHasMore(transactions.length === itemsPerPage)
+      
+      // Extract unique customer lookup IDs and fetch names
+      const customerLookupIds = [...new Set(
+        transactions
+          .map((tx: TxRow) => tx.customerLookup)
+          .filter(Boolean)
+      )] as string[]
+      
+      if (customerLookupIds.length > 0) {
+        const names = await fetchCustomerNames(customerLookupIds)
+        setCustomerNames(prev => ({ ...prev, ...names }))
+      }
+    } catch (e: unknown) {
+      console.error('Error loading payments:', e)
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error'
+      toast.error('Failed to load payments: ' + errorMessage)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  useEffect(() => {
+    loadTransactions(1, false)
   }, [])
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      const nextPage = currentPage + 1
+      setCurrentPage(nextPage)
+      loadTransactions(nextPage, true)
+    }
+  }
+
+  const resetAndReload = () => {
+    setCurrentPage(1)
+    setHasMore(true)
+    setQuery("")
+    loadTransactions(1, false)
+  }
 
   const handleDeleteClick = (transaction: TxRow) => {
     setSelectedTransaction(transaction)
@@ -218,14 +254,26 @@ export default function PaymentsPage() {
                   <h1 className="text-xl font-semibold">Payments</h1>
                 </div>
               </div>
-              <div className="relative">
-                <input
-                  className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
-                  placeholder="Search services, staff, phone, ID"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
+                    placeholder="Search services, staff, phone, ID"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                </div>
+                <Button
+                  onClick={resetAndReload}
+                  disabled={loading}
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3 text-sm font-medium hover:bg-[#601625]/5 hover:border-[#601625]/30 hover:text-[#601625] transition-all duration-200"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
               </div>
             </div>
             <p className="text-sm text-muted-foreground ml-[4.5rem]">View and manage all customer payments and transactions</p>
@@ -519,10 +567,33 @@ export default function PaymentsPage() {
                           </div>
                         ))}
                         
-                        {filtered.length === 0 && (
+                        {filtered.length === 0 && !loading && (
                           <div className="p-12 text-center">
                             <div className="text-[16px] font-medium text-neutral-500 mb-2">No transactions found</div>
                             <div className="text-[14px] text-neutral-400">Try adjusting your search criteria</div>
+                          </div>
+                        )}
+                        
+                        {/* Load More Button */}
+                        {hasMore && !loading && (
+                          <div className="p-6 text-center border-t border-neutral-200">
+                            <Button
+                              onClick={loadMore}
+                              disabled={loadingMore}
+                              className="bg-gradient-to-r from-[#601625] to-[#751a29] hover:from-[#751a29] hover:to-[#601625] text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                            >
+                              {loadingMore ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Loading More...
+                                </>
+                              ) : (
+                                `Load More Transactions (${rows.length} loaded)`
+                              )}
+                            </Button>
+                            <p className="text-sm text-neutral-500 mt-2">
+                              Showing {rows.length} of your {rows.length > 0 ? '16,000+' : '0'} transactions
+                            </p>
                           </div>
                         )}
                       </div>

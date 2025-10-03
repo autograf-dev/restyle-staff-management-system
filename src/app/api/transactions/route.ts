@@ -125,12 +125,14 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get('limit') || 50)
+    const offset = Number(searchParams.get('offset') || 0)
     const appointmentId = searchParams.get('appointmentId')
 
     let query = supabaseAdmin
       .from('Transactions')
       .select('*')
-      .limit(limit)
+      .range(offset, offset + limit - 1)
+      .order('"Payment/Date"', { ascending: false })
     
     // Filter by appointment ID if provided
     if (appointmentId) {
