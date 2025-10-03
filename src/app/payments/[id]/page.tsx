@@ -230,7 +230,7 @@ export default function PaymentDetailPage() {
     if (!data) return
     setSaving(true)
     try {
-      // Update main transaction with current calculated values
+      // Update main transaction with current calculated values and customer info
       const res = await fetch(`/api/transactions/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -238,24 +238,44 @@ export default function PaymentDetailPage() {
           subtotal, 
           tax, 
           tip, 
-          totalPaid 
+          totalPaid,
+          customerName,
+          customerPhone
         })
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || json?.ok === false) throw new Error(json.error || 'Save failed')
       
-      setData({ 
-        ...data, 
-        subtotal, 
-        tax, 
-        tip, 
-        totalPaid
-      })
+      // Update service items
+      for (const item of data.items) {
+        const itemRes = await fetch(`/api/transaction-items/${encodeURIComponent(item.id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serviceName: item.serviceName,
+            price: item.price,
+            staffName: item.staffName,
+            staffTipCollected: item.staffTipCollected
+          })
+        })
+        if (!itemRes.ok) {
+          throw new Error(`Failed to update service item ${item.id}`)
+        }
+      }
+      
+      // Reload from server to pick up backend-calculated totals/tips
+      const reload = await fetch(`/api/transactions/${encodeURIComponent(id)}`)
+      const reloadJson = await reload.json().catch(() => ({}))
+      if (reload.ok && reloadJson?.ok) {
+        setData(reloadJson.data)
+      } else {
+        setData({ ...data, customerName, customerPhone })
+      }
       setEditPricesDialog(false)
-      toast.success('Transaction totals updated')
+      toast.success('Transaction updated successfully')
     } catch (e: unknown) {
-      console.error('Error saving prices:', e)
-      toast.error('Could not save prices')
+      console.error('Error saving transaction:', e)
+      toast.error('Could not save transaction')
     } finally {
       setSaving(false)
     }
@@ -265,10 +285,6 @@ export default function PaymentDetailPage() {
     if (!editingItem) return
     setSaving(true)
     try {
-      // Calculate tip for this item (15% of item price) and round to 2 decimal places
-      const itemTip = Math.round((Number(editingItem.price) || 0) * 0.15 * 100) / 100
-      editingItem.staffTipCollected = itemTip
-      
       const res = await fetch(`/api/transaction-items/${encodeURIComponent(editingItem.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -276,7 +292,7 @@ export default function PaymentDetailPage() {
           serviceName: editingItem.serviceName,
           price: editingItem.price,
           staffName: editingItem.staffName,
-          staffTipCollected: itemTip
+          staffTipCollected: editingItem.staffTipCollected
         })
       })
       const json = await res.json().catch(() => ({}))
@@ -287,36 +303,15 @@ export default function PaymentDetailPage() {
         item.id === editingItem.id ? editingItem : item
       ) || []
       
-      // Recalculate totals from all items
-      const newSubtotal = updatedItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
-      const newTax = Math.round(newSubtotal * 0.13 * 100) / 100
-      const newTip = Math.round(newSubtotal * 0.15 * 100) / 100
-      const newTotal = newSubtotal + newTax + newTip
-      
-      // Update main transaction with new totals
-      const transactionRes = await fetch(`/api/transactions/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subtotal: newSubtotal,
-          tax: newTax,
-          tip: newTip,
-          totalPaid: newTotal
-        })
-      })
-      
-      if (!transactionRes.ok) {
-        throw new Error('Failed to update transaction totals')
+      // Reload transaction from server so backend-calculated totals/tips are reflected
+      const txRes = await fetch(`/api/transactions/${encodeURIComponent(id)}`)
+      const txJson = await txRes.json()
+      if (txRes.ok && txJson?.ok) {
+        setData(txJson.data)
+      } else {
+        // Fallback: update items locally
+        setData({ ...data!, items: updatedItems })
       }
-      
-      setData({ 
-        ...data!, 
-        items: updatedItems,
-        subtotal: newSubtotal,
-        tax: newTax,
-        tip: newTip,
-        totalPaid: newTotal
-      })
       
       setEditItemDialog(false)
       setEditingItem(null)
@@ -344,28 +339,14 @@ export default function PaymentDetailPage() {
     }
   }, [editingItem?.price])
 
-  // Auto-calculate tax, tips, and total when subtotal or items change
+  // Backend will calculate tax/tip/total; keep local display values synced from server
   useEffect(() => {
-    if (!data?.items) return
-    
-    // Calculate total from all service items
-    const totalFromItems = data.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
-    
-    // Calculate tax (13% HST for Canada) and round to 2 decimal places
-    const calculatedTax = Math.round(totalFromItems * 0.13 * 100) / 100
-    
-    // Calculate tip (15% of subtotal) and round to 2 decimal places
-    const calculatedTip = Math.round(totalFromItems * 0.15 * 100) / 100
-    
-    // Update tax and tip
-    setTax(calculatedTax)
-    setTip(calculatedTip)
-    
-    // Calculate total
-    const calculatedTotal = totalFromItems + calculatedTax + calculatedTip
-    setTotalPaid(calculatedTotal)
-    setSubtotal(totalFromItems)
-  }, [data?.items])
+    if (!data) return
+    setSubtotal(Number(data.subtotal) || 0)
+    setTax(Number(data.tax) || 0)
+    setTip(Number(data.tip) || 0)
+    setTotalPaid(Number(data.totalPaid) || 0)
+  }, [data])
 
   if (loading) {
     return (
@@ -427,14 +408,25 @@ export default function PaymentDetailPage() {
                   <h1 className="text-xl font-semibold">Payment Details</h1>
                 </div>
               </div>
-              <Button 
-                onClick={() => router.push('/payments')} 
-                size="sm"
-                className="h-9 px-4 text-sm font-semibold bg-[#601625] hover:bg-[#751a29] text-white transition-all duration-200 rounded-lg shadow-sm"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Payments
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button 
+                  onClick={() => setEditPricesDialog(true)}
+                  size="sm"
+                  className="h-9 px-4 text-sm font-semibold bg-[#601625] hover:bg-[#751a29] text-white transition-all duration-200 rounded-lg shadow-sm"
+                >
+                  <Edit3 className="h-4 w-4 mr-2" />
+                  Edit Transaction
+                </Button>
+                <Button 
+                  onClick={() => router.push('/payments')} 
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-4 text-sm font-semibold border-gray-300 hover:bg-gray-50 transition-all duration-200 rounded-lg"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Payments
+                </Button>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground ml-[4.5rem]">Complete transaction information and service details</p>
           </header>
@@ -482,96 +474,52 @@ export default function PaymentDetailPage() {
                     </div>
                     
                 {/* Financial Breakdown */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-2xl border border-gray-200/50">
-                  <div className="text-center relative group bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div className="text-xl font-bold text-gray-900 mb-1">{formatCurrency(data.subtotal)}</div>
-                    <div className="text-xs font-medium text-gray-600 uppercase tracking-wide">Subtotal</div>
-                    <Dialog open={editPricesDialog} onOpenChange={setEditPricesDialog}>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="absolute top-2 right-2 h-7 w-7 p-0 opacity-70 hover:opacity-100 transition-opacity hover:bg-gray-100 rounded-full">
-                          <Edit3 className="h-3.5 w-3.5 text-gray-500" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-md">
-                         <DialogHeader>
-                           <DialogTitle>Edit Prices</DialogTitle>
-                           <p className="text-sm text-gray-500 mt-2">
-                             Subtotal is calculated from all service items. Tax (13%) and Tips (15%) are automatically calculated from subtotal.
-                           </p>
-                         </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="subtotal">Subtotal (Calculated from service items)</Label>
-                            <Input
-                              id="subtotal"
-                              type="number"
-                              step="0.01"
-                              value={subtotal}
-                              readOnly
-                              className="bg-gray-50"
-                              placeholder="0.00"
-                            />
-                          </div>
-                           <div>
-                             <Label htmlFor="tax">Tax (Auto-calculated 13%)</Label>
-                             <Input
-                               id="tax"
-                               type="number"
-                               step="0.01"
-                               value={tax}
-                               readOnly
-                               className="bg-gray-50"
-                               placeholder="0.00"
-                             />
-                           </div>
-                           <div>
-                             <Label htmlFor="tip">Tips (Auto-calculated 15%)</Label>
-                             <Input
-                               id="tip"
-                               type="number"
-                               step="0.01"
-                               value={tip}
-                               readOnly
-                               className="bg-gray-50"
-                               placeholder="0.00"
-                             />
-                           </div>
-                          <div>
-                            <Label htmlFor="totalPaid">Total (Auto-calculated)</Label>
-                            <Input
-                              id="totalPaid"
-                              type="number"
-                              step="0.01"
-                              value={totalPaid}
-                              readOnly
-                              className="bg-gray-50"
-                            />
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setEditPricesDialog(false)}>
-                              Cancel
-                            </Button>
-                            <Button onClick={savePrices} disabled={saving}>
-                              {saving ? 'Saving...' : 'Save'}
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                  <div className="text-center relative group bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div className="text-xl font-bold text-gray-900 mb-1">{formatCurrency(data.tax)}</div>
-                    <div className="text-xs font-medium text-gray-600 uppercase tracking-wide">Tax</div>
-                  </div>
-                  <div className="text-center relative group bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div className="text-xl font-bold text-[#751a29] mb-1">{formatCurrency(data.tip)}</div>
-                    <div className="text-xs font-medium text-gray-600 uppercase tracking-wide">Tips</div>
-                  </div>
-                  <div className="text-center relative group bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div className="text-xl font-bold text-[#601625] mb-1">{formatCurrency(data.totalPaid)}</div>
-                    <div className="text-xs font-medium text-gray-600 uppercase tracking-wide">Total</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6">
+                  <div className="bg-gradient-to-br from-rose-50/80 to-pink-50/60 rounded-xl p-6 border border-rose-100/50 hover:shadow-lg transition-all duration-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-[#601625] uppercase tracking-wide mb-2">SUBTOTAL</div>
+                        <div className="text-2xl font-bold text-[#601625]">{formatCurrency(data.subtotal)}</div>
+                      </div>
+                      <div className="w-10 h-10 bg-rose-100/80 rounded-lg flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-[#601625]" />
+                      </div>
                     </div>
                   </div>
+                  <div className="relative group bg-gradient-to-br from-rose-50/80 to-pink-50/60 rounded-xl p-6 border border-rose-100/50 hover:shadow-lg transition-all duration-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-[#601625] uppercase tracking-wide mb-2">TAX</div>
+                        <div className="text-2xl font-bold text-[#601625]">{formatCurrency(data.tax)}</div>
+                      </div>
+                      <div className="w-10 h-10 bg-rose-100/80 rounded-lg flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-[#601625]" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative group bg-gradient-to-br from-rose-50/80 to-pink-50/60 rounded-xl p-6 border border-rose-100/50 hover:shadow-lg transition-all duration-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-[#601625] uppercase tracking-wide mb-2">TIPS</div>
+                        <div className="text-2xl font-bold text-[#601625]">{formatCurrency(data.tip)}</div>
+                      </div>
+                      <div className="w-10 h-10 bg-rose-100/80 rounded-lg flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-[#601625]" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative group bg-gradient-to-br from-rose-50/80 to-pink-50/60 rounded-xl p-6 border border-rose-100/50 hover:shadow-lg transition-all duration-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-[#601625] uppercase tracking-wide mb-2">TOTAL</div>
+                        <div className="text-2xl font-bold text-[#601625]">{formatCurrency(data.totalPaid)}</div>
+                      </div>
+                      <div className="w-10 h-10 bg-rose-100/80 rounded-lg flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-[#601625]" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 </CardContent>
               </Card>
 
@@ -615,14 +563,6 @@ export default function PaymentDetailPage() {
                                 Tip: {formatCurrency(Number(item.staffTipCollected))}
                               </div>
                             )}
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="absolute -top-2 -right-2 h-7 w-7 p-0 opacity-70 hover:opacity-100 transition-opacity hover:bg-gray-100 rounded-full"
-                              onClick={() => openEditItem(item)}
-                            >
-                              <Edit3 className="h-3.5 w-3.5 text-gray-500" />
-                            </Button>
                           </div>
                         </div>
                       </div>
@@ -662,37 +602,6 @@ export default function PaymentDetailPage() {
                           </div>
                           <div className="text-sm text-gray-600 mt-1">Customer Name</div>
                         </div>
-                        <Dialog open={editCustomerDialog} onOpenChange={setEditCustomerDialog}>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-full">
-                              <Edit3 className="h-4 w-4 text-gray-500" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-md">
-                            <DialogHeader>
-                              <DialogTitle>Edit Customer Name</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                      <div>
-                                <Label htmlFor="customerName">Customer Name</Label>
-                                <Input
-                                  id="customerName"
-                                  value={customerName}
-                                  onChange={(e) => setCustomerName(e.target.value)}
-                                  placeholder="Enter customer name"
-                                />
-                              </div>
-                              <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setEditCustomerDialog(false)}>
-                                  Cancel
-                                </Button>
-                                <Button onClick={saveCustomerName} disabled={saving}>
-                                  {saving ? 'Saving...' : 'Save'}
-                                </Button>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
                       </div>
                     </div>
                     
@@ -710,37 +619,6 @@ export default function PaymentDetailPage() {
                             <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
                             Contact
                           </span>
-                          <Dialog open={editPhoneDialog} onOpenChange={setEditPhoneDialog}>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-full">
-                                <Edit3 className="h-4 w-4 text-gray-500" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-md">
-                              <DialogHeader>
-                                <DialogTitle>Edit Phone Number</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                        <div>
-                                  <Label htmlFor="customerPhone">Phone Number</Label>
-                                  <Input
-                                    id="customerPhone"
-                                    value={customerPhone}
-                                    onChange={(e) => setCustomerPhone(e.target.value)}
-                                    placeholder="Enter phone number"
-                                  />
-                                </div>
-                                <div className="flex justify-end gap-2">
-                                  <Button variant="outline" onClick={() => setEditPhoneDialog(false)}>
-                                    Cancel
-                                  </Button>
-                                  <Button onClick={saveCustomerPhone} disabled={saving}>
-                                    {saving ? 'Saving...' : 'Save'}
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
                         </div>
                       </div>
                     )}
@@ -779,28 +657,37 @@ export default function PaymentDetailPage() {
                 </div>
                 </CardHeader>
               <CardContent className="px-6">
-                <div className="grid gap-8 md:grid-cols-2">
-                  <div className="space-y-2">
+                <div className="space-y-6">
+                  <div className="space-y-3">
                     <label className="text-sm font-semibold text-gray-700">Payment Method</label>
-                      <Select value={data.method || ''} onValueChange={(value) => setData({ ...data, method: value })}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-300 focus:ring-[#601625]/20 focus:border-[#601625] bg-white shadow-sm">
-                          <SelectValue placeholder="Select payment method" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="debit">Debit</SelectItem>
-                          <SelectItem value="visa">Visa</SelectItem>
-                          <SelectItem value="mastercard">Mastercard</SelectItem>
-                        <SelectItem value="amex">American Express</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  <div className="flex items-end">
-                    <div className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-                      Changes will be saved to the database
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: 'cash', label: 'Cash' },
+                        { value: 'debit', label: 'Debit' },
+                        { value: 'visa', label: 'Visa' },
+                        { value: 'mastercard', label: 'Mastercard' },
+                        { value: 'amex', label: 'American Express' }
+                      ].map((method) => (
+                        <Button
+                          key={method.value}
+                          variant={data.method === method.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setData({ ...data, method: method.value })}
+                          className={`h-10 px-4 text-sm font-medium transition-all duration-200 ${
+                            data.method === method.value
+                              ? 'bg-[#601625] hover:bg-[#751a29] text-white shadow-md'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-[#601625]'
+                          }`}
+                        >
+                          {method.label}
+                        </Button>
+                      ))}
                     </div>
                   </div>
+                  <div className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                    Changes will be saved to the database
                   </div>
+                </div>
                 
                 <div className="flex justify-end gap-4 pt-8 border-t border-gray-200 mt-8">
                   <Button 
@@ -823,6 +710,121 @@ export default function PaymentDetailPage() {
                 </CardContent>
               </Card>
 
+
+            {/* Edit Transaction Dialog */}
+            <Dialog open={editPricesDialog} onOpenChange={setEditPricesDialog}>
+              <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Edit Transaction</DialogTitle>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Edit customer information, prices, and service items for this transaction.
+                  </p>
+                </DialogHeader>
+                <div className="space-y-6">
+                  {/* Customer Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Customer Information</h3>
+                    <div>
+                      <Label htmlFor="customerName">Customer Name</Label>
+                      <Input
+                        id="customerName"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Enter customer name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customerPhone">Phone Number</Label>
+                      <Input
+                        id="customerPhone"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Financial details are calculated on the backend and not editable here */}
+
+                  {/* Service Items */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Service Items</h3>
+                    <div className="space-y-3">
+                      {(data?.items || []).map((item: any, index: number) => (
+                        <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor={`serviceName-${index}`}>Service Name</Label>
+                              <Input
+                                id={`serviceName-${index}`}
+                                value={item.serviceName || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(data?.items || [])]
+                                  updatedItems[index] = { ...updatedItems[index], serviceName: e.target.value }
+                                  setData({ ...data!, items: updatedItems })
+                                }}
+                                placeholder="Enter service name"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`servicePrice-${index}`}>Price</Label>
+                              <Input
+                                id={`servicePrice-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.price || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(data?.items || [])]
+                                  const newPrice = Number(e.target.value)
+                                  const newTip = Math.round(newPrice * 0.15 * 100) / 100
+                                  updatedItems[index] = { ...updatedItems[index], price: newPrice, staffTipCollected: newTip }
+                                  setData({ ...data!, items: updatedItems })
+                                }}
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`staffName-${index}`}>Staff Name</Label>
+                              <Input
+                                id={`staffName-${index}`}
+                                value={item.staffName || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(data?.items || [])]
+                                  updatedItems[index] = { ...updatedItems[index], staffName: e.target.value }
+                                  setData({ ...data!, items: updatedItems })
+                                }}
+                                placeholder="Enter staff name"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`staffTip-${index}`}>Staff Tip (Auto-calculated 15%)</Label>
+                              <Input
+                                id={`staffTip-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.staffTipCollected || ''}
+                                readOnly
+                                className="bg-gray-50"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4 border-t">
+                    <Button variant="outline" onClick={() => setEditPricesDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={savePrices} disabled={saving}>
+                      {saving ? 'Saving...' : 'Save All Changes'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Service Item Edit Dialog */}
             <Dialog open={editItemDialog} onOpenChange={setEditItemDialog}>
