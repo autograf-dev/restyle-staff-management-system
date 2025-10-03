@@ -427,6 +427,14 @@ export default function PaymentDetailPage() {
                   <h1 className="text-xl font-semibold">Payment Details</h1>
                 </div>
               </div>
+              <Button 
+                onClick={() => router.push('/payments')} 
+                size="sm"
+                className="h-9 px-4 text-sm font-semibold bg-[#601625] hover:bg-[#751a29] text-white transition-all duration-200 rounded-lg shadow-sm"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Payments
+              </Button>
             </div>
             <p className="text-sm text-muted-foreground ml-[4.5rem]">Complete transaction information and service details</p>
           </header>
@@ -440,7 +448,10 @@ export default function PaymentDetailPage() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 bg-[#601625] rounded-full"></div>
-                      <h2 className="text-3xl font-bold text-gray-900">Transaction #{data.id.slice(-8)}</h2>
+                      <h2 className="text-3xl font-bold text-gray-900">
+                        Transaction {data.id.slice(-8)} by {data.customerName || 'Unknown Customer'}
+                        {data.customerPhone && ` (${data.customerPhone})`}
+                      </h2>
                     </div>
                     <p className="text-sm text-gray-600 ml-6">
                       {data.paymentDate ? new Date(data.paymentDate).toLocaleDateString('en-CA', { 
@@ -812,17 +823,6 @@ export default function PaymentDetailPage() {
                 </CardContent>
               </Card>
 
-            {/* Action Buttons */}
-            <div className="flex justify-center items-center pt-8">
-              <Button 
-                onClick={() => router.push('/payments')} 
-                size="lg"
-                className="h-14 px-10 text-base font-semibold bg-[#601625] hover:bg-[#751a29] text-white transition-all duration-200 rounded-xl shadow-lg hover:shadow-xl"
-              >
-                <ArrowLeft className="h-5 w-5 mr-3" />
-                Back to Payments
-              </Button>
-            </div>
 
             {/* Service Item Edit Dialog */}
             <Dialog open={editItemDialog} onOpenChange={setEditItemDialog}>
