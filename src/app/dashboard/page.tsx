@@ -1301,18 +1301,6 @@ export default function DashboardPage() {
             {/* Date Filter Buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               <Button
-                variant={selectedFilter === "alltime" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedFilter("alltime")}
-                className={`rounded-full h-8 px-4 text-xs font-medium transition-all ${
-                  selectedFilter === "alltime"
-                    ? "bg-[#601625] hover:bg-[#751a29] text-white"
-                    : "hover:bg-[#601625]/5"
-                }`}
-              >
-                All Time
-              </Button>
-              <Button
                 variant={selectedFilter === "today" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedFilter("today")}
