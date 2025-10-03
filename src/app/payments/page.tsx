@@ -460,159 +460,161 @@ export default function PaymentsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {/* KPI Section */}
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900">Key Performance Indicators</h3>
-                    <p className="text-sm text-gray-500">Track your business metrics</p>
-                  </div>
-
-                  {/* Enhanced KPI Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                    <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Revenue</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
-                              {loadingKpis ? (
-                                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-                              ) : (
-                                formatCurrency(kpiData.totalRevenue)
-                              )}
-                            </div>
+                  {/* Combined KPI and Payment Methods Card */}
+                  <Card className="rounded-2xl border-neutral-200 shadow-sm mb-6">
+                    <CardContent className="p-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Left Side - KPI Metrics */}
+                        <div>
+                          <div className="mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                              <div className="h-2 w-2 bg-[#601625] rounded-full"></div>
+                              Today's Performance
+                            </h3>
+                            <p className="text-sm text-gray-500 mt-1">Key business metrics</p>
                           </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                            <DollarSign className="h-5 w-5 text-[#601625]" />
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-[#601625]/5 to-transparent rounded-xl border border-[#601625]/10">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-lg bg-[#601625]/10 flex items-center justify-center">
+                                  <DollarSign className="h-5 w-5 text-[#601625]" />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-600">Revenue</div>
+                                  <div className="text-xl font-bold text-gray-900">
+                                    {loadingKpis ? (
+                                      <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+                                    ) : (
+                                      formatCurrency(kpiData.totalRevenue)
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <TrendingUp className="h-4 w-4 text-[#751a29]" />
+                                  <span className="text-xs font-medium text-gray-600">Tips</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">
+                                  {loadingKpis ? (
+                                    <div className="h-5 w-16 bg-gray-200 rounded animate-pulse"></div>
+                                  ) : (
+                                    formatCurrency(kpiData.totalTips)
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CreditCard className="h-4 w-4 text-[#601625]" />
+                                  <span className="text-xs font-medium text-gray-600">Transactions</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">
+                                  {loadingKpis ? (
+                                    <div className="h-5 w-12 bg-gray-200 rounded animate-pulse"></div>
+                                  ) : (
+                                    kpiData.transactionsCount
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Users className="h-4 w-4 text-[#751a29]" />
+                                  <span className="text-xs font-medium text-gray-600">Active Staff</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">
+                                  {loadingKpis ? (
+                                    <div className="h-5 w-10 bg-gray-200 rounded animate-pulse"></div>
+                                  ) : (
+                                    kpiData.activeStaff
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Calendar className="h-4 w-4 text-[#601625]" />
+                                  <span className="text-xs font-medium text-gray-600">Tax Collected</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">
+                                  {loadingKpis ? (
+                                    <div className="h-5 w-16 bg-gray-200 rounded animate-pulse"></div>
+                                  ) : (
+                                    formatCurrency(kpiData.totalTax)
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Tips</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
-                              {loadingKpis ? (
-                                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-                              ) : (
-                                formatCurrency(kpiData.totalTips)
-                              )}
+                        
+                        {/* Right Side - Payment Methods */}
+                        <div>
+                          <div className="mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                              <div className="h-2 w-2 bg-[#601625] rounded-full"></div>
+                              Payment Methods
+                            </h3>
+                            <p className="text-sm text-gray-500 mt-1">Revenue breakdown by payment type</p>
+                          </div>
+                          
+                          {loadingPaymentMethods ? (
+                            <div className="space-y-3">
+                              {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="p-4 bg-gray-50/50 rounded-lg border border-gray-100">
+                                  <div className="animate-pulse">
+                                    <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
+                                    <div className="h-6 bg-gray-200 rounded w-1/2 mb-1"></div>
+                                    <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#751a29]/10 flex items-center justify-center">
-                            <TrendingUp className="h-5 w-5 text-[#751a29]" />
-                          </div>
+                          ) : paymentMethodData.length > 0 ? (
+                            <div className="space-y-3">
+                              {paymentMethodData.map((method, index) => (
+                                <div key={method.method} className="p-4 bg-gray-50/50 rounded-lg border border-gray-100 hover:bg-gray-100/50 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-3 h-3 rounded-full ${
+                                        index === 0 ? 'bg-green-500' :
+                                        index === 1 ? 'bg-blue-500' :
+                                        index === 2 ? 'bg-purple-500' :
+                                        index === 3 ? 'bg-orange-500' :
+                                        'bg-gray-500'
+                                      }`}></div>
+                                      <div>
+                                        <div className="font-medium text-gray-900 capitalize">{method.method}</div>
+                                        <div className="text-xs text-gray-500">
+                                          {method.transactionCount} transaction{method.transactionCount !== 1 ? 's' : ''}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-lg font-bold text-gray-900">
+                                        {formatCurrency(method.totalRevenue)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              <div className="text-sm">No payment data available for today</div>
+                            </div>
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Transactions</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
-                              {loadingKpis ? (
-                                <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
-                              ) : (
-                                kpiData.transactionsCount
-                              )}
-                            </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                            <CreditCard className="h-5 w-5 text-[#601625]" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Staff</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
-                              {loadingKpis ? (
-                                <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
-                              ) : (
-                                kpiData.activeStaff
-                              )}
-                            </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#751a29]/10 flex items-center justify-center">
-                            <Users className="h-5 w-5 text-[#751a29]" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card className="rounded-2xl border-neutral-200 shadow-sm hover:shadow-md transition-shadow">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Today&apos;s Tax</div>
-                            <div className="text-[24px] font-bold text-neutral-900 mt-1">
-                              {loadingKpis ? (
-                                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-                              ) : (
-                                formatCurrency(kpiData.totalTax)
-                              )}
-                            </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-xl bg-[#601625]/10 flex items-center justify-center">
-                            <Calendar className="h-5 w-5 text-[#601625]" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Payment Method Breakdown */}
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Today&apos;s Revenue by Payment Method</h3>
-                    {loadingPaymentMethods ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <div key={i} className="bg-white rounded-lg border border-gray-200 p-3">
-                            <div className="animate-pulse">
-                              <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
-                              <div className="h-5 bg-gray-200 rounded w-1/2 mb-1"></div>
-                              <div className="h-2 bg-gray-200 rounded w-1/3"></div>
-                            </div>
-                          </div>
-                        ))}
                       </div>
-                    ) : paymentMethodData.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                        {paymentMethodData.map((method, index) => (
-                          <div key={method.method} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-shadow">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className={`w-2 h-2 rounded-full ${
-                                index === 0 ? 'bg-green-500' :
-                                index === 1 ? 'bg-blue-500' :
-                                index === 2 ? 'bg-purple-500' :
-                                index === 3 ? 'bg-orange-500' :
-                                'bg-gray-500'
-                              }`}></div>
-                              <span className="text-xs font-medium text-gray-600 truncate capitalize">{method.method}</span>
-                            </div>
-                            <div className="text-lg font-bold text-gray-900 mb-1">
-                              {formatCurrency(method.totalRevenue)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {method.transactionCount} transaction{method.transactionCount !== 1 ? 's' : ''}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <div className="text-sm">No payment data available for today</div>
-                      </div>
-                    )}
-                  </div>
+                    </CardContent>
+                  </Card>
                   {loading ? (
                     <div className="space-y-2">
                       {Array.from({ length: 8 }).map((_, i) => (
