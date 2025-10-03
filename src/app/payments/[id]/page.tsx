@@ -79,6 +79,34 @@ export default function PaymentDetailPage() {
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
 
+  // Recalculate per-item tips (if percentage exists) and overall totals
+  const recomputeTotalsFromItems = (items: TransactionData['items']) => {
+    const updatedItems = items.map((it) => {
+      const priceNumber = Number(it.price) || 0
+      const tipPercent = Number(it.staffTipSplit)
+      if (!isNaN(tipPercent) && tipPercent > 0) {
+        const computedTip = Math.round(priceNumber * (tipPercent / 100) * 100) / 100
+        return { ...it, staffTipCollected: computedTip }
+      }
+      return it
+    })
+
+    const newSubtotal = updatedItems.reduce((sum, i) => sum + (Number(i.price) || 0), 0)
+    const newTax = Math.round(newSubtotal * 0.13 * 100) / 100
+    const newTip = updatedItems.reduce((sum, i) => sum + (Number(i.staffTipCollected) || 0), 0)
+    const newTotal = Math.round((newSubtotal + newTax + newTip) * 100) / 100
+
+    // Sync local displayed fields and data object so UI updates instantly
+    setSubtotal(newSubtotal)
+    setTax(newTax)
+    setTip(newTip)
+    setTotalPaid(newTotal)
+
+    setData((prev) => prev ? { ...prev, items: updatedItems, subtotal: newSubtotal, tax: newTax, tip: newTip, totalPaid: newTotal } : prev)
+
+    return { updatedItems, newSubtotal, newTax, newTip, newTotal }
+  }
+
   // Function to fetch customer name from GHL contacts API (only when customerLookup is an ID)
   const fetchCustomerName = async (customerLookupId: string) => {
     // Check if customerLookupId looks like an ID (contains letters/numbers, not just a name)
@@ -249,7 +277,7 @@ export default function PaymentDetailPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok || json?.ok === false) throw new Error(json.error || 'Save failed')
       
-      // Update service items
+      // Update service items (use current data.items which include any edited prices/tips)
       for (const item of data.items) {
         const itemRes = await fetch(`/api/transaction-items/${encodeURIComponent(item.id)}`, {
           method: 'PUT',
@@ -266,6 +294,19 @@ export default function PaymentDetailPage() {
         }
       }
       
+      // Send updated totals to backend as well for consistency
+      await fetch(`/api/transactions/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subtotal,
+          tax,
+          tip,
+          totalPaid,
+          method: data.method
+        })
+      })
+
       // Reload from server to pick up backend-calculated totals/tips
       const reload = await fetch(`/api/transactions/${encodeURIComponent(id)}`)
       const reloadJson = await reload.json().catch(() => ({}))
@@ -786,7 +827,7 @@ export default function PaymentDetailPage() {
                                   onChange={(e) => {
                                     const updated = [...(data.items || [])]
                                     updated[index] = { ...updated[index], price: Number(e.target.value) }
-                                    setData({ ...data, items: updated })
+                                    recomputeTotalsFromItems(updated)
                                   }}
                                   className="w-28 text-right"
                                   placeholder="0.00"
