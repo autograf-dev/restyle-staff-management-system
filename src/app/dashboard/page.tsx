@@ -48,22 +48,19 @@ interface TxRow {
   }>
 }
 
-interface OldTxRow {
+interface OldTxItemRow {
   idx: number
   rowId: string
-  bookingId: string
+  paymentId: string
+  staffName: string | null
+  staffTipSplit: number
+  staffTipCollected: number
+  serviceId: string | null
+  serviceName: string | null
+  servicePrice: number
+  paidCheck: boolean
   paymentDate: string | null
-  paymentMethod: string | null
-  paymentStatus: string | null
-  transactionServicesTotal: number | null
-  transactionTax: number | null
-  transactionTotalPaid: number | null
-  transactionTip: string | null
-  serviceJoinedList: string | null
-  joinedStaffList: string | null
-  summaryDate: number | null
-  summaryYear: number | null
-  summaryMonth: number | null
+  paymentAt: string | null
 }
 
 export default function DashboardPage() {
@@ -83,7 +80,7 @@ export default function DashboardPage() {
 
   // Data State
   const [rows, setRows] = useState<TxRow[]>([])
-  const [oldRows, setOldRows] = useState<OldTxRow[]>([])
+  const [oldTxItems, setOldTxItems] = useState<OldTxItemRow[]>([])
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([])
   const [servicesRevenue, setServicesRevenue] = useState<ServiceRevenue[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -101,7 +98,7 @@ export default function DashboardPage() {
   
   // Date Filter State
   type FilterType = "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom"
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>("today")
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>("thisYear")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [customDateDialogOpen, setCustomDateDialogOpen] = useState(false)
   const [tempStartDate, setTempStartDate] = useState<Date | undefined>()
@@ -217,8 +214,8 @@ export default function DashboardPage() {
     return filtered
   }, [rows, selectedFilter, dateRange])
 
-  // Filter old transactions based on selected date range
-  const filteredOldRows = useMemo(() => {
+  // Filter old transaction items based on selected date range
+  const filteredOldTxItems = useMemo(() => {
     const { start, end } = getDateRange(selectedFilter)
     
     // Normalize dates to compare only date parts (ignore time)
@@ -231,10 +228,14 @@ export default function DashboardPage() {
     const startDate = normalizeDate(start)
     const endDate = normalizeDate(end)
     
-    const filtered = oldRows.filter(row => {
-      if (!row.paymentDate) return false
+    const filtered = oldTxItems.filter(item => {
+      if (!item.paymentDate && !item.paymentAt) return false
       try {
-        const paymentDate = normalizeDate(new Date(row.paymentDate))
+        // Use payment_at if available, otherwise fall back to payment_date
+        const dateStr = item.paymentAt || item.paymentDate
+        if (!dateStr) return false
+        
+        const paymentDate = normalizeDate(new Date(dateStr))
         return paymentDate >= startDate && paymentDate <= endDate
       } catch {
         return false
@@ -242,17 +243,17 @@ export default function DashboardPage() {
     })
     
     // Debug logging
-    console.log('📅 Old Transactions Filter Debug:', {
+    console.log('📅 Old Transaction Items Filter Debug:', {
       selectedFilter,
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
-      totalOldRows: oldRows.length,
-      filteredOldRows: filtered.length,
-      sampleOldPaymentDates: filtered.slice(0, 3).map(r => r.paymentDate)
+      totalOldItems: oldTxItems.length,
+      filteredOldItems: filtered.length,
+      sampleOldPaymentDates: filtered.slice(0, 3).map(r => r.paymentAt || r.paymentDate)
     })
     
     return filtered
-  }, [oldRows, selectedFilter, dateRange])
+  }, [oldTxItems, selectedFilter, dateRange])
 
   // Calculate KPIs from filtered data
   const kpis = useMemo(() => {
@@ -293,9 +294,9 @@ export default function DashboardPage() {
     return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods }
   }, [filteredRows])
 
-  // Calculate V1 metrics from old transactions with proper staff distribution
+  // Calculate V1 metrics from old transaction items (like current Transaction Items)
   const v1Metrics = useMemo(() => {
-    if (filteredOldRows.length === 0) {
+    if (filteredOldTxItems.length === 0) {
       return {
         totalRevenue: 0,
         totalTips: 0,
@@ -310,55 +311,43 @@ export default function DashboardPage() {
     const staffRevenue = new Map<string, number>()
     const staffTips = new Map<string, number>()
     const staffTransactions = new Map<string, number>()
+    const uniquePayments = new Set<string>()
+    
     let totalRevenue = 0
     let totalTips = 0
-    const totalTransactions = filteredOldRows.length
 
-    filteredOldRows.forEach(row => {
-      const revenue = Number(row.transactionTotalPaid || 0)
-      const tip = Number(row.transactionTip || 0)
+    // Process each transaction item
+    filteredOldTxItems.forEach(item => {
+      if (!item.staffName) return
       
-      totalRevenue += revenue
-      totalTips += tip
-
-      // Parse joined_staff_list to distribute revenue and tips
-      if (row.joinedStaffList) {
-        const staffList = row.joinedStaffList
-          .split(',')
-          .map(name => name.trim())
-          .filter(name => name.length > 0)
-
-        if (staffList.length > 0) {
-          // Count occurrences of each staff member
-          const staffCounts = new Map<string, number>()
-          staffList.forEach(staff => {
-            staffCounts.set(staff, (staffCounts.get(staff) || 0) + 1)
-          })
-
-          const totalStaffOccurrences = staffList.length
-          
-          // Distribute revenue and tips based on staff occurrence ratio
-          staffCounts.forEach((count, staffName) => {
-            const ratio = count / totalStaffOccurrences
-            const staffRevenueShare = revenue * ratio
-            const staffTipShare = tip * ratio
-
-            // Update staff totals
-            staffRevenue.set(staffName, (staffRevenue.get(staffName) || 0) + staffRevenueShare)
-            staffTips.set(staffName, (staffTips.get(staffName) || 0) + staffTipShare)
-            staffTransactions.set(staffName, (staffTransactions.get(staffName) || 0) + (1 / staffCounts.size))
-          })
-        }
+      const staffName = item.staffName.trim()
+      const servicePrice = item.servicePrice || 0
+      const tipCollected = item.staffTipCollected || 0
+      
+      // Track revenue per staff
+      totalRevenue += servicePrice
+      staffRevenue.set(staffName, (staffRevenue.get(staffName) || 0) + servicePrice)
+      
+      // Track tips per staff
+      totalTips += tipCollected
+      staffTips.set(staffName, (staffTips.get(staffName) || 0) + tipCollected)
+      
+      // Track unique transactions per staff (count unique payment IDs)
+      if (item.paymentId) {
+        uniquePayments.add(item.paymentId)
+        staffTransactions.set(staffName, (staffTransactions.get(staffName) || 0) + 1)
       }
     })
 
+    const totalTransactions = uniquePayments.size
     const uniqueStaffCount = staffRevenue.size
 
-    console.log('📊 V1 Metrics Calculated:', {
+    console.log('📊 V1 Metrics Calculated from Transaction Items:', {
       totalRevenue,
       totalTips,
       totalTransactions,
       uniqueStaffCount,
+      totalItems: filteredOldTxItems.length,
       sampleStaffRevenue: Array.from(staffRevenue.entries()).slice(0, 3),
       sampleStaffTips: Array.from(staffTips.entries()).slice(0, 3)
     })
@@ -372,7 +361,7 @@ export default function DashboardPage() {
       staffTransactions,
       uniqueStaffCount
     }
-  }, [filteredOldRows])
+  }, [filteredOldTxItems])
 
 
   // Fetch transactions data
@@ -380,10 +369,10 @@ export default function DashboardPage() {
     const load = async () => {
       setSectionsLoading(true)
       try {
-        // Fetch both current and old transactions
-        const [currentRes, oldRes] = await Promise.all([
+        // Fetch both current transactions and old transaction items
+        const [currentRes, oldItemsRes] = await Promise.all([
           fetch(`/api/transactions?limit=100`),
-          fetch(`/api/old-transactions?limit=500`)
+          fetch(`/api/old-transaction-items?limit=1000`)
         ])
         
         // Process current transactions
@@ -395,13 +384,14 @@ export default function DashboardPage() {
           setRows(transactions)
         }
         
-        // Process old transactions
-        const oldJson = await oldRes.json()
-        if (!oldRes.ok || !oldJson.ok) {
-          console.warn('Failed to load old transactions:', oldJson.error)
+        // Process old transaction items
+        const oldItemsJson = await oldItemsRes.json()
+        if (!oldItemsRes.ok || !oldItemsJson.ok) {
+          console.warn('Failed to load old transaction items:', oldItemsJson.error)
         } else {
-          const oldTransactions = oldJson.data || []
-          setOldRows(oldTransactions)
+          const oldItems = oldItemsJson.data || []
+          console.log('📊 Loaded old transaction items:', oldItems.length)
+          setOldTxItems(oldItems)
         }
         
         // Add 0.5 second delay for skeleton loading
@@ -409,7 +399,7 @@ export default function DashboardPage() {
           setSectionsLoading(false)
         }, 500)
       } catch (e: unknown) {
-        console.error('Error loading payments:', e)
+        console.error('Error loading data:', e)
         setSectionsLoading(false)
       }
     }

@@ -13,11 +13,19 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get('limit') || 100)
 
+    console.log('🔍 Attempting to fetch from old_transactions table...')
+
     const { data, error } = await supabaseAdmin
       .from('old_transactions')
       .select('*')
       .limit(limit)
       .order('idx', { ascending: false })
+
+    console.log('📊 Supabase response:', { 
+      dataLength: data?.length || 0, 
+      error: error?.message || null,
+      sampleData: data?.slice(0, 1) || [] 
+    })
 
     if (error) {
       console.error('Supabase error:', error)
