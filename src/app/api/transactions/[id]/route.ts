@@ -24,7 +24,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         "Booking/ID",
         "Payment/Staff",
         "Customer/Phone",
-        "Customer/Lookup"
+        "Customer/Lookup",
+        "Walk-In/Customer ID",
+        "Walk-In/Phone"
       `)
       .eq('"🔒 Row ID"', id)
       .maybeSingle()
@@ -69,6 +71,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       staff: tx['Payment/Staff'],
       customerPhone: tx['Customer/Phone'],
       customerLookup: tx['Customer/Lookup'],
+      // Walk-in guest fields
+      walkInCustomerId: tx['Walk-In/Customer ID'],
+      walkInPhone: tx['Walk-In/Phone'],
       // Add payment status fields without breaking existing structure
       status: tx['Payment/Status'],
       paymentStatus: tx['Payment/Status'],

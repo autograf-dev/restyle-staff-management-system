@@ -152,11 +152,44 @@ export default function PaymentDetailPage() {
         
         const transactionData = json.data
         
-        // Fetch customer name if customerLookup exists
-        if (transactionData.customerLookup) {
-          const customerName = await fetchCustomerName(transactionData.customerLookup)
-          transactionData.customerName = customerName
+        // Determine customer name priority: Walk-In guest name > API lookup > fallback
+        let customerDisplayName = ''
+        
+        // First check for Walk-In guest name
+        if (transactionData.walkInCustomerId && transactionData.walkInCustomerId.trim() !== "") {
+          const walkInName = transactionData.walkInCustomerId.trim()
+          // If it looks like a name (contains spaces or is reasonably short), use it
+          if (walkInName.includes(' ') || walkInName.length < 20) {
+            const phone = transactionData.walkInPhone || transactionData.customerPhone
+            customerDisplayName = phone ? `${walkInName} (${phone})` : walkInName
+          }
         }
+        
+        // If no walk-in name, try customer lookup API
+        if (!customerDisplayName && transactionData.customerLookup) {
+          customerDisplayName = await fetchCustomerName(transactionData.customerLookup)
+        }
+        
+        // Fallback to phone-based guest
+        if (!customerDisplayName && transactionData.customerPhone) {
+          customerDisplayName = `Guest (${transactionData.customerPhone})`
+        }
+        
+        // Final fallback
+        if (!customerDisplayName) {
+          customerDisplayName = 'Walk-in Guest'
+        }
+        
+        transactionData.customerName = customerDisplayName
+        
+        console.log('🎯 Payment Detail Debug:', {
+          walkInCustomerId: transactionData.walkInCustomerId,
+          walkInPhone: transactionData.walkInPhone,
+          customerLookup: transactionData.customerLookup,
+          customerPhone: transactionData.customerPhone,
+          calculatedDisplayName: customerDisplayName,
+          finalCustomerName: transactionData.customerName
+        })
         
         setData(transactionData)
         
