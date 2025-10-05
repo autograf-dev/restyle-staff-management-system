@@ -389,8 +389,8 @@ const StaffOverviewView = ({
   // Minimal padding for the time grid
   const GRID_TOP_PADDING = 8
   const GRID_BOTTOM_PADDING = 16
-  // Reduced hour slot height to fit everything in viewport (12 hours * 60px = 720px + padding = ~744px total)
-  const HOUR_SLOT_HEIGHT = 60
+  // Increased hour slot height to prevent appointment overlap (12 hours * 120px = 1440px + padding)
+  const HOUR_SLOT_HEIGHT = 120
 
   // Update current time every minute
   React.useEffect(() => {
@@ -1036,8 +1036,8 @@ const StaffOverviewView = ({
       
       </div>
 
-      {/* Fixed height Time grid container - no scrolling */}
-      <div className="w-full pb-6" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING + 24}px` }} ref={scrollContainerRef}>
+      {/* Scrollable Time grid container - with vertical scroll */}
+      <div className="w-full pb-6 overflow-y-auto" style={{ maxHeight: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING + 24}px` }} ref={scrollContainerRef}>
         <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
@@ -1559,12 +1559,8 @@ export default function CalendarPage() {
 
   // Reschedule appointment function
   const handleRescheduleAppointment = async (appointment: Appointment) => {
-    if (isWithinTwoHours(appointment.startTime)) {
-      toast.error("Cannot reschedule - appointment starts within 2 hours")
-      return
-    }
-    if (isAppointmentEnded(appointment.endTime)) {
-      toast.error("Cannot reschedule - appointment has already ended")
+    if (appointment.payment_status === 'paid') {
+      toast.error("Cannot reschedule - appointment has been paid for")
       return
     }
     
@@ -2489,13 +2485,11 @@ export default function CalendarPage() {
                           disabled={
                             selectedAppointment.appointment_status === 'cancelled' || 
                             cancelLoading || 
-                            isWithinTwoHours(selectedAppointment.startTime) ||
-                            isAppointmentEnded(selectedAppointment.endTime)
+                            selectedAppointment.payment_status === 'paid'
                           }
                         >
                           <RefreshCcw className="h-4 w-4 mr-2" />
-                          {isAppointmentEnded(selectedAppointment.endTime) ? "Ended" : 
-                           isWithinTwoHours(selectedAppointment.startTime) ? "Too Late" : "Reschedule"}
+                          {selectedAppointment.payment_status === 'paid' ? "Paid" : "Reschedule"}
                         </Button>
                         <Button 
                           variant="outline"

@@ -574,11 +574,6 @@ function BookingsPageInner() {
 
   // Reschedule functions
   const handleRescheduleBooking = async (booking: Booking) => {
-    if (isWithinTwoHours(booking.startTime)) {
-      toast.error("Cannot reschedule - appointment starts within 2 hours")
-      return
-    }
-    
     setBookingToReschedule(booking)
     setSelectedStaff(booking.assigned_user_id || "any")
     setSelectedDate("")
@@ -1517,10 +1512,9 @@ function BookingsPageInner() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={withinTwoHours}
-                  title={withinTwoHours ? "Cannot reschedule - appointment starts within 2 hours" : "Reschedule appointment"}
+                  title="Reschedule appointment"
                   onClick={() => handleRescheduleBooking(appointment)}
-                  className="h-8 px-3 text-xs hover:bg-[#601625] hover:text-white transition-colors disabled:opacity-50"
+                  className="h-8 px-3 text-xs hover:bg-[#601625] hover:text-white transition-colors"
                 >
                   Reschedule
                 </Button>
@@ -2091,7 +2085,6 @@ function BookingsPageInner() {
                               setDetailsOpen(false)
                               handleRescheduleBooking(selected)
                             }}
-                            disabled={isWithinTwoHours(selected.startTime)}
                             className="flex-1 bg-[#601625] hover:bg-[#4a1119] text-white h-11 font-medium shadow-lg shadow-[#601625]/20"
                           >
                             <Calendar className="h-4 w-4 mr-2" />
@@ -2112,7 +2105,7 @@ function BookingsPageInner() {
                         </div>
                         {isWithinTwoHours(selected.startTime) && (
                           <p className="text-xs text-gray-500 text-center mt-3">
-                            ⚠️ Actions disabled - appointment starts within 2 hours
+                            ⚠️ Cancellation disabled - appointment starts within 2 hours
                           </p>
                         )}
                       </>

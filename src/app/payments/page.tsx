@@ -377,8 +377,7 @@ export default function PaymentsPage() {
                   <section className="rounded-xl border border-neutral-200 bg-white p-3 lg:p-4">
                     <header className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-900">Key Performance</h4>
-                        <p className="text-xs text-gray-500">Today</p>
+                        <h4 className="text-sm font-semibold text-gray-900">Today&apos;s Overview</h4>
                       </div>
                       <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
                         <TrendingUp className="h-4 w-4 text-[#601625]" />
@@ -391,18 +390,12 @@ export default function PaymentsPage() {
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse" /> : formatCurrency(kpiData.totalRevenue)}
                         </div>
-                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-neutral-600">
-                          <DollarSign className="h-3 w-3 text-[#601625]" /> Today
-                        </div>
                       </div>
 
                       <div className="rounded-lg border border-neutral-200 p-3">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Tips</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" /> : formatCurrency(kpiData.totalTips)}
-                        </div>
-                        <div className="mt-1 inline-flex items-center gap-1 text:[11px] text-neutral-600">
-                          <TrendingUp className="h-3 w-3 text-[#751a29]" /> Today
                         </div>
                       </div>
 
@@ -411,9 +404,6 @@ export default function PaymentsPage() {
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-12 bg-gray-200 rounded animate-pulse" /> : kpiData.transactionsCount}
                         </div>
-                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-neutral-600">
-                          <CreditCard className="h-3 w-3 text-[#601625]" /> Today
-                        </div>
                       </div>
 
                       <div className="rounded-lg border border-neutral-200 p-3">
@@ -421,18 +411,12 @@ export default function PaymentsPage() {
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-10 bg-gray-200 rounded animate-pulse" /> : kpiData.activeStaff}
                         </div>
-                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-neutral-600">
-                          <Users className="h-3 w-3 text-[#751a29]" /> Today
-                        </div>
                       </div>
 
                       <div className="rounded-lg border border-neutral-200 p-3">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Tax</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse" /> : formatCurrency(kpiData.totalTax)}
-                        </div>
-                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-neutral-600">
-                          <Calendar className="h-3 w-3 text-[#601625]" /> Today
                         </div>
                       </div>
                     </div>
@@ -443,7 +427,6 @@ export default function PaymentsPage() {
                     <header className="flex items-center justify-between mb-3">
                       <div>
                         <h4 className="text-sm font-semibold text-gray-900">Revenue by Payment Method</h4>
-                        <p className="text-xs text-gray-500">Today</p>
                       </div>
                       <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
                         <CreditCard className="h-4 w-4 text-[#601625]" />
