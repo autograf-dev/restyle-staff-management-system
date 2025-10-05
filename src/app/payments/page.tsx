@@ -138,11 +138,8 @@ export default function PaymentsPage() {
     // Check for walk-in guest name first
     if (transaction.walkInCustomerId && transaction.walkInCustomerId.trim() !== "") {
       const walkInName = transaction.walkInCustomerId.trim()
-      // If it looks like a name (contains spaces or common name patterns), return it
-      if (walkInName.includes(' ') || walkInName.length < 20) {
-        const phone = transaction.walkInPhone || transaction.customerPhone
-        return phone ? `${walkInName} (${phone})` : walkInName
-      }
+      // Return the walk-in name as-is, don't append phone number
+      return walkInName
     }
     
     // Then check regular customer lookup

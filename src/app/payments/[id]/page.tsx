@@ -158,11 +158,8 @@ export default function PaymentDetailPage() {
         // First check for Walk-In guest name
         if (transactionData.walkInCustomerId && transactionData.walkInCustomerId.trim() !== "") {
           const walkInName = transactionData.walkInCustomerId.trim()
-          // If it looks like a name (contains spaces or is reasonably short), use it
-          if (walkInName.includes(' ') || walkInName.length < 20) {
-            const phone = transactionData.walkInPhone || transactionData.customerPhone
-            customerDisplayName = phone ? `${walkInName} (${phone})` : walkInName
-          }
+          // Use the walk-in name as-is, don't append phone number here
+          customerDisplayName = walkInName
         }
         
         // If no walk-in name, try customer lookup API
@@ -181,15 +178,6 @@ export default function PaymentDetailPage() {
         }
         
         transactionData.customerName = customerDisplayName
-        
-        console.log('🎯 Payment Detail Debug:', {
-          walkInCustomerId: transactionData.walkInCustomerId,
-          walkInPhone: transactionData.walkInPhone,
-          customerLookup: transactionData.customerLookup,
-          customerPhone: transactionData.customerPhone,
-          calculatedDisplayName: customerDisplayName,
-          finalCustomerName: transactionData.customerName
-        })
         
         setData(transactionData)
         
@@ -519,7 +507,6 @@ export default function PaymentDetailPage() {
                       <div className="w-3 h-3 bg-[#601625] rounded-full"></div>
                       <h2 className="text-3xl font-bold text-gray-900">
                         Transaction - {data.customerName || 'Unknown Customer'}
-                        {data.customerPhone && ` (${data.customerPhone})`}
                       </h2>
                     </div>
                     <p className="text-sm text-gray-600 ml-6">
