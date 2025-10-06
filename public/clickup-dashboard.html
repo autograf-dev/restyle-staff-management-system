@@ -368,6 +368,21 @@
             document.getElementById('errorContainer').innerHTML = '';
         }
 
+        // Normalize date to compare only date parts (ignore time)
+        function normalizeDate(date) {
+            const normalized = new Date(date);
+            normalized.setHours(0, 0, 0, 0);
+            return normalized;
+        }
+
+        // Check if transaction is from today
+        function isToday(dateString) {
+            if (!dateString) return false;
+            const transactionDate = normalizeDate(new Date(dateString));
+            const today = normalizeDate(new Date());
+            return transactionDate.getTime() === today.getTime();
+        }
+
         // Load all metrics
         async function loadAllMetrics() {
             clearError();
@@ -379,27 +394,52 @@
             `;
 
             try {
-                const { startDate, endDate } = getTodayDateRange();
+                // Fetch all transactions (no date filter - we'll filter client-side like the dashboard does)
+                const response = await fetchAPI('/api/transactions?limit=10000');
+                const allTransactions = response.data || [];
                 
-                // Fetch all KPIs in parallel - using filter=today parameter
-                const [
-                    revenueData,
-                    tipsData,
-                    transactionsData,
-                    staffData,
-                    taxData
-                ] = await Promise.all([
-                    fetchAPI('/api/kpi/total-revenue?filter=today'),
-                    fetchAPI('/api/kpi/total-tips?filter=today'),
-                    fetchAPI('/api/kpi/transactions-count?filter=today'),
-                    fetchAPI('/api/kpi/active-staff?filter=today'),
-                    fetchAPI('/api/kpi/total-tax?filter=today')
-                ]);
+                console.log('Total transactions fetched:', allTransactions.length);
+                
+                // Filter for today's transactions only
+                const todayTransactions = allTransactions.filter(tx => isToday(tx.paymentDate));
+                
+                console.log('Today\'s transactions:', todayTransactions.length);
+                console.log('Sample dates:', todayTransactions.slice(0, 3).map(t => t.paymentDate));
 
-                // Calculate average ticket
-                const totalRevenue = revenueData.data?.totalRevenue || 0;
-                const totalTransactions = transactionsData.data?.transactionsCount || 0;
+                // Calculate metrics from today's transactions
+                let totalRevenue = 0;
+                let totalTips = 0;
+                let totalTax = 0;
+                const activeStaffSet = new Set();
+
+                todayTransactions.forEach(tx => {
+                    // Add to totals
+                    totalRevenue += parseFloat(tx.subtotal) || 0;
+                    totalTips += parseFloat(tx.tip) || 0;
+                    totalTax += parseFloat(tx.tax) || 0;
+                    
+                    // Track unique staff members
+                    if (tx.items && Array.isArray(tx.items)) {
+                        tx.items.forEach(item => {
+                            if (item.staffName) {
+                                activeStaffSet.add(item.staffName);
+                            }
+                        });
+                    }
+                });
+
+                const totalTransactions = todayTransactions.length;
+                const activeStaff = activeStaffSet.size;
                 const averageTicket = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+                
+                console.log('Calculated metrics:', {
+                    totalRevenue,
+                    totalTips,
+                    totalTax,
+                    totalTransactions,
+                    activeStaff,
+                    averageTicket
+                });
 
                 // Render metrics
                 const metricsHTML = `
@@ -460,8 +500,8 @@
 
                 document.getElementById('metricsContainer').innerHTML = metricsHTML;
 
-                // Load staff performance
-                await loadStaffPerformance();
+                // Load staff performance using today's transactions
+                loadStaffPerformance(todayTransactions);
 
                 // Update timestamp
                 const now = new Date();
@@ -475,25 +515,12 @@
         }
 
         // Load staff performance data
-        async function loadStaffPerformance() {
+        function loadStaffPerformance(transactions) {
             try {
-                const response = await fetchAPI('/api/transactions?limit=1000');
-                const transactions = response.data || [];
-
-                // Calculate revenue per staff member
+                // Calculate revenue per staff member from today's transactions
                 const staffRevenue = {};
                 
                 transactions.forEach(transaction => {
-                    // Filter for today's transactions
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const transactionDate = transaction.paymentDate ? new Date(transaction.paymentDate) : null;
-                    
-                    if (!transactionDate) return;
-                    
-                    transactionDate.setHours(0, 0, 0, 0);
-                    if (transactionDate.getTime() !== today.getTime()) return;
-                    
                     if (transaction.items && Array.isArray(transaction.items)) {
                         transaction.items.forEach(item => {
                             const staffName = item.staffName || 'Unknown';
