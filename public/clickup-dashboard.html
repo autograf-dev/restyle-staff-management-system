@@ -276,8 +276,9 @@
     </div>
 
     <script>
-        // Configuration - Update this with your actual API base URL
-        const API_BASE_URL = window.location.origin; // Uses the same domain
+        // Configuration - IMPORTANT: Replace with your actual deployed application URL
+        // Example: 'https://your-app.vercel.app' or 'https://yourdomain.com'
+        const API_BASE_URL = 'https://app.restylesalon.com'; // Change this to your production URL!
         
         // Date helper functions
         function getTodayDateRange() {
@@ -397,7 +398,7 @@
 
                 // Calculate average ticket
                 const totalRevenue = revenueData.data?.totalRevenue || 0;
-                const totalTransactions = transactionsData.data?.totalTransactions || 0;
+                const totalTransactions = transactionsData.data?.transactionsCount || 0;
                 const averageTicket = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
 
                 // Render metrics
