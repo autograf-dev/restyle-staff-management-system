@@ -26,7 +26,8 @@ import {
   RefreshCcw,
   DollarSign,
   CheckCircle,
-  X
+  X,
+  Eye
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser, type User } from "@/contexts/user-context"
@@ -2532,7 +2533,7 @@ export default function CalendarPage() {
 
           {/* Appointment Details Dialog */}
           <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-lg bg-white">
+            <SheetContent side="right" className="w-full sm:max-w-lg bg-white p-4">
               <SheetHeader className="pb-4">
                 <SheetTitle className="text-lg font-semibold text-[#601625]">
                   Appointment Details
@@ -2617,7 +2618,7 @@ export default function CalendarPage() {
 
                   {/* Paid Status Section */}
                   {selectedAppointment.payment_status === 'paid' && (
-                    <div className="p-4 border border-green-200 bg-green-50 rounded-xl text-center">
+                    <div className="px-6 py-4 border border-green-200 bg-green-50 rounded-xl text-center">
                       <div className="flex items-center justify-center gap-2 text-green-700">
                         <CheckCircle className="h-5 w-5" />
                         <span className="font-medium">Payment Completed</span>
@@ -2634,6 +2635,18 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <>
+                        {/* View Payment Button - Only for paid appointments */}
+                        {selectedAppointment.payment_status === 'paid' && (
+                          <Button 
+                            variant="outline"
+                            className="flex-1 border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 rounded-xl py-2.5 font-medium"
+                            onClick={() => router.push(`/payments/${selectedAppointment.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Payment
+                          </Button>
+                        )}
+                        
                         <Button 
                           variant="outline"
                           className="flex-1 border-[#601625]/30 text-[#601625] hover:bg-[#601625]/5 hover:border-[#601625]/50 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"

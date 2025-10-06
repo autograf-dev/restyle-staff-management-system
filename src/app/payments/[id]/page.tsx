@@ -144,10 +144,31 @@ export default function PaymentDetailPage() {
       setLoading(true)
       try {
         console.log('Loading transaction with ID:', id)
-        const res = await fetch(`/api/transactions/${encodeURIComponent(id)}`)
+        
+        // First try to load as transaction ID
+        let res = await fetch(`/api/transactions/${encodeURIComponent(id)}`)
         console.log('Response status:', res.status)
-        const json = await res.json()
+        let json = await res.json()
         console.log('Response data:', json)
+        
+        // If not found as transaction ID, try to find transaction by appointment ID
+        if (!res.ok || !json.ok) {
+          console.log('Not found as transaction ID, trying as appointment ID...')
+          const appointmentRes = await fetch(`/api/transactions?appointmentId=${encodeURIComponent(id)}`)
+          const appointmentJson = await appointmentRes.json()
+          
+          if (appointmentRes.ok && appointmentJson.ok && appointmentJson.data && appointmentJson.data.length > 0) {
+            // Found transaction(s) for this appointment, use the first one
+            const transactionId = appointmentJson.data[0].id
+            console.log('Found transaction ID for appointment:', transactionId)
+            
+            // Now fetch the full transaction details
+            res = await fetch(`/api/transactions/${encodeURIComponent(transactionId)}`)
+            json = await res.json()
+            console.log('Transaction details response:', json)
+          }
+        }
+        
         if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load')
         
         const transactionData = json.data
