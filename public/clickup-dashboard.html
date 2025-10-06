@@ -457,7 +457,7 @@
                             <div class="metric-icon">🎁</div>
                         </div>
                         <div class="metric-label">Total Tips</div>
-                        <div class="metric-value">${formatCurrency(tipsData.data?.totalTips || 0)}</div>
+                        <div class="metric-value">${formatCurrency(totalTips)}</div>
                         <div class="metric-subtitle">Staff gratuities</div>
                     </div>
 
@@ -475,7 +475,7 @@
                             <div class="metric-icon">👥</div>
                         </div>
                         <div class="metric-label">Active Staff</div>
-                        <div class="metric-value">${staffData.data?.activeStaff || 0}</div>
+                        <div class="metric-value">${activeStaff}</div>
                         <div class="metric-subtitle">Working today</div>
                     </div>
 
@@ -484,7 +484,7 @@
                             <div class="metric-icon">🧾</div>
                         </div>
                         <div class="metric-label">Total Tax (GST)</div>
-                        <div class="metric-value">${formatCurrency(taxData.data?.totalTax || 0)}</div>
+                        <div class="metric-value">${formatCurrency(totalTax)}</div>
                         <div class="metric-subtitle">5% collected</div>
                     </div>
 
