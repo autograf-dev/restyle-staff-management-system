@@ -384,7 +384,9 @@ const StaffOverviewView = ({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const headerScrollRef = React.useRef<HTMLDivElement>(null)
   const columnsScrollRef = React.useRef<HTMLDivElement>(null)
-  const columnWidth = 220
+  const baseColumnWidth = 220
+  const minColumnWidth = 180
+  const maxColumnWidth = 400
   const [currentTime, setCurrentTime] = React.useState(new Date())
   // Minimal padding for the time grid
   const GRID_TOP_PADDING = 8
@@ -564,8 +566,102 @@ const StaffOverviewView = ({
   // Debug: Log the first few time slots
   console.log(`📅 Time slots generated:`, timeSlots.slice(0, 10))
 
-  // Helper function to get appointment position and height (8AM to 8PM range)
-  const getAppointmentStyleImproved = (appointment: Appointment) => {
+  // Get staff appointments for the current day
+  const getStaffAppointments = (staffGhlId: string) => {
+    // Filter from the appointments prop (already filtered to current day)
+    const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
+    console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
+      staffGhlId,
+      currentDate: currentDate.toDateString(),
+      totalAppointments: appointments.length,
+      filteredAppointments: filtered.length,
+      sampleFiltered: filtered.slice(0, 2).map((a: Appointment) => ({
+        id: a.id,
+        title: a.title,
+        assigned_user_id: a.assigned_user_id,
+        startTime: a.startTime
+      }))
+    })
+    return filtered
+  }
+
+  // Function to detect overlapping appointments and calculate dynamic column widths
+  const calculateDynamicColumnWidths = () => {
+    const columnWidths: Record<string, number> = {}
+    
+    staff.forEach((staffMember) => {
+      const staffAppointments = getStaffAppointments(staffMember.ghl_id)
+      
+      if (staffAppointments.length === 0) {
+        columnWidths[staffMember.ghl_id] = baseColumnWidth
+        return
+      }
+      
+      // Group appointments by time slots to detect overlaps
+      const timeSlots: Record<string, Appointment[]> = {}
+      
+      staffAppointments.forEach((appointment) => {
+        if (!appointment.startTime || !appointment.endTime) return
+        
+        const start = new Date(appointment.startTime)
+        const end = new Date(appointment.endTime)
+        const { hour: startHour, minute: startMinute } = getHourMinuteInTimeZone(start, 'America/Denver')
+        const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
+        
+        const dayStartMinutes = 8 * 60
+        const startMinutes = startHour * 60 + startMinute
+        const endMinutes = endHour * 60 + endMinute
+        
+        // Only consider appointments within 8AM-8PM range
+        const dayEndMinutesExclusive = 20 * 60
+        if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) return
+        
+        // Create time slots (15-minute intervals) to detect overlaps
+        for (let minutes = startMinutes; minutes < endMinutes; minutes += 15) {
+          const slotKey = Math.floor(minutes / 15).toString()
+          if (!timeSlots[slotKey]) {
+            timeSlots[slotKey] = []
+          }
+          if (!timeSlots[slotKey].includes(appointment)) {
+            timeSlots[slotKey].push(appointment)
+          }
+        }
+      })
+      
+      // Find the maximum number of concurrent appointments
+      let maxConcurrent = 1
+      Object.values(timeSlots).forEach(slotAppointments => {
+        maxConcurrent = Math.max(maxConcurrent, slotAppointments.length)
+      })
+      
+      // Calculate dynamic width based on concurrent appointments
+      let dynamicWidth = baseColumnWidth
+      if (maxConcurrent > 1) {
+        // Increase width for overlapping appointments
+        dynamicWidth = Math.min(
+          maxColumnWidth,
+          Math.max(minColumnWidth, baseColumnWidth + (maxConcurrent - 1) * 60)
+        )
+      }
+      
+      columnWidths[staffMember.ghl_id] = dynamicWidth
+      
+      console.log(`📅 Dynamic column width for ${staffMember.name}:`, {
+        maxConcurrent,
+        dynamicWidth,
+        totalAppointments: staffAppointments.length,
+        timeSlotsWithOverlaps: Object.entries(timeSlots).filter(([_, apps]) => apps.length > 1).length
+      })
+    })
+    
+    return columnWidths
+  }
+
+  // Calculate dynamic column widths
+  const dynamicColumnWidths = React.useMemo(() => calculateDynamicColumnWidths(), [staff, appointments])
+
+  // Helper function to get appointment position and height with overlap handling (8AM to 8PM range)
+  const getAppointmentStyleImproved = (appointment: Appointment, staffGhlId: string) => {
     if (!appointment.startTime || !appointment.endTime) {
       console.log(`📅 Appointment ${appointment.id} missing time:`, { startTime: appointment.startTime, endTime: appointment.endTime })
       return { display: 'none' }
@@ -595,10 +691,50 @@ const StaffOverviewView = ({
       return { display: 'none' }
     }
     
-    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT // Use reduced slot height
+    const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT
     const height = ((endMinutes - startMinutes) / 60) * HOUR_SLOT_HEIGHT
     
-    console.log(`📅 Appointment ${appointment.id} positioned:`, {
+    // Calculate overlap positioning
+    const staffAppointments = getStaffAppointments(staffGhlId)
+    const overlappingAppointments = staffAppointments.filter(apt => {
+      if (apt.id === appointment.id) return false
+      if (!apt.startTime || !apt.endTime) return false
+      
+      const aptStart = new Date(apt.startTime)
+      const aptEnd = new Date(apt.endTime)
+      const { hour: aptStartHour, minute: aptStartMinute } = getHourMinuteInTimeZone(aptStart, 'America/Denver')
+      const { hour: aptEndHour, minute: aptEndMinute } = getHourMinuteInTimeZone(aptEnd, 'America/Denver')
+      
+      const aptStartMinutes = aptStartHour * 60 + aptStartMinute
+      const aptEndMinutes = aptEndHour * 60 + aptEndMinute
+      
+      // Check if appointments overlap
+      return (startMinutes < aptEndMinutes && endMinutes > aptStartMinutes)
+    })
+    
+    // Calculate side-by-side positioning for overlapping appointments
+    let leftOffset = 4
+    let width = 'calc(100% - 8px)'
+    
+    if (overlappingAppointments.length > 0) {
+      const columnWidth = dynamicColumnWidths[staffGhlId] || baseColumnWidth
+      const totalOverlapping = overlappingAppointments.length + 1 // +1 for current appointment
+      const appointmentWidth = (columnWidth - 8) / totalOverlapping // 8px for padding
+      
+      // Find the index of this appointment among overlapping ones
+      const allOverlapping = [...overlappingAppointments, appointment].sort((a, b) => {
+        const aStart = new Date(a.startTime!)
+        const bStart = new Date(b.startTime!)
+        return aStart.getTime() - bStart.getTime()
+      })
+      
+      const appointmentIndex = allOverlapping.findIndex(apt => apt.id === appointment.id)
+      
+      leftOffset = 4 + (appointmentIndex * appointmentWidth)
+      width = `${appointmentWidth}px`
+    }
+    
+    console.log(`📅 Appointment ${appointment.id} positioned with overlaps:`, {
       title: appointment.title,
       startTime: appointment.startTime,
       endTime: appointment.endTime,
@@ -606,36 +742,20 @@ const StaffOverviewView = ({
       endMinutes,
       topOffset,
       height,
-      assigned_user_id: appointment.assigned_user_id
+      assigned_user_id: appointment.assigned_user_id,
+      overlappingCount: overlappingAppointments.length,
+      leftOffset,
+      width
     })
     
     return {
       position: 'absolute' as const,
       top: `${Math.max(0, topOffset)}px`,
       height: `${Math.max(30, height - 4)}px`,
-      left: '4px',
-      right: '4px',
+      left: `${leftOffset}px`,
+      width: width,
       zIndex: 10
     }
-  }
-
-  // Get staff appointments for the current day
-  const getStaffAppointments = (staffGhlId: string) => {
-    // Filter from the appointments prop (already filtered to current day)
-    const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
-    console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
-      staffGhlId,
-      currentDate: currentDate.toDateString(),
-      totalAppointments: appointments.length,
-      filteredAppointments: filtered.length,
-      sampleFiltered: filtered.slice(0, 2).map((a: Appointment) => ({
-        id: a.id,
-        title: a.title,
-        assigned_user_id: a.assigned_user_id,
-        startTime: a.startTime
-      }))
-    })
-    return filtered
   }
 
   // Get appointments for a specific staff member
@@ -956,7 +1076,7 @@ const StaffOverviewView = ({
           <button
             className="h-6 w-6 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0"
             onClick={() => {
-              const delta = -columnWidth*3
+              const delta = -baseColumnWidth*3
               const h = headerScrollRef.current
               const b = columnsScrollRef.current
               if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
@@ -973,7 +1093,8 @@ const StaffOverviewView = ({
                 key={index}
                 className="h-1.5 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full flex-1 cursor-pointer hover:from-[#601625]/40 hover:to-[#751a29]/40 transition-all duration-200 border border-[#601625]/10"
                 onClick={() => {
-                  const scrollPosition = (index * columnWidth * staff.length) / 8
+                  const totalWidth = Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)
+                  const scrollPosition = (index * totalWidth) / 8
                   const h = headerScrollRef.current
                   const b = columnsScrollRef.current
                   if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
@@ -986,7 +1107,7 @@ const StaffOverviewView = ({
           <button
             className="h-6 w-6 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0"
             onClick={() => {
-              const delta = columnWidth*3
+              const delta = baseColumnWidth*3
               const h = headerScrollRef.current
               const b = columnsScrollRef.current
               if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
@@ -1008,9 +1129,10 @@ const StaffOverviewView = ({
         
         {/* Scrollable Staff Headers */}
         <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
-          <div className="flex" style={{ minWidth: `${staff.length * columnWidth}px` }}>
+          <div className="flex" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px` }}>
             {staff.map((staffMember) => {
               const appts = getStaffAppointments(staffMember.ghl_id)
+              const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
               // Build a compact list of time chips for that day
               const chips = appts
                 .filter((a: Appointment) => a.startTime)
@@ -1018,7 +1140,7 @@ const StaffOverviewView = ({
                 .slice(0,4) // show first 4
                 .map((a: Appointment) => new Date(a.startTime!))
               return (
-                <div key={staffMember.ghl_id} className="w-[220px] p-4 border-r last:border-r-0 border-[#601625]/20 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
+                <div key={staffMember.ghl_id} className="p-4 border-r last:border-r-0 border-[#601625]/20 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
                   <div className="text-center">
                     <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
                       {staffMember.name}
@@ -1072,9 +1194,11 @@ const StaffOverviewView = ({
               h.scrollLeft = sl
             }
           }}>
-            <div className="flex relative" style={{ minWidth: `${staff.length * columnWidth}px`, height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+            <div className="flex relative" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px`, height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
               {/* Staff columns */}
-              {staff.map((staffMember) => (
+              {staff.map((staffMember) => {
+                const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
+                return (
                 <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
                   {/* Hour lines for this staff column */}
                   {timeSlots.map((time, index) => {
@@ -1262,7 +1386,7 @@ const StaffOverviewView = ({
 
                   {/* Appointments for this staff member */}
                   {getStaffAppointments(staffMember.ghl_id).map((appointment: Appointment) => {
-                    const style = getAppointmentStyleImproved(appointment)
+                    const style = getAppointmentStyleImproved(appointment, staffMember.ghl_id)
                     if (style.display === 'none') return null
 
                     const duration = appointment.startTime && appointment.endTime 
@@ -1322,7 +1446,8 @@ const StaffOverviewView = ({
                     )
                   })}
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
