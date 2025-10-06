@@ -1687,118 +1687,154 @@ export default function WalkInPage() {
                             Add Product
                           </Button>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-[400px] sm:w-[540px] overflow-y-auto">
-                          <SheetHeader>
-                            <SheetTitle className="text-2xl font-semibold">Add Product</SheetTitle>
-                            <SheetDescription>
-                              Add a product to this transaction with optional name, price, and staff assignment.
-                            </SheetDescription>
-                          </SheetHeader>
-                          
-                          <div className="space-y-6 mt-6">
-                            {/* Product Name */}
-                            <div className="space-y-2">
-                              <Label htmlFor="productName">Product Name (Optional)</Label>
-                              <Input
-                                id="productName"
-                                value={productName}
-                                onChange={(e) => setProductName(e.target.value || 'Product')}
-                                placeholder="Product"
-                                className="rounded-lg"
-                              />
-                              <p className="text-xs text-neutral-500">Leave empty to use default name &quot;Product&quot;</p>
-                            </div>
+                        <SheetContent side="right" className="w-[600px] sm:w-[700px] overflow-y-auto p-0">
+                          <div className="h-full flex flex-col">
+                            <SheetHeader className="px-8 pt-8 pb-6 border-b border-neutral-200 bg-gradient-to-r from-[#7b1d1d]/5 to-[#7b1d1d]/10">
+                              <SheetTitle className="text-3xl font-bold text-[#7b1d1d] flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-[#7b1d1d]/10">
+                                  <Plus className="h-6 w-6 text-[#7b1d1d]" />
+                                </div>
+                                Add Product
+                              </SheetTitle>
+                              <SheetDescription className="text-base text-neutral-600 mt-2">
+                                Add a product to this transaction with optional name, price, and staff assignment.
+                              </SheetDescription>
+                            </SheetHeader>
                             
-                            {/* Product Price */}
-                            <div className="space-y-2">
-                              <Label htmlFor="productPrice">Price *</Label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">CA$</span>
+                            <div className="flex-1 overflow-y-auto px-8 py-6">
+                              <div className="space-y-8">
+                              {/* Product Name */}
+                              <div className="space-y-3">
+                                <Label htmlFor="productName" className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-[#7b1d1d]" />
+                                  Product Name (Optional)
+                                </Label>
                                 <Input
-                                  id="productPrice"
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={productPrice}
-                                  onChange={(e) => setProductPrice(e.target.value)}
-                                  placeholder="0.00"
-                                  className="rounded-lg pl-12"
+                                  id="productName"
+                                  value={productName}
+                                  onChange={(e) => setProductName(e.target.value || 'Product')}
+                                  placeholder="e.g., Hair Gel, Pomade, Shampoo..."
+                                  className="rounded-xl h-12 text-base border-2 border-neutral-200 focus:border-[#7b1d1d] transition-colors"
                                 />
+                                <p className="text-sm text-neutral-500 flex items-center gap-2">
+                                  <span className="text-[#7b1d1d]">💡</span>
+                                  Leave empty to use default name &quot;Product&quot;
+                                </p>
+                              </div>
+                              
+                              {/* Product Price */}
+                              <div className="space-y-3">
+                                <Label htmlFor="productPrice" className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-[#7b1d1d]" />
+                                  Price <span className="text-red-500">*</span>
+                                </Label>
+                                <div className="relative">
+                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-600 font-semibold text-base">CA$</span>
+                                  <Input
+                                    id="productPrice"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={productPrice}
+                                    onChange={(e) => setProductPrice(e.target.value)}
+                                    placeholder="0.00"
+                                    className="rounded-xl h-12 text-base pl-14 pr-4 border-2 border-neutral-200 focus:border-[#7b1d1d] transition-colors font-medium"
+                                  />
+                                </div>
+                              </div>
+                            
+                              {/* Staff Selection */}
+                              <div className="space-y-4">
+                                <Label className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-[#7b1d1d]" />
+                                  Select Staff Members <span className="text-red-500">*</span>
+                                </Label>
+                                <Tabs value={productStaffTab} onValueChange={(v) => setProductStaffTab(v as 'all' | 'available')} className="w-full">
+                                  <TabsList className="grid w-full grid-cols-2 h-11 bg-neutral-100 p-1 rounded-xl">
+                                    <TabsTrigger value="all" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">All Staff</TabsTrigger>
+                                    <TabsTrigger value="available" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Available</TabsTrigger>
+                                  </TabsList>
+                                </Tabs>
+                                
+                                {productStaffIds.length > 0 && (
+                                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#7b1d1d]/10 border border-[#7b1d1d]/20">
+                                    <CheckCircle2 className="h-4 w-4 text-[#7b1d1d]" />
+                                    <span className="text-sm font-medium text-[#7b1d1d]">
+                                      {productStaffIds.length} staff member{productStaffIds.length > 1 ? 's' : ''} selected
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                {staffData.length === 0 ? (
+                                  <div className="flex items-center justify-center py-12 rounded-xl border-2 border-dashed border-neutral-200">
+                                    <div className="text-center">
+                                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-[#7b1d1d]" />
+                                      <span className="text-sm text-neutral-600">Loading staff data...</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-3 gap-3">
+                                    {staffData.map((staff) => (
+                                      <button
+                                        key={staff.ghl_id}
+                                        onClick={() => {
+                                          if (productStaffIds.includes(staff.ghl_id)) {
+                                            setProductStaffIds(prev => prev.filter(id => id !== staff.ghl_id))
+                                          } else {
+                                            setProductStaffIds(prev => [...prev, staff.ghl_id])
+                                          }
+                                        }}
+                                        className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all relative hover:scale-105 ${
+                                          productStaffIds.includes(staff.ghl_id)
+                                            ? 'border-[#7b1d1d] bg-gradient-to-br from-[#7b1d1d]/10 to-[#7b1d1d]/5 shadow-md'
+                                            : 'border-neutral-200 bg-white hover:border-[#7b1d1d]/40 hover:shadow-sm'
+                                        }`}
+                                      >
+                                        {productStaffIds.includes(staff.ghl_id) && (
+                                          <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-[#7b1d1d] to-[#a02929] rounded-full flex items-center justify-center shadow-lg">
+                                            <CheckCircle2 className="h-4 w-4 text-white" />
+                                          </div>
+                                        )}
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md ${
+                                          productStaffIds.includes(staff.ghl_id) 
+                                            ? 'bg-gradient-to-br from-[#7b1d1d] to-[#a02929]' 
+                                            : 'bg-gradient-to-br from-neutral-400 to-neutral-500'
+                                        }`}>
+                                          {staff.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                        </div>
+                                        <p className="text-xs font-semibold text-center leading-tight">{staff.name}</p>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                               </div>
                             </div>
                             
-                            {/* Staff Selection */}
-                            <div className="space-y-3">
-                              <Label>Select Staff Members *</Label>
-                              <Tabs value={productStaffTab} onValueChange={(v) => setProductStaffTab(v as 'all' | 'available')}>
-                                <TabsList className="grid w-full grid-cols-2">
-                                  <TabsTrigger value="all">All Staff</TabsTrigger>
-                                  <TabsTrigger value="available">Available</TabsTrigger>
-                                </TabsList>
-                              </Tabs>
-                              
-                              {staffData.length === 0 ? (
-                                <div className="flex items-center justify-center py-8">
-                                  <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                                  <span>Loading staff data...</span>
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-2 gap-3">
-                                  {staffData.map((staff) => (
-                                    <button
-                                      key={staff.ghl_id}
-                                      onClick={() => {
-                                        if (productStaffIds.includes(staff.ghl_id)) {
-                                          setProductStaffIds(prev => prev.filter(id => id !== staff.ghl_id))
-                                        } else {
-                                          setProductStaffIds(prev => [...prev, staff.ghl_id])
-                                        }
-                                      }}
-                                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all relative ${
-                                        productStaffIds.includes(staff.ghl_id)
-                                          ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
-                                          : 'border-neutral-200 bg-white hover:border-[#7b1d1d]/30'
-                                      }`}
-                                    >
-                                      {productStaffIds.includes(staff.ghl_id) && (
-                                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-[#7b1d1d] rounded-full flex items-center justify-center">
-                                          <CheckCircle2 className="h-3 w-3 text-white" />
-                                        </div>
-                                      )}
-                                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
-                                        productStaffIds.includes(staff.ghl_id) ? 'bg-[#7b1d1d]' : 'bg-neutral-400'
-                                      }`}>
-                                        {staff.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                                      </div>
-                                      <p className="text-xs font-medium text-center">{staff.name}</p>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            
-                            {/* Action Buttons */}
-                            <div className="flex gap-3 pt-4">
-                              <Button
-                                variant="outline"
-                                onClick={() => {
-                                  setProductName('Product')
-                                  setProductPrice('')
-                                  setProductStaffIds([])
-                                  setAddProductSheetOpen(false)
-                                }}
-                                className="flex-1 rounded-lg"
-                              >
-                                Cancel
-                              </Button>
-                              <Button 
-                                onClick={handleAddProduct}
-                                disabled={!productPrice || parseFloat(productPrice) <= 0 || productStaffIds.length === 0}
-                                className="flex-1 rounded-lg bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Product {productStaffIds.length > 0 && `(${productStaffIds.length} staff)`}
-                              </Button>
+                            {/* Action Buttons - Fixed position at bottom */}
+                            <div className="border-t border-neutral-200 px-8 py-6 bg-neutral-50">
+                              <div className="flex gap-4">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setProductName('Product')
+                                    setProductPrice('')
+                                    setProductStaffIds([])
+                                    setAddProductSheetOpen(false)
+                                  }}
+                                  className="flex-1 rounded-xl h-12 text-base border-2 hover:bg-neutral-100"
+                                >
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  onClick={handleAddProduct}
+                                  disabled={!productPrice || parseFloat(productPrice) <= 0 || productStaffIds.length === 0}
+                                  className="flex-1 rounded-xl h-12 text-base bg-gradient-to-r from-[#7b1d1d] to-[#a02929] hover:from-[#6b1717] hover:to-[#8f2424] text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Plus className="h-5 w-5 mr-2" />
+                                  Add Product {productStaffIds.length > 0 && `(${productStaffIds.length} staff)`}
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </SheetContent>
