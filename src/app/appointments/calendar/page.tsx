@@ -585,6 +585,68 @@ const StaffOverviewView = ({
     return filtered
   }
 
+  // Helper function to group overlapping appointments
+  const groupOverlappingAppointments = (appointments: Appointment[]) => {
+    const groups: Appointment[][] = []
+    const processed = new Set<string>()
+    
+    appointments.forEach(appointment => {
+      if (processed.has(appointment.id) || !appointment.startTime || !appointment.endTime) return
+      
+      const start = new Date(appointment.startTime)
+      const end = new Date(appointment.endTime)
+      const { hour: startHour, minute: startMinute } = getHourMinuteInTimeZone(start, 'America/Denver')
+      const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
+      
+      const dayStartMinutes = 8 * 60
+      const startMinutes = startHour * 60 + startMinute
+      const endMinutes = endHour * 60 + endMinute
+      
+      // Only consider appointments within 8AM-8PM range
+      const dayEndMinutesExclusive = 20 * 60
+      if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) return
+      
+      const group: Appointment[] = [appointment]
+      processed.add(appointment.id)
+      
+      // Find all appointments that overlap with this one
+      appointments.forEach(otherAppointment => {
+        if (processed.has(otherAppointment.id) || !otherAppointment.startTime || !otherAppointment.endTime) return
+        
+        const otherStart = new Date(otherAppointment.startTime)
+        const otherEnd = new Date(otherAppointment.endTime)
+        const { hour: otherStartHour, minute: otherStartMinute } = getHourMinuteInTimeZone(otherStart, 'America/Denver')
+        const { hour: otherEndHour, minute: otherEndMinute } = getHourMinuteInTimeZone(otherEnd, 'America/Denver')
+        
+        const otherStartMinutes = otherStartHour * 60 + otherStartMinute
+        const otherEndMinutes = otherEndHour * 60 + otherEndMinute
+        
+        // Check if appointments overlap
+        if (startMinutes < otherEndMinutes && endMinutes > otherStartMinutes) {
+          group.push(otherAppointment)
+          processed.add(otherAppointment.id)
+        }
+      })
+      
+      groups.push(group)
+    })
+    
+    // Debug logging for overlap groups
+    if (groups.some(group => group.length > 1)) {
+      console.log(`📅 Overlap groups found:`, groups.map(group => ({
+        size: group.length,
+        appointments: group.map(apt => ({
+          id: apt.id,
+          title: apt.title,
+          startTime: apt.startTime,
+          endTime: apt.endTime
+        }))
+      })))
+    }
+    
+    return groups
+  }
+
   // Function to detect overlapping appointments and calculate dynamic column widths
   const calculateDynamicColumnWidths = () => {
     const columnWidths: Record<string, number> = {}
@@ -597,41 +659,13 @@ const StaffOverviewView = ({
         return
       }
       
-      // Group appointments by time slots to detect overlaps
-      const timeSlots: Record<string, Appointment[]> = {}
+      // Use the same grouping logic as the positioning function
+      const overlapGroups = groupOverlappingAppointments(staffAppointments)
       
-      staffAppointments.forEach((appointment) => {
-        if (!appointment.startTime || !appointment.endTime) return
-        
-        const start = new Date(appointment.startTime)
-        const end = new Date(appointment.endTime)
-        const { hour: startHour, minute: startMinute } = getHourMinuteInTimeZone(start, 'America/Denver')
-        const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
-        
-        const dayStartMinutes = 8 * 60
-        const startMinutes = startHour * 60 + startMinute
-        const endMinutes = endHour * 60 + endMinute
-        
-        // Only consider appointments within 8AM-8PM range
-        const dayEndMinutesExclusive = 20 * 60
-        if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) return
-        
-        // Create time slots (15-minute intervals) to detect overlaps
-        for (let minutes = startMinutes; minutes < endMinutes; minutes += 15) {
-          const slotKey = Math.floor(minutes / 15).toString()
-          if (!timeSlots[slotKey]) {
-            timeSlots[slotKey] = []
-          }
-          if (!timeSlots[slotKey].includes(appointment)) {
-            timeSlots[slotKey].push(appointment)
-          }
-        }
-      })
-      
-      // Find the maximum number of concurrent appointments
+      // Find the maximum number of concurrent appointments in any group
       let maxConcurrent = 1
-      Object.values(timeSlots).forEach(slotAppointments => {
-        maxConcurrent = Math.max(maxConcurrent, slotAppointments.length)
+      overlapGroups.forEach(group => {
+        maxConcurrent = Math.max(maxConcurrent, group.length)
       })
       
       // Calculate dynamic width based on concurrent appointments
@@ -650,7 +684,8 @@ const StaffOverviewView = ({
         maxConcurrent,
         dynamicWidth,
         totalAppointments: staffAppointments.length,
-        timeSlotsWithOverlaps: Object.entries(timeSlots).filter(([_, apps]) => apps.length > 1).length
+        overlapGroups: overlapGroups.length,
+        groupsWithOverlaps: overlapGroups.filter(group => group.length > 1).length
       })
     })
     
@@ -694,44 +729,37 @@ const StaffOverviewView = ({
     const topOffset = GRID_TOP_PADDING + ((startMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT
     const height = ((endMinutes - startMinutes) / 60) * HOUR_SLOT_HEIGHT
     
-    // Calculate overlap positioning
+    // Get all staff appointments and group overlapping ones
     const staffAppointments = getStaffAppointments(staffGhlId)
-    const overlappingAppointments = staffAppointments.filter(apt => {
-      if (apt.id === appointment.id) return false
-      if (!apt.startTime || !apt.endTime) return false
-      
-      const aptStart = new Date(apt.startTime)
-      const aptEnd = new Date(apt.endTime)
-      const { hour: aptStartHour, minute: aptStartMinute } = getHourMinuteInTimeZone(aptStart, 'America/Denver')
-      const { hour: aptEndHour, minute: aptEndMinute } = getHourMinuteInTimeZone(aptEnd, 'America/Denver')
-      
-      const aptStartMinutes = aptStartHour * 60 + aptStartMinute
-      const aptEndMinutes = aptEndHour * 60 + aptEndMinute
-      
-      // Check if appointments overlap
-      return (startMinutes < aptEndMinutes && endMinutes > aptStartMinutes)
-    })
+    const overlapGroups = groupOverlappingAppointments(staffAppointments)
+    
+    // Find which group this appointment belongs to
+    let appointmentGroup: Appointment[] = []
+    let appointmentIndex = 0
+    
+    for (const group of overlapGroups) {
+      const index = group.findIndex(apt => apt.id === appointment.id)
+      if (index !== -1) {
+        appointmentGroup = group
+        appointmentIndex = index
+        break
+      }
+    }
     
     // Calculate side-by-side positioning for overlapping appointments
     let leftOffset = 4
     let width = 'calc(100% - 8px)'
+    let zIndex = 10
     
-    if (overlappingAppointments.length > 0) {
+    if (appointmentGroup.length > 1) {
       const columnWidth = dynamicColumnWidths[staffGhlId] || baseColumnWidth
-      const totalOverlapping = overlappingAppointments.length + 1 // +1 for current appointment
-      const appointmentWidth = (columnWidth - 8) / totalOverlapping // 8px for padding
-      
-      // Find the index of this appointment among overlapping ones
-      const allOverlapping = [...overlappingAppointments, appointment].sort((a, b) => {
-        const aStart = new Date(a.startTime!)
-        const bStart = new Date(b.startTime!)
-        return aStart.getTime() - bStart.getTime()
-      })
-      
-      const appointmentIndex = allOverlapping.findIndex(apt => apt.id === appointment.id)
+      const appointmentWidth = (columnWidth - 8) / appointmentGroup.length // 8px for padding
       
       leftOffset = 4 + (appointmentIndex * appointmentWidth)
       width = `${appointmentWidth}px`
+      
+      // Use different z-index for each appointment in the group to ensure visibility
+      zIndex = 10 + appointmentIndex
     }
     
     console.log(`📅 Appointment ${appointment.id} positioned with overlaps:`, {
@@ -743,9 +771,12 @@ const StaffOverviewView = ({
       topOffset,
       height,
       assigned_user_id: appointment.assigned_user_id,
-      overlappingCount: overlappingAppointments.length,
+      groupSize: appointmentGroup.length,
+      appointmentIndex,
       leftOffset,
-      width
+      width,
+      zIndex,
+      columnWidth: dynamicColumnWidths[staffGhlId] || baseColumnWidth
     })
     
     return {
@@ -754,7 +785,7 @@ const StaffOverviewView = ({
       height: `${Math.max(30, height - 4)}px`,
       left: `${leftOffset}px`,
       width: width,
-      zIndex: 10
+      zIndex: zIndex
     }
   }
 
