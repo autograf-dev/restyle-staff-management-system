@@ -402,6 +402,7 @@ function BookingsPageInner() {
   const [newAppLoadingServices, setNewAppLoadingServices] = React.useState(false)
   const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
   const [newAppLoadingSlots, setNewAppLoadingSlots] = React.useState(false)
+  const [newAppLoadingDates, setNewAppLoadingDates] = React.useState(false)
 
   // Fetch GHL booking details
   const fetchGHLBookingDetails = React.useCallback(async (bookingId: string) => {
@@ -1042,7 +1043,7 @@ function BookingsPageInner() {
   const fetchNewAppWorkingSlots = async () => {
     if (!newAppSelectedService) return
     
-    setNewAppLoadingSlots(true)
+    setNewAppLoadingDates(true)
     const serviceId = newAppSelectedService
     const userId = newAppSelectedStaff && newAppSelectedStaff !== 'any' ? newAppSelectedStaff : null
 
@@ -1061,13 +1062,17 @@ function BookingsPageInner() {
       } else {
         setNewAppWorkingSlots({})
         setNewAppDates([])
+        setNewAppSlots([])
+        setNewAppLoadingSlots(false)
       }
     } catch (error) {
       console.error('Error fetching working slots:', error)
       setNewAppWorkingSlots({})
       setNewAppDates([])
-    } finally {
+      setNewAppSlots([])
       setNewAppLoadingSlots(false)
+    } finally {
+      setNewAppLoadingDates(false)
     }
   }
 
@@ -1077,7 +1082,19 @@ function BookingsPageInner() {
     const todayDateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     
     const workingDates = Object.keys(workingSlots)
-      .filter(dateString => dateString >= todayDateString)
+      .filter(dateString => {
+        // Always include future dates
+        if (dateString > todayDateString) return true
+        
+        // For today's date, only include if it has available slots
+        if (dateString === todayDateString) {
+          const todaySlots = workingSlots[dateString] || []
+          const availableTodaySlots = todaySlots.filter(slot => !isNewAppSlotInPast(slot, dateString))
+          return availableTodaySlots.length > 0
+        }
+        
+        return false
+      })
       .sort()
     
     const dates = workingDates.map((dateString) => {
@@ -1109,30 +1126,38 @@ function BookingsPageInner() {
     
     setNewAppDates(dates)
     
-    // Auto-select first date and fetch slots for it
-    if (dates.length > 0 && !newAppSelectedDate) {
-      const firstDate = dates[0].dateString
-      setNewAppSelectedDate(firstDate)
-      fetchNewAppSlotsForDate(firstDate)
+    // If we already have a selected date, refresh its slots
+    if (newAppSelectedDate) {
+      fetchNewAppSlotsForDate(newAppSelectedDate)
     }
   }
 
   // Fetch slots for selected date
   const fetchNewAppSlotsForDate = (dateString: string) => {
-    if (!dateString || !newAppWorkingSlots[dateString]) {
+    if (!dateString) {
       setNewAppSlots([])
+      setNewAppLoadingSlots(false)
       return
     }
 
-    const slotsForSelectedDate = newAppWorkingSlots[dateString]
-    const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({
-      time: slot,
-      isPast: isNewAppSlotInPast(slot, dateString),
-      isUnavailable: false
-    }))
-    
-    const availableSlots = slotsWithStatus.filter((slot: TimeSlot) => !slot.isPast)
-    setNewAppSlots(availableSlots)
+    // Check if we already have slots for this date
+    if (newAppWorkingSlots[dateString]) {
+      // We have slots, process them immediately without loading state
+      const slotsForSelectedDate = newAppWorkingSlots[dateString]
+      const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({
+        time: slot,
+        isPast: isNewAppSlotInPast(slot, dateString),
+        isUnavailable: false
+      }))
+      
+      const availableSlots = slotsWithStatus.filter((slot: TimeSlot) => !slot.isPast)
+      setNewAppSlots(availableSlots)
+      setNewAppLoadingSlots(false)
+    } else {
+      // We don't have slots yet, show loading state
+      setNewAppLoadingSlots(true)
+      setNewAppSlots([])
+    }
   }
 
   // Helper function to check if slot is in past for new appointments
@@ -1154,6 +1179,24 @@ function BookingsPageInner() {
     slotDate.setHours(hour, minute, 0, 0)
     
     return slotDate < now
+  }
+
+  // Helper function to format date for display
+  const formatSelectedDate = (dateString: string) => {
+    if (!dateString) return ''
+    try {
+      const [year, month, day] = dateString.split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      return dateString
+    }
   }
 
   // Reset new appointment form
@@ -2649,33 +2692,62 @@ function BookingsPageInner() {
                     <div className="space-y-6">
                       {/* Date Slider with Working Navigation */}
                       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
-                          <button
-                            onClick={() => {
-                              // Navigate to previous 3 dates
-                              const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
-                              if (currentIndex > 0) {
-                                const prevDate = newAppDates[Math.max(0, currentIndex - 1)]
-                                handleNewAppDateSelect(prevDate.dateString)
-                              }
-                            }}
-                            disabled={!newAppSelectedDate || newAppDates.findIndex(d => d.dateString === newAppSelectedDate) === 0}
-                            className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            <ChevronLeft className="h-5 w-5 text-neutral-600" />
-                          </button>
-                          
-                          {/* Show 3 dates dynamically based on current selection */}
-                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:mx-4">
-                            {(() => {
-                              // Get the current index and show 3 dates around it
-                              const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
-                              const startIndex = currentIndex > 0 ? Math.max(0, currentIndex - 1) : 0
-                              const datesToShow = newAppDates.slice(startIndex, startIndex + 3)
-                              
-                              // If no date selected, show first 3
-                              if (currentIndex === -1 && newAppDates.length > 0) {
-                                return newAppDates.slice(0, 3).map((dateInfo) => (
+                        {newAppLoadingDates ? (
+                          <div className="flex items-center justify-center py-12">
+                            <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                            <span className="text-lg">Loading available dates...</span>
+                          </div>
+                        ) : newAppDates.length > 0 ? (
+                          <div className="flex items-center justify-between mb-6">
+                            <button
+                              onClick={() => {
+                                // Navigate to previous 3 dates
+                                const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
+                                if (currentIndex > 0) {
+                                  const prevDate = newAppDates[Math.max(0, currentIndex - 1)]
+                                  handleNewAppDateSelect(prevDate.dateString)
+                                }
+                              }}
+                              disabled={!newAppSelectedDate || newAppDates.findIndex(d => d.dateString === newAppSelectedDate) === 0}
+                              className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                            </button>
+                            
+                            {/* Show 3 dates dynamically based on current selection */}
+                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:mx-4">
+                              {(() => {
+                                // Get the current index and show 3 dates around it
+                                const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
+                                const startIndex = currentIndex > 0 ? Math.max(0, currentIndex - 1) : 0
+                                const datesToShow = newAppDates.slice(startIndex, startIndex + 3)
+                                
+                                // If no date selected, show first 3
+                                if (currentIndex === -1 && newAppDates.length > 0) {
+                                  return newAppDates.slice(0, 3).map((dateInfo) => (
+                                    <div
+                                      key={dateInfo.dateString}
+                                      onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
+                                      className={`p-4 rounded-lg border-2 transition-all duration-200 text-center cursor-pointer hover:shadow-md ${
+                                        newAppSelectedDate === dateInfo.dateString 
+                                          ? 'border-[#7b1d1d] bg-[#7b1d1d]/10'
+                                          : 'border-neutral-200 bg-neutral-50 hover:border-[#7b1d1d]/30'
+                                      }`}
+                                    >
+                                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                        {dateInfo.label}
+                                      </div>
+                                      <div className="font-bold text-lg text-black">
+                                        {dateInfo.dayName}
+                                      </div>
+                                      <div className="text-sm text-gray-600">
+                                        {dateInfo.dateDisplay}
+                                      </div>
+                                    </div>
+                                  ))
+                                }
+                                
+                                return datesToShow.map((dateInfo) => (
                                   <div
                                     key={dateInfo.dateString}
                                     onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
@@ -2696,61 +2768,55 @@ function BookingsPageInner() {
                                     </div>
                                   </div>
                                 ))
-                              }
-                              
-                              return datesToShow.map((dateInfo) => (
-                                <div
-                                  key={dateInfo.dateString}
-                                  onClick={() => handleNewAppDateSelect(dateInfo.dateString)}
-                                  className={`p-4 rounded-lg border-2 transition-all duration-200 text-center cursor-pointer hover:shadow-md ${
-                                    newAppSelectedDate === dateInfo.dateString 
-                                      ? 'border-[#7b1d1d] bg-[#7b1d1d]/10'
-                                      : 'border-neutral-200 bg-neutral-50 hover:border-[#7b1d1d]/30'
-                                  }`}
-                                >
-                                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                    {dateInfo.label}
-                                  </div>
-                                  <div className="font-bold text-lg text-black">
-                                    {dateInfo.dayName}
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {dateInfo.dateDisplay}
-                                  </div>
-                                </div>
-                              ))
-                            })()}
+                              })()}
+                            </div>
+                            
+                            <button
+                              onClick={() => {
+                                // Navigate to next dates
+                                const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
+                                if (currentIndex < newAppDates.length - 1) {
+                                  const nextDate = newAppDates[currentIndex + 1]
+                                  handleNewAppDateSelect(nextDate.dateString)
+                                }
+                              }}
+                              disabled={!newAppSelectedDate || newAppDates.findIndex(d => d.dateString === newAppSelectedDate) === newAppDates.length - 1}
+                              className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <ChevronRight className="h-5 w-5 text-neutral-600" />
+                            </button>
                           </div>
-                          
-                          <button
-                            onClick={() => {
-                              // Navigate to next dates
-                              const currentIndex = newAppDates.findIndex(d => d.dateString === newAppSelectedDate)
-                              if (currentIndex < newAppDates.length - 1) {
-                                const nextDate = newAppDates[currentIndex + 1]
-                                handleNewAppDateSelect(nextDate.dateString)
-                              }
-                            }}
-                            disabled={!newAppSelectedDate || newAppDates.findIndex(d => d.dateString === newAppSelectedDate) === newAppDates.length - 1}
-                            className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            <ChevronRight className="h-5 w-5 text-neutral-600" />
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="text-center py-12">
+                            <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                              <AlertCircle className="h-8 w-8 text-neutral-400" />
+                            </div>
+                            <p className="text-lg text-neutral-600">No available dates</p>
+                            <p className="text-sm text-neutral-500 mt-1">Please try again later</p>
+                          </div>
+                        )}
                       </div>
 
                       {/* Time slots section */}
                       <div className="space-y-4">
                         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-h-[400px]">
-                          {newAppSlots.length > 0 ? (
+                          {!newAppSelectedDate ? (
+                            <div className="text-center py-12">
+                              <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                                <Calendar className="h-8 w-8 text-neutral-400" />
+                              </div>
+                              <div className="text-gray-500 text-lg">Select a date to view available time slots</div>
+                              <div className="text-sm text-gray-400 mt-2">Choose from the available dates above</div>
+                            </div>
+                          ) : newAppLoadingSlots ? (
+                            <div className="flex items-center justify-center py-12">
+                              <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                              <span className="text-lg">Loading available time slots...</span>
+                            </div>
+                          ) : newAppSlots.length > 0 ? (
                             <div className="space-y-4">
                               <div className="text-sm text-gray-600 mb-3">
-                                Available slots for {newAppSelectedDate ? new Date(newAppSelectedDate).toLocaleDateString('en-US', { 
-                                  weekday: 'long', 
-                                  year: 'numeric', 
-                                  month: 'long', 
-                                  day: 'numeric' 
-                                }) : ''}:
+                                Available slots for {formatSelectedDate(newAppSelectedDate)}:
                               </div>
                               <div className="grid sm:grid-cols-4 sm:gap-4 grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2">
                               {newAppSlots.map((slot) => (
@@ -2770,14 +2836,10 @@ function BookingsPageInner() {
                               ))}
                             </div>
                           </div>
-                          ) : newAppSelectedDate ? (
+                          ) : (
                             <div className="text-center py-8">
                               <div className="text-gray-500 text-lg">No available slots for this date</div>
                               <div className="text-sm text-gray-400 mt-2">Please select another date</div>
-                            </div>
-                          ) : (
-                            <div className="text-center py-8">
-                              <div className="text-gray-500 text-lg">Select a date to view available slots</div>
                             </div>
                           )}
                         </div>
@@ -2788,12 +2850,7 @@ function BookingsPageInner() {
                               <div className="font-bold text-black text-lg">Selected Time</div>
                               <div className="text-red-700 font-semibold">{newAppSelectedTime} MST</div>
                               <div className="text-sm text-gray-600 mt-1">
-                                {newAppSelectedDate ? new Date(newAppSelectedDate).toLocaleDateString('en-US', { 
-                                  weekday: 'long', 
-                                  year: 'numeric', 
-                                  month: 'long', 
-                                  day: 'numeric' 
-                                }) : ''}
+                                {formatSelectedDate(newAppSelectedDate)}
                               </div>
                             </div>
                           </div>
@@ -2876,12 +2933,7 @@ function BookingsPageInner() {
                               <div className="flex items-center gap-3">
                                 <Calendar className="text-xl text-red-700" />
                                 <span className="font-semibold text-black">
-                                  {newAppSelectedDate ? new Date(newAppSelectedDate).toLocaleDateString('en-US', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                  }) : 'Select Date'}
+                                  {formatSelectedDate(newAppSelectedDate) || 'Select Date'}
                                 </span>
                         </div>
                               <div className="flex items-center gap-3">
