@@ -60,6 +60,8 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<TransactionData | null>(null)
+  const [staffList, setStaffList] = useState<Array<{id: string, name: string}>>([])
+  const [editingItems, setEditingItems] = useState<Array<{id: string, staffName: string}>>([])
   
   // Edit dialog states
   const [editCustomerDialog, setEditCustomerDialog] = useState(false)
@@ -78,6 +80,36 @@ export default function PaymentDetailPage() {
   const [totalPaid, setTotalPaid] = useState(0)
 
   const formatCurrency = (n?: number | null) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Number(n || 0))
+
+  // Fetch staff list from barber-hours API
+  const fetchStaffList = async () => {
+    try {
+      const res = await fetch('/api/barber-hours')
+      const json = await res.json()
+      if (res.ok && json.ok && json.data) {
+        const staff = json.data.map((barber: Record<string, unknown>) => ({
+          id: barber['🔒 Row ID'],
+          name: barber['Barber/Name'] || 'Unknown Staff'
+        })).filter((staff: {id: string, name: string}) => staff.name !== 'Unknown Staff')
+        setStaffList(staff)
+      }
+    } catch (error) {
+      console.error('Error fetching staff list:', error)
+    }
+  }
+
+  // Update staff assignment for a specific item
+  const updateItemStaff = (itemId: string, staffName: string) => {
+    setEditingItems(prev => prev.map((item: {id: string, staffName: string}) => 
+      item.id === itemId ? { ...item, staffName } : item
+    ))
+  }
+
+  // Get staff name for a specific item
+  const getItemStaff = (itemId: string) => {
+    const item = editingItems.find((item: {id: string, staffName: string}) => item.id === itemId)
+    return item?.staffName || ''
+  }
 
   // Recalculate per-item tips (if percentage exists) and overall totals
   const recomputeTotalsFromItems = (items: TransactionData['items']) => {
@@ -209,6 +241,15 @@ export default function PaymentDetailPage() {
         setTax(Number(transactionData.tax) || 0)
         setTip(Number(transactionData.tip) || 0)
         setTotalPaid(Number(transactionData.totalPaid) || 0)
+        
+        // Set initial staff assignments for each item
+        if (transactionData.items && transactionData.items.length > 0) {
+          const itemsWithStaff = transactionData.items.map((item: Record<string, unknown>) => ({
+            id: item.id,
+            staffName: item.staffName || ''
+          }))
+          setEditingItems(itemsWithStaff)
+        }
       } catch (e: unknown) {
         console.error('Error loading transaction:', e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
@@ -219,6 +260,11 @@ export default function PaymentDetailPage() {
     }
     if (id) load()
   }, [id])
+
+  // Fetch staff list on component mount
+  useEffect(() => {
+    fetchStaffList()
+  }, [])
 
   const save = async () => {
     if (!data) return
@@ -321,13 +367,14 @@ export default function PaymentDetailPage() {
       
       // Update service items (use current data.items which include any edited prices/tips)
       for (const item of data.items) {
+        const currentStaffName = getItemStaff(item.id) || item.staffName
         const itemRes = await fetch(`/api/transaction-items/${encodeURIComponent(item.id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             serviceName: item.serviceName,
             price: item.price,
-            staffName: item.staffName,
+            staffName: currentStaffName, // Use individual staff assignment
             staffTipCollected: item.staffTipCollected
           })
         })
@@ -847,6 +894,7 @@ export default function PaymentDetailPage() {
                       </div>
                     </div>
 
+
                     {/* Services (price editable only) */}
                     <div className="space-y-3">
                       <h3 className="text-sm font-semibold text-gray-700">Services in this transaction</h3>
@@ -854,25 +902,46 @@ export default function PaymentDetailPage() {
                       <div className="space-y-3">
                         {(data.items || []).map((item, index) => (
                           <div key={item.id} className="rounded-xl border border-gray-200/70 bg-white p-4 shadow-sm">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">{item.serviceName || 'Service'}</div>
-                                <div className="mt-1 text-base font-semibold text-gray-900 truncate">{item.staffName || 'Staff'}</div>
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">{item.serviceName || 'Service'}</div>
+                                </div>
+                                <div className="text-right flex items-center gap-3">
+                                  <div className="text-xs text-gray-500">Price</div>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={item.price ?? ''}
+                                    onChange={(e) => {
+                                      const updated = [...(data.items || [])]
+                                      updated[index] = { ...updated[index], price: Number(e.target.value) }
+                                      recomputeTotalsFromItems(updated)
+                                    }}
+                                    className="w-28 text-right"
+                                    placeholder="0.00"
+                                  />
+                                </div>
                               </div>
-                              <div className="text-right flex items-center gap-3">
-                                <div className="text-xs text-gray-500">Price</div>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={item.price ?? ''}
-                                  onChange={(e) => {
-                                    const updated = [...(data.items || [])]
-                                    updated[index] = { ...updated[index], price: Number(e.target.value) }
-                                    recomputeTotalsFromItems(updated)
-                                  }}
-                                  className="w-28 text-right"
-                                  placeholder="0.00"
-                                />
+                              
+                              {/* Individual Staff Assignment */}
+                              <div className="space-y-2">
+                                <Label htmlFor={`staff-${item.id}`} className="text-xs font-medium text-gray-600">Assigned Stylist</Label>
+                                <Select 
+                                  value={getItemStaff(item.id)} 
+                                  onValueChange={(staffName) => updateItemStaff(item.id, staffName)}
+                                >
+                                  <SelectTrigger className="w-full h-9">
+                                    <SelectValue placeholder="Select a stylist" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {staffList.map((staff) => (
+                                      <SelectItem key={staff.id} value={staff.name}>
+                                        {staff.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
                           </div>
