@@ -368,7 +368,7 @@ export default function PaymentsPage() {
               <CardHeader className="py-1.5 px-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-[#601625] rounded-full" />
-                  <h3 className="text-sm font-semibold text-gray-900">Overview</h3>
+                  <h3 className="text-sm font-semibold text-gray-900">Today&apos;s Overview</h3>
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-2">
@@ -377,7 +377,7 @@ export default function PaymentsPage() {
                   <section className="rounded-xl border border-neutral-200 bg-white p-3 lg:p-4">
                     <header className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-900">Today&apos;s Overview</h4>
+                        <h4 className="text-sm font-semibold text-gray-900">Key Performance Indicators </h4>
                       </div>
                       <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
                         <TrendingUp className="h-4 w-4 text-[#601625]" />

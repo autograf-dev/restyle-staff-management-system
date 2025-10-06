@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator as UISeparator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   DollarSign, 
@@ -194,6 +195,13 @@ function CheckoutContent() {
   const [editingService, setEditingService] = useState<{ type: 'appointment' | 'additional', index: number } | null>(null)
   const [editPrice, setEditPrice] = useState<string>('')
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  
+  // Product dialog state
+  const [addProductSheetOpen, setAddProductSheetOpen] = useState(false)
+  const [productName, setProductName] = useState('Product')
+  const [productPrice, setProductPrice] = useState('')
+  const [productStaffIds, setProductStaffIds] = useState<string[]>([])
+  const [productStaffTab, setProductStaffTab] = useState<'all' | 'available'>('all')
 
   // Utility functions for price and tip distribution
   const calculatePriceDistribution = (totalPrice: number, staffCount: number) => {
@@ -413,6 +421,52 @@ function CheckoutContent() {
       setShowStaffSelection(false)
       setAddServiceDialogOpen(false)
     }
+  }
+
+  // Handle add product with multiple staff support
+  const handleAddProduct = () => {
+    if (!productPrice || parseFloat(productPrice) <= 0) {
+      toast.error('Please enter a valid price for the product')
+      return
+    }
+    
+    if (productStaffIds.length === 0) {
+      toast.error('Please select at least one staff member')
+      return
+    }
+    
+    const price = parseFloat(productPrice)
+    const staffNames = productStaffIds.map(id => getStaffName(id))
+    const pricePerStaff = calculatePriceDistribution(price, productStaffIds.length)
+    
+    // Create price distribution for each staff member
+    const priceDistribution = productStaffIds.map((staffId, index) => ({
+      staffId,
+      staffName: getStaffName(staffId),
+      amount: pricePerStaff[index]
+    }))
+    
+    // Add product as a service to additional services
+    const newProduct = {
+      id: `product-${Date.now()}`, // Generate unique ID for product
+      name: productName || 'Product',
+      price: price,
+      duration: 0, // Products don't have duration
+      staffIds: productStaffIds,
+      staffNames: staffNames,
+      priceDistribution: priceDistribution
+    }
+    
+    setAdditionalServices(prev => [...prev, newProduct])
+    
+    console.log('Adding product:', productName, 'with staff:', staffNames.join(', '), 'price:', price)
+    toast.success(`${productName || 'Product'} added with ${productStaffIds.length} staff member${productStaffIds.length > 1 ? 's' : ''}`)
+    
+    // Reset states and close sheet
+    setProductName('Product')
+    setProductPrice('')
+    setProductStaffIds([])
+    setAddProductSheetOpen(false)
   }
 
   // Fetch staff data
@@ -1391,17 +1445,18 @@ function CheckoutContent() {
                             </CardTitle>
                             <CardDescription className="text-[13px]">Complete breakdown of charges and taxes</CardDescription>
                           </div>
-                          <Dialog open={addServiceDialogOpen} onOpenChange={setAddServiceDialogOpen}>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="rounded-lg border-[#7b1d1d] text-[#7b1d1d] hover:bg-[#7b1d1d] hover:text-white transition-all"
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Service
-                              </Button>
-                            </DialogTrigger>
+                          <div className="flex gap-2">
+                            <Dialog open={addServiceDialogOpen} onOpenChange={setAddServiceDialogOpen}>
+                              <DialogTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="rounded-lg border-[#7b1d1d] text-[#7b1d1d] hover:bg-[#7b1d1d] hover:text-white transition-all"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Service
+                                </Button>
+                              </DialogTrigger>
                             <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
                               <DialogHeader className="pb-6">
                                 <DialogTitle className="text-2xl font-semibold">Add Service</DialogTitle>
@@ -1652,6 +1707,135 @@ function CheckoutContent() {
                               </div>
                             </DialogContent>
                           </Dialog>
+                          
+                          <Sheet open={addProductSheetOpen} onOpenChange={setAddProductSheetOpen}>
+                            <SheetTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="rounded-lg border-[#7b1d1d] text-[#7b1d1d] hover:bg-[#7b1d1d] hover:text-white transition-all"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Product
+                              </Button>
+                            </SheetTrigger>
+                            <SheetContent side="right" className="w-[400px] sm:w-[540px] overflow-y-auto">
+                              <SheetHeader>
+                                <SheetTitle className="text-2xl font-semibold">Add Product</SheetTitle>
+                                <SheetDescription>
+                                  Add a product to this transaction with optional name, price, and staff assignment.
+                                </SheetDescription>
+                              </SheetHeader>
+                              
+                              <div className="space-y-6 mt-6">
+                                {/* Product Name */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="productName">Product Name (Optional)</Label>
+                                  <Input
+                                    id="productName"
+                                    value={productName}
+                                    onChange={(e) => setProductName(e.target.value || 'Product')}
+                                    placeholder="Product"
+                                    className="rounded-lg"
+                                  />
+                                  <p className="text-xs text-neutral-500">Leave empty to use default name &quot;Product&quot;</p>
+                                </div>
+                                
+                                {/* Product Price */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="productPrice">Price *</Label>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">CA$</span>
+                                    <Input
+                                      id="productPrice"
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={productPrice}
+                                      onChange={(e) => setProductPrice(e.target.value)}
+                                      placeholder="0.00"
+                                      className="rounded-lg pl-12"
+                                    />
+                                  </div>
+                                </div>
+                                
+                                {/* Staff Selection */}
+                                <div className="space-y-3">
+                                  <Label>Select Staff Members *</Label>
+                                  <Tabs value={productStaffTab} onValueChange={(v) => setProductStaffTab(v as 'all' | 'available')}>
+                                    <TabsList className="grid w-full grid-cols-2">
+                                      <TabsTrigger value="all">All Staff</TabsTrigger>
+                                      <TabsTrigger value="available">Available</TabsTrigger>
+                                    </TabsList>
+                                  </Tabs>
+                                  
+                                  {staffData.length === 0 ? (
+                                    <div className="flex items-center justify-center py-8">
+                                      <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                                      <span>Loading staff data...</span>
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-2 gap-3">
+                                      {staffData.map((staff) => (
+                                        <button
+                                          key={staff.ghl_id}
+                                          onClick={() => {
+                                            if (productStaffIds.includes(staff.ghl_id)) {
+                                              setProductStaffIds(prev => prev.filter(id => id !== staff.ghl_id))
+                                            } else {
+                                              setProductStaffIds(prev => [...prev, staff.ghl_id])
+                                            }
+                                          }}
+                                          className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all relative ${
+                                            productStaffIds.includes(staff.ghl_id)
+                                              ? 'border-[#7b1d1d] bg-[#7b1d1d]/5'
+                                              : 'border-neutral-200 bg-white hover:border-[#7b1d1d]/30'
+                                          }`}
+                                        >
+                                          {productStaffIds.includes(staff.ghl_id) && (
+                                            <div className="absolute -top-2 -right-2 w-5 h-5 bg-[#7b1d1d] rounded-full flex items-center justify-center">
+                                              <CheckCircle2 className="h-3 w-3 text-white" />
+                                            </div>
+                                          )}
+                                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                                            productStaffIds.includes(staff.ghl_id) ? 'bg-[#7b1d1d]' : 'bg-neutral-400'
+                                          }`}>
+                                            {staff.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                          </div>
+                                          <p className="text-xs font-medium text-center">{staff.name}</p>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Action Buttons */}
+                                <div className="flex gap-3 pt-4">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                      setProductName('Product')
+                                      setProductPrice('')
+                                      setProductStaffIds([])
+                                      setAddProductSheetOpen(false)
+                                    }}
+                                    className="flex-1 rounded-lg"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    onClick={handleAddProduct}
+                                    disabled={!productPrice || parseFloat(productPrice) <= 0 || productStaffIds.length === 0}
+                                    className="flex-1 rounded-lg bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add Product {productStaffIds.length > 0 && `(${productStaffIds.length} staff)`}
+                                  </Button>
+                                </div>
+                              </div>
+                            </SheetContent>
+                          </Sheet>
+                          </div>
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
