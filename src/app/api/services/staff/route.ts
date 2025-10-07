@@ -45,16 +45,19 @@ export async function POST(request: NextRequest) {
     console.log('Found service:', service.name)
     console.log('Full service object keys:', Object.keys(service))
     
-    // Extract only the exact fields needed - create a completely new object
-    // to ensure no extra properties leak through
+    // Extract only the exact fields needed - map from service object field names
+    // to the field names that updateFullService expects
     const svcId = String(service.id)
     const svcName = String(service.name)
     const svcDescription = String(service.description || '')
-    const svcDuration = Number(service.duration) || 60
-    const svcDurationUnit = String(service.durationUnit || 'mins')
-    const svcPrice = String(service.price || '0.00')
+    // Service object uses slotDuration/slotDurationUnit, not duration/durationUnit
+    const svcDuration = Number(service.slotDuration) || 60
+    const svcDurationUnit = String(service.slotDurationUnit || 'mins')
+    // Price is embedded in description HTML, default to 0.00
+    const svcPrice = '0.00'
     
     // Prepare payload with only the fields updateFullService expects
+    // Do NOT include: id, locationId, formSubmitRedirectUrl, openHours, or any other service fields
     const updatePayload = {
       serviceId: svcId,
       name: svcName,
