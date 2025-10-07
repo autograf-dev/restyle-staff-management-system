@@ -30,6 +30,7 @@ import {
   Eye
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useUser, type User } from "@/contexts/user-context"
 import { toast } from "sonner"
 
@@ -394,6 +395,36 @@ const StaffOverviewView = ({
   const GRID_BOTTOM_PADDING = 16
   // Increased hour slot height to prevent appointment overlap (12 hours * 120px = 1440px + padding)
   const HOUR_SLOT_HEIGHT = 120
+
+  // Drag-to-select state for creating a break
+  const [isSelecting, setIsSelecting] = React.useState(false)
+  const [selectStaffId, setSelectStaffId] = React.useState<string | null>(null)
+  const [selectStartY, setSelectStartY] = React.useState<number | null>(null)
+  const [selectEndY, setSelectEndY] = React.useState<number | null>(null)
+  const [breakDialogOpen, setBreakDialogOpen] = React.useState(false)
+  const [prefillBlock, setPrefillBlock] = React.useState<Record<string, unknown> | null>(null)
+
+  const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
+
+  const openPrefilledBreakDialog = (ghlId: string, startMinutesAbs: number, endMinutesAbs: number) => {
+    const blockDateIso = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).toISOString()
+    setPrefillBlock({
+      ghl_id: ghlId,
+      name: 'Break',
+      startMinutes: startMinutesAbs,
+      endMinutes: endMinutesAbs,
+      date: blockDateIso,
+    })
+    setBreakDialogOpen(true)
+  }
+
+  const refreshBreaks = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/time-blocks')
+      const json = await res.json().catch(() => ({ ok: false }))
+      if (json?.ok) setBreaks(json.data || [])
+    } catch {}
+  }, [])
 
   // Update current time every minute
   React.useEffect(() => {
@@ -1231,7 +1262,89 @@ const StaffOverviewView = ({
               {staff.map((staffMember) => {
                 const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
                 return (
-                <div key={staffMember.ghl_id} className="border-r last:border-r-0 bg-background flex-shrink-0 relative" style={{ width: `${columnWidth}px` }}>
+                <div
+                  key={staffMember.ghl_id}
+                  className="border-r last:border-r-0 bg-background flex-shrink-0 relative select-none"
+                  style={{ width: `${columnWidth}px` }}
+                  onMouseDown={(e) => {
+                    // Only left click within grid area
+                    if (e.button !== 0) return
+                    const container = e.currentTarget as HTMLDivElement
+                    const rect = container.getBoundingClientRect()
+                    const y = e.clientY - rect.top
+                    // Prevent starting selection over existing appointment/break/non-working overlay
+                    const elements = document.elementsFromPoint(e.clientX, e.clientY)
+                    const isOverBusyItem = elements.some(el => {
+                      const className = (el as HTMLElement).className?.toString?.() || ''
+                      return (
+                        className.includes('border-l-[#601625]') || // appointment element
+                        className.includes('bg-orange-100/50') || // leave
+                        className.includes('bg-gray-100/50') || // break box
+                        className.includes('bg-gray-200/40') || // staff-off
+                        className.includes('bg-red-200/50')      // salon-closed
+                      )
+                    })
+                    if (isOverBusyItem) return
+                    setIsSelecting(true)
+                    setSelectStaffId(staffMember.ghl_id)
+                    setSelectStartY(y)
+                    setSelectEndY(y)
+                  }}
+                  onMouseMove={(e) => {
+                    if (!isSelecting || selectStaffId !== staffMember.ghl_id) return
+                    const container = e.currentTarget as HTMLDivElement
+                    const rect = container.getBoundingClientRect()
+                    let y = e.clientY - rect.top
+                    if (y < GRID_TOP_PADDING) y = GRID_TOP_PADDING
+                    if (y > totalGridHeight - GRID_BOTTOM_PADDING) y = totalGridHeight - GRID_BOTTOM_PADDING
+                    setSelectEndY(y)
+                  }}
+                  onMouseUp={(e) => {
+                    if (!isSelecting || selectStaffId !== staffMember.ghl_id) return
+                    setIsSelecting(false)
+                    const startY = Math.min(selectStartY ?? 0, selectEndY ?? 0)
+                    const endY = Math.max(selectStartY ?? 0, selectEndY ?? 0)
+                    // Convert Y positions into minutes from 8:00
+                    // Snap to 15-minute grid: start floors, end ceils to match user drag end
+                    const toFloor15 = (val: number) => Math.floor(val / 15) * 15
+                    const toCeil15 = (val: number) => Math.ceil(val / 15) * 15
+                    const rawStart = Math.max(0, ((startY - GRID_TOP_PADDING) / HOUR_SLOT_HEIGHT) * 60)
+                    const rawEnd = Math.max(0, ((endY - GRID_TOP_PADDING) / HOUR_SLOT_HEIGHT) * 60)
+                    const minutesFrom8Start = toFloor15(rawStart)
+                    const minutesFrom8End = toCeil15(rawEnd)
+                    const startAbs = (8 * 60) + minutesFrom8Start
+                    const endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
+                    if (endAbs - startAbs < 15) {
+                      // Minimum 15 minutes
+                      return
+                    }
+                    // Ensure selection does not overlap with existing appointments or breaks
+                    const overlaps = (rangeStart: number, rangeEnd: number) => {
+                      // Appointments
+                      const appts = getStaffAppointments(staffMember.ghl_id)
+                      for (const a of appts) {
+                        if (!a.startTime || !a.endTime) continue
+                        const s = new Date(a.startTime)
+                        const e = new Date(a.endTime)
+                        if (s.toDateString() !== currentDate.toDateString()) continue
+                        const mins = (d: Date) => d.getHours() * 60 + d.getMinutes()
+                        const as = mins(s)
+                        const ae = mins(e)
+                        if (Math.max(rangeStart, as) < Math.min(rangeEnd, ae)) return true
+                      }
+                      // Breaks overlays
+                      const bs = getStaffBreaks(staffMember.ghl_id)
+                      for (const b of bs) {
+                        const bsMin = parseInt(b['Block/Start'] || '0')
+                        const beMin = parseInt(b['Block/End'] || '0')
+                        if (Math.max(rangeStart, bsMin) < Math.min(rangeEnd, beMin)) return true
+                      }
+                      return false
+                    }
+                    if (overlaps(startAbs, endAbs)) return
+                    openPrefilledBreakDialog(staffMember.ghl_id, startAbs, endAbs)
+                  }}
+                >
                   {/* Hour lines for this staff column */}
                   {timeSlots.map((time, index) => {
                     return (
@@ -1349,6 +1462,17 @@ const StaffOverviewView = ({
                       </div>
                     )
                   })()}
+
+                  {/* Selection overlay while dragging */}
+                  {isSelecting && selectStaffId === staffMember.ghl_id && selectStartY !== null && selectEndY !== null && (
+                    <div
+                      className="absolute left-0 right-0 bg-primary/10 border-l-4 border-l-primary z-30"
+                      style={{
+                        top: `${Math.min(selectStartY, selectEndY)}px`,
+                        height: `${Math.abs(selectEndY - selectStartY)}px`
+                      }}
+                    />
+                  )}
 
                   {/* Leaves for this staff member */}
                   {getStaffLeaves(staffMember.ghl_id).map((leave) => {
@@ -1481,6 +1605,19 @@ const StaffOverviewView = ({
                 )
               })}
             </div>
+
+            {/* Global TimeBlock dialog for creating breaks via selection */}
+            <TimeBlockDialog
+              open={breakDialogOpen}
+              onOpenChange={(open) => {
+                setBreakDialogOpen(open)
+                if (!open) setPrefillBlock(null)
+              }}
+              staff={staff.map(s => ({ ghl_id: s.ghl_id, "Barber/Name": s.name }))}
+              editingBlock={null}
+              prefill={prefillBlock as any}
+              onSuccess={refreshBreaks}
+            />
           </div>
         </div>
       </div>

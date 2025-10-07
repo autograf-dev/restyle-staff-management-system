@@ -12,17 +12,26 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 
+interface Prefill {
+  ghl_id: string
+  name?: string
+  startMinutes: number
+  endMinutes: number
+  date?: string // ISO
+}
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   staff?: Array<Record<string, unknown>>
   editingBlock?: Record<string, unknown> | null
   onSuccess: () => void
+  prefill?: Prefill
 }
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
 
-export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, onSuccess }: Props) {
+export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, onSuccess, prefill }: Props) {
   const [saving, setSaving] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState("")
   const [name, setName] = useState("Lunch")
@@ -48,6 +57,15 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
       const toHHMM = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
       setStart(toHHMM(startMin))
       setEnd(toHHMM(endMin))
+    } else if (prefill) {
+      setSelectedStaff(prefill.ghl_id)
+      setName(prefill.name || "Break")
+      setRecurring(false)
+      setDays([])
+      setDate(prefill.date ? new Date(prefill.date) : new Date())
+      const toHHMM = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+      setStart(toHHMM(prefill.startMinutes))
+      setEnd(toHHMM(prefill.endMinutes))
     } else {
       setName("Lunch")
       setRecurring(false)
@@ -56,7 +74,7 @@ export function TimeBlockDialog({ open, onOpenChange, staff = [], editingBlock, 
       setStart("12:00")
       setEnd("13:00")
     }
-  }, [open, editingBlock])
+  }, [open, editingBlock, prefill])
 
   const toggleDay = (d: string) => {
     setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
