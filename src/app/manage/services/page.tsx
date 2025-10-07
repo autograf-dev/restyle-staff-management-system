@@ -352,7 +352,7 @@ export default function ServicesPage() {
 
     setAssigningStaff(true)
     try {
-      const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/manageServiceStaff', {
+      const response = await fetch('/api/services/staff', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -367,7 +367,7 @@ export default function ServicesPage() {
       const result = await response.json()
 
       if (result.success) {
-        toast.success(`✅ Staff ${action}ed successfully!`)
+        toast.success(`✅ Staff ${action === 'replace' ? 'updated' : action}d successfully!`)
         setStaffDialogOpen(false)
         setSelectedStaffIds([])
         await fetchServices()
@@ -376,7 +376,7 @@ export default function ServicesPage() {
       }
     } catch (error) {
       console.error(`Error ${action}ing staff:`, error)
-      toast.error(`Failed to ${action} staff`)
+      toast.error(`Failed to ${action} staff. Please try again.`)
     } finally {
       setAssigningStaff(false)
     }
