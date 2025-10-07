@@ -384,20 +384,27 @@ export default function ServicesPage() {
     if (!selectedService) return
 
     setAssigningStaff(true)
+    
+    const payload = {
+      serviceId: selectedService.id,
+      action,
+      staffIds: selectedStaffIds
+    }
+    
+    console.log('🔵 Frontend sending staff management request:', payload)
+    
     try {
       const response = await fetch('/api/services/staff', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          serviceId: selectedService.id,
-          action,
-          staffIds: selectedStaffIds
-        })
+        body: JSON.stringify(payload)
       })
 
       const result = await response.json()
+      
+      console.log('🔵 Frontend received response:', { status: response.status, result })
 
       if (result.success) {
         toast.success(`✅ Staff ${action === 'replace' ? 'updated' : action}d successfully!`)
@@ -405,6 +412,7 @@ export default function ServicesPage() {
         setSelectedStaffIds([])
         await fetchServices()
       } else {
+        console.error('❌ Staff management failed:', result)
         throw new Error(result.error || `Failed to ${action} staff`)
       }
     } catch (error) {

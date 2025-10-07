@@ -538,11 +538,11 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
       )
     }
 
-    // First check if transaction exists and get booking ID
-    console.log('Checking if transaction exists and fetching booking ID...')
+    // First check if transaction exists and get booking details for matching
+    console.log('Checking if transaction exists and fetching transaction details...')
     const { data: existingTransaction, error: checkError } = await supabaseAdmin
       .from('Transactions')
-      .select('"🔒 Row ID", "Booking/ID"')
+      .select('"🔒 Row ID", "Booking/ID", "Customer/Phone", "Payment/Date"')
       .eq('"🔒 Row ID"', id)
       .single()
 
@@ -555,9 +555,10 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
     }
 
     console.log('Transaction exists:', existingTransaction)
-    const bookingId = existingTransaction['Booking/ID']
-    console.log('Associated booking ID from Transactions table:', bookingId)
-    console.log('Booking ID type:', typeof bookingId)
+    const ghlAppointmentId = existingTransaction['Booking/ID']
+    const customerPhone = existingTransaction['Customer/Phone']
+    const paymentDate = existingTransaction['Payment/Date']
+    console.log('Transaction details:', { ghlAppointmentId, customerPhone, paymentDate })
 
     console.log('Deleting transaction items first...')
     // First delete transaction items - they reference the transaction by "Payment/ID"
@@ -595,42 +596,71 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
 
     console.log('Transaction deleted successfully:', deletedTransaction)
 
-    // Update the booking's payment_status to 'pending' if there was an associated booking
-    if (bookingId) {
-      console.log('🔍 Attempting to update booking with ID:', bookingId)
+    // Update the booking's payment_status if there was an associated booking
+    // Try multiple strategies to find the matching booking
+    let matchedBooking = null
+
+    if (ghlAppointmentId) {
+      console.log('🔍 Strategy 1: Trying to find booking with GHL appointment ID:', ghlAppointmentId)
       
-      // First check if booking exists with this ID
-      const { data: existingBooking, error: checkBookingError } = await supabaseAdmin
+      // Try searching by apptId field
+      const { data: bookingByApptId } = await supabaseAdmin
         .from('restyle_bookings')
         .select('id, payment_status')
-        .eq('id', bookingId)
-        .single()
+        .eq('apptId', ghlAppointmentId)
+        .maybeSingle()
 
-      if (checkBookingError) {
-        console.error('❌ Booking not found with ID:', bookingId, checkBookingError)
+      if (bookingByApptId) {
+        console.log('✅ Found booking by apptId:', bookingByApptId)
+        matchedBooking = bookingByApptId
+      }
+    }
+
+    // If not found by apptId, try searching by customer phone near the payment date
+    if (!matchedBooking && customerPhone && paymentDate) {
+      console.log('🔍 Strategy 2: Searching by customer phone and payment date:', { customerPhone, paymentDate })
+      
+      // Search for bookings with same phone, paid status, within 24 hours of payment
+      const paymentDateTime = new Date(paymentDate)
+      const startTime = new Date(paymentDateTime.getTime() - 24 * 60 * 60 * 1000).toISOString()
+      const endTime = new Date(paymentDateTime.getTime() + 24 * 60 * 60 * 1000).toISOString()
+      
+      const { data: bookingsByPhone } = await supabaseAdmin
+        .from('restyle_bookings')
+        .select('id, payment_status, start_time, customer_name_')
+        .ilike('customer_name_', `%${customerPhone.slice(-4)}%`) // Last 4 digits
+        .eq('payment_status', 'paid')
+        .gte('start_time', startTime)
+        .lte('start_time', endTime)
+        .limit(1)
+
+      if (bookingsByPhone && bookingsByPhone.length > 0) {
+        console.log('✅ Found booking by phone and date:', bookingsByPhone[0])
+        matchedBooking = bookingsByPhone[0]
+      }
+    }
+
+    if (matchedBooking) {
+      console.log('🔍 Updating payment status for booking:', matchedBooking.id)
+      
+      const { data: updatedBooking, error: bookingUpdateError } = await supabaseAdmin
+        .from('restyle_bookings')
+        .update({ 
+          payment_status: null,
+          payment_method: null,
+          payment_date: null,
+          total_paid: null
+        })
+        .eq('id', matchedBooking.id)
+        .select()
+
+      if (bookingUpdateError) {
+        console.error('❌ Failed to update booking payment_status:', bookingUpdateError)
       } else {
-        console.log('✅ Found booking:', existingBooking)
-        
-        // Now update it
-        const { data: updatedBooking, error: bookingUpdateError } = await supabaseAdmin
-          .from('restyle_bookings')
-          .update({ 
-            payment_status: null,
-            payment_method: null,
-            payment_date: null,
-            total_paid: null
-          })
-          .eq('id', bookingId)
-          .select()
-
-        if (bookingUpdateError) {
-          console.error('❌ Failed to update booking payment_status:', bookingUpdateError)
-        } else {
-          console.log('✅ Booking payment_status updated:', updatedBooking)
-        }
+        console.log('✅ Booking payment_status cleared:', updatedBooking)
       }
     } else {
-      console.log('⚠️ No booking ID found in transaction, skipping booking update')
+      console.log('⚠️ No matching booking found - this might be a walk-in transaction')
     }
 
     return NextResponse.json({ 
@@ -638,7 +668,7 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
       message: 'Transaction deleted successfully',
       deletedItems: deletedItems?.length || 0,
       deletedTransaction: deletedTransaction?.length || 0,
-      bookingUpdated: !!bookingId
+      bookingUpdated: !!matchedBooking
     })
 
   } catch (error) {
