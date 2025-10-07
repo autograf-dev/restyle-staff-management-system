@@ -556,7 +556,8 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
 
     console.log('Transaction exists:', existingTransaction)
     const bookingId = existingTransaction['Booking/ID']
-    console.log('Associated booking ID:', bookingId)
+    console.log('Associated booking ID from Transactions table:', bookingId)
+    console.log('Booking ID type:', typeof bookingId)
 
     console.log('Deleting transaction items first...')
     // First delete transaction items - they reference the transaction by "Payment/ID"
@@ -596,24 +597,40 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
 
     // Update the booking's payment_status to 'pending' if there was an associated booking
     if (bookingId) {
-      console.log('Updating booking payment_status to pending for booking:', bookingId)
-      const { error: bookingUpdateError } = await supabaseAdmin
+      console.log('🔍 Attempting to update booking with ID:', bookingId)
+      
+      // First check if booking exists with this ID
+      const { data: existingBooking, error: checkBookingError } = await supabaseAdmin
         .from('restyle_bookings')
-        .update({ 
-          payment_status: 'pending',
-          payment_method: null,
-          payment_date: null,
-          total_paid: null
-        })
+        .select('id, payment_status')
         .eq('id', bookingId)
+        .single()
 
-      if (bookingUpdateError) {
-        console.error('Warning: Failed to update booking payment_status:', bookingUpdateError)
-        // Don't fail the entire operation if booking update fails
-        // The transaction is already deleted
+      if (checkBookingError) {
+        console.error('❌ Booking not found with ID:', bookingId, checkBookingError)
       } else {
-        console.log('✅ Booking payment_status updated to pending')
+        console.log('✅ Found booking:', existingBooking)
+        
+        // Now update it
+        const { data: updatedBooking, error: bookingUpdateError } = await supabaseAdmin
+          .from('restyle_bookings')
+          .update({ 
+            payment_status: null,
+            payment_method: null,
+            payment_date: null,
+            total_paid: null
+          })
+          .eq('id', bookingId)
+          .select()
+
+        if (bookingUpdateError) {
+          console.error('❌ Failed to update booking payment_status:', bookingUpdateError)
+        } else {
+          console.log('✅ Booking payment_status updated:', updatedBooking)
+        }
       }
+    } else {
+      console.log('⚠️ No booking ID found in transaction, skipping booking update')
     }
 
     return NextResponse.json({ 

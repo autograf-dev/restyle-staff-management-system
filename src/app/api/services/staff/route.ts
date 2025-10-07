@@ -5,14 +5,29 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { serviceId, action, staffIds } = body
 
-    if (!serviceId || !action || !staffIds) {
+    console.log('Service staff management request:', { serviceId, action, staffIds })
+
+    // Validate required fields - staffIds can be an empty array for 'remove' action
+    if (!serviceId || !action) {
+      console.error('Missing required fields:', { serviceId, action, staffIds })
       return NextResponse.json(
-        { error: 'Missing required fields: serviceId, action, staffIds' }, 
+        { error: 'Missing required fields: serviceId, action', success: false }, 
+        { status: 400 }
+      )
+    }
+
+    // staffIds should be an array (can be empty for remove action)
+    if (!Array.isArray(staffIds)) {
+      console.error('staffIds must be an array:', staffIds)
+      return NextResponse.json(
+        { error: 'staffIds must be an array', success: false }, 
         { status: 400 }
       )
     }
 
     // Forward the request to the external Netlify backend
+    console.log('Forwarding to Netlify backend:', { serviceId, action, staffIds })
+    
     const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/manageServiceStaff', {
       method: 'POST',
       headers: {
@@ -26,11 +41,12 @@ export async function POST(request: NextRequest) {
     })
 
     const data = await response.json()
+    console.log('Netlify backend response:', { status: response.status, data })
 
     if (!response.ok) {
       console.error('Failed to manage service staff:', response.status, data)
       return NextResponse.json(
-        { error: data.error || 'Failed to manage service staff', success: false }, 
+        { error: data.error || data.message || 'Failed to manage service staff', success: false }, 
         { status: response.status }
       )
     }
