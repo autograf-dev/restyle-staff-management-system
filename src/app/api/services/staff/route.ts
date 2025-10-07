@@ -1,4 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
+
+// Get valid GHL access token
+async function getValidAccessToken() {
+  const { data, error } = await supabaseAdmin
+    .from('ghl_tokens')
+    .select('access_token')
+    .single()
+  
+  if (error || !data) {
+    throw new Error('Failed to get access token')
+  }
+  
+  return data.access_token
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,50 +58,81 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('Found service:', service.name)
-    console.log('Full service object keys:', Object.keys(service))
     
-    // Map service object fields to updateFullService expected fields
-    // Service object uses: slotDuration, slotDurationUnit
-    // Update endpoint expects: duration, durationUnit
+    // Get GHL access token
+    const accessToken = await getValidAccessToken()
+    
+    // Build team members array from staff IDs
+    const teamMembers = staffIds.map((userId: string) => ({
+      priority: 0.5,
+      selected: true,
+      userId: userId,
+      isZoomAdded: "false",
+      zoomOauthId: "",
+      locationConfigurations: [
+        {
+          location: "",
+          position: 0,
+          kind: "custom",
+          zoomOauthId: "",
+          meetingId: "custom_0"
+        }
+      ]
+    }))
+    
+    // Build the update payload with ONLY the fields GHL accepts
     const updatePayload = {
-      serviceId: String(service.id),
-      name: String(service.name),
-      description: String(service.description || ''),
-      duration: Number(service.slotDuration) || 60,
-      durationUnit: String(service.slotDurationUnit || 'mins'),
-      price: '0.00', // Price is in description HTML, not a separate field
-      selectedStaff: staffIds
+      name: service.name,
+      description: service.description || '',
+      teamMembers: teamMembers,
+      eventTitle: service.eventTitle || `{{contact.name}} ${service.name} with {{appointment.user.name}}`,
+      eventColor: service.eventColor || '#039BE5',
+      slotDuration: service.slotDuration,
+      slotDurationUnit: service.slotDurationUnit,
+      slotInterval: service.slotInterval,
+      slotBuffer: service.preBuffer || 0,
+      preBuffer: service.preBuffer || 0,
+      autoConfirm: service.autoConfirm !== undefined ? service.autoConfirm : true,
+      allowReschedule: service.allowReschedule !== undefined ? service.allowReschedule : true,
+      allowCancellation: service.allowCancellation !== undefined ? service.allowCancellation : true,
+      notes: service.notes || ''
     }
     
-    // Update the service with new staff assignment using updateFullService endpoint
     console.log('Updating service with staff IDs:', staffIds)
-    console.log('Update payload:', JSON.stringify(updatePayload, null, 2))
+    console.log('Calling GHL API directly with team members:', teamMembers.length)
     
-    const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateFullService', {
+    // Call GHL API directly
+    const response = await fetch(`https://services.leadconnectorhq.com/calendars/${serviceId}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'Version': '2021-04-15',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(updatePayload)
     })
     
     const data = await response.json()
-    console.log('Netlify backend response:', { status: response.status, data })
+    console.log('GHL API response:', { status: response.status, success: response.ok })
     
     if (!response.ok) {
       console.error('Failed to update service staff:', response.status, data)
       return NextResponse.json(
         { 
           error: data.error || data.message || 'Failed to update service staff',
-          details: data.details,
-          debugInfo: data.debugInfo,
+          details: data,
           success: false 
         },
         { status: response.status }
       )
     }
     
-    return NextResponse.json(data)
+    return NextResponse.json({
+      success: true,
+      message: 'Service staff updated successfully',
+      service: data,
+      updatedStaffCount: staffIds.length
+    })
   } catch (error) {
     console.error('Error in service staff management:', error)
     return NextResponse.json(
