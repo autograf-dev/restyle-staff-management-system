@@ -1493,8 +1493,8 @@ export default function ServicesPage() {
                 </SheetDescription>
               </SheetHeader>
 
-              <div className="flex flex-col h-full">
-                <div className="flex-1 space-y-6">
+              <div className="flex flex-col h-[calc(100vh-100px)]">
+                <div className="flex-1 overflow-y-auto space-y-4 pb-4">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-base font-semibold">Available Staff Members</Label>
@@ -1503,7 +1503,7 @@ export default function ServicesPage() {
                       </Badge>
                     </div>
                     
-                    <div className="border rounded-xl p-4 max-h-[calc(100vh-280px)] overflow-y-auto bg-muted/30">
+                    <div className="border rounded-xl p-4 max-h-[calc(100vh-380px)] overflow-y-auto bg-muted/30">
                       {staffOptions.length === 0 ? (
                         <div className="text-center py-12">
                           <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
@@ -1546,25 +1546,11 @@ export default function ServicesPage() {
                         </div>
                       )}
                     </div>
-
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex gap-3">
-                        <div className="flex-shrink-0">
-                          <Users className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-semibold text-blue-900">Staff Assignment Tips</h4>
-                          <p className="text-sm text-blue-700 mt-1">
-                            Select staff members who are qualified to provide this service. You can assign multiple staff members to increase availability.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
-                {/* Footer Actions */}
-                <div className="border-t pt-6 mt-6">
+                {/* Footer Actions - Always visible at bottom */}
+                <div className="border-t pt-4 pb-2 bg-background sticky bottom-0 z-10 shadow-lg">
                   <div className="flex justify-between gap-4">
                     <Button 
                       variant="outline" 

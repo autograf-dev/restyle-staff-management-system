@@ -538,11 +538,11 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
       )
     }
 
-    // First check if transaction exists
-    console.log('Checking if transaction exists...')
+    // First check if transaction exists and get booking ID
+    console.log('Checking if transaction exists and fetching booking ID...')
     const { data: existingTransaction, error: checkError } = await supabaseAdmin
       .from('Transactions')
-      .select('"🔒 Row ID"')
+      .select('"🔒 Row ID", "Booking/ID"')
       .eq('"🔒 Row ID"', id)
       .single()
 
@@ -555,6 +555,8 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
     }
 
     console.log('Transaction exists:', existingTransaction)
+    const bookingId = existingTransaction['Booking/ID']
+    console.log('Associated booking ID:', bookingId)
 
     console.log('Deleting transaction items first...')
     // First delete transaction items - they reference the transaction by "Payment/ID"
@@ -591,11 +593,35 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
     }
 
     console.log('Transaction deleted successfully:', deletedTransaction)
+
+    // Update the booking's payment_status to 'pending' if there was an associated booking
+    if (bookingId) {
+      console.log('Updating booking payment_status to pending for booking:', bookingId)
+      const { error: bookingUpdateError } = await supabaseAdmin
+        .from('restyle_bookings')
+        .update({ 
+          payment_status: 'pending',
+          payment_method: null,
+          payment_date: null,
+          total_paid: null
+        })
+        .eq('id', bookingId)
+
+      if (bookingUpdateError) {
+        console.error('Warning: Failed to update booking payment_status:', bookingUpdateError)
+        // Don't fail the entire operation if booking update fails
+        // The transaction is already deleted
+      } else {
+        console.log('✅ Booking payment_status updated to pending')
+      }
+    }
+
     return NextResponse.json({ 
       ok: true, 
       message: 'Transaction deleted successfully',
       deletedItems: deletedItems?.length || 0,
-      deletedTransaction: deletedTransaction?.length || 0
+      deletedTransaction: deletedTransaction?.length || 0,
+      bookingUpdated: !!bookingId
     })
 
   } catch (error) {
