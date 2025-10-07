@@ -45,27 +45,17 @@ export async function POST(request: NextRequest) {
     console.log('Found service:', service.name)
     console.log('Full service object keys:', Object.keys(service))
     
-    // Extract only the exact fields needed - map from service object field names
-    // to the field names that updateFullService expects
-    const svcId = String(service.id)
-    const svcName = String(service.name)
-    const svcDescription = String(service.description || '')
-    // Service object uses slotDuration/slotDurationUnit, not duration/durationUnit
-    const svcDuration = Number(service.slotDuration) || 60
-    const svcDurationUnit = String(service.slotDurationUnit || 'mins')
-    // Price is embedded in description HTML, default to 0.00
-    const svcPrice = '0.00'
-    
-    // Prepare payload with only the fields updateFullService expects
-    // Do NOT include: id, locationId, formSubmitRedirectUrl, openHours, or any other service fields
+    // Map service object fields to updateFullService expected fields
+    // Service object uses: slotDuration, slotDurationUnit
+    // Update endpoint expects: duration, durationUnit
     const updatePayload = {
-      serviceId: svcId,
-      name: svcName,
-      description: svcDescription,
-      duration: svcDuration,
-      durationUnit: svcDurationUnit,
-      price: svcPrice,
-      selectedStaff: staffIds // Replace staff with new selection
+      serviceId: String(service.id),
+      name: String(service.name),
+      description: String(service.description || ''),
+      duration: Number(service.slotDuration) || 60,
+      durationUnit: String(service.slotDurationUnit || 'mins'),
+      price: '0.00', // Price is in description HTML, not a separate field
+      selectedStaff: staffIds
     }
     
     // Update the service with new staff assignment using updateFullService endpoint
