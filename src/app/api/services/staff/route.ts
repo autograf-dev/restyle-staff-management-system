@@ -1,19 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-// Get valid GHL access token
-async function getValidAccessToken() {
-  const { data, error } = await supabaseAdmin
-    .from('ghl_tokens')
-    .select('access_token')
-    .single()
-  
-  if (error || !data) {
-    throw new Error('Failed to get access token')
-  }
-  
-  return data.access_token
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,9 +44,6 @@ export async function POST(request: NextRequest) {
     
     console.log('Found service:', service.name)
     
-    // Get GHL access token
-    const accessToken = await getValidAccessToken()
-    
     // Build team members array from staff IDs
     const teamMembers = staffIds.map((userId: string) => ({
       priority: 0.5,
@@ -80,59 +62,53 @@ export async function POST(request: NextRequest) {
       ]
     }))
     
-    // Build the update payload with ONLY the fields GHL accepts
+    // Build the update payload - use the Netlify backend approach
+    // Netlify function will handle token and GHL API call
     const updatePayload = {
+      serviceId: serviceId,
       name: service.name,
       description: service.description || '',
-      teamMembers: teamMembers,
-      eventTitle: service.eventTitle || `{{contact.name}} ${service.name} with {{appointment.user.name}}`,
-      eventColor: service.eventColor || '#039BE5',
-      slotDuration: service.slotDuration,
-      slotDurationUnit: service.slotDurationUnit,
+      selectedStaff: staffIds,
+      duration: service.slotDuration,
+      durationUnit: service.slotDurationUnit,
       slotInterval: service.slotInterval,
-      slotBuffer: service.preBuffer || 0,
-      preBuffer: service.preBuffer || 0,
+      slotBufferBefore: service.preBuffer || 0,
       autoConfirm: service.autoConfirm !== undefined ? service.autoConfirm : true,
       allowReschedule: service.allowReschedule !== undefined ? service.allowReschedule : true,
       allowCancellation: service.allowCancellation !== undefined ? service.allowCancellation : true,
+      eventColor: service.eventColor || '#039BE5',
       notes: service.notes || ''
     }
     
     console.log('Updating service with staff IDs:', staffIds)
-    console.log('Calling GHL API directly with team members:', teamMembers.length)
+    console.log('Calling Netlify updateFullService with proper payload')
     
-    // Call GHL API directly
-    const response = await fetch(`https://services.leadconnectorhq.com/calendars/${serviceId}`, {
+    // Call Netlify backend which handles token management
+    const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateFullService', {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Version': '2021-04-15',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(updatePayload)
     })
     
     const data = await response.json()
-    console.log('GHL API response:', { status: response.status, success: response.ok })
+    console.log('Netlify backend response:', { status: response.status, success: response.ok })
     
     if (!response.ok) {
       console.error('Failed to update service staff:', response.status, data)
       return NextResponse.json(
         { 
           error: data.error || data.message || 'Failed to update service staff',
-          details: data,
+          details: data.details || data,
+          debugInfo: data.debugInfo,
           success: false 
         },
         { status: response.status }
       )
     }
     
-    return NextResponse.json({
-      success: true,
-      message: 'Service staff updated successfully',
-      service: data,
-      updatedStaffCount: staffIds.length
-    })
+    return NextResponse.json(data)
   } catch (error) {
     console.error('Error in service staff management:', error)
     return NextResponse.json(
