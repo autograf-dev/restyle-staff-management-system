@@ -44,31 +44,13 @@ export async function POST(request: NextRequest) {
     
     console.log('Found service:', service.name)
     
-    // Build team members array from staff IDs
-    const teamMembers = staffIds.map((userId: string) => ({
-      priority: 0.5,
-      selected: true,
-      userId: userId,
-      isZoomAdded: "false",
-      zoomOauthId: "",
-      locationConfigurations: [
-        {
-          location: "",
-          position: 0,
-          kind: "custom",
-          zoomOauthId: "",
-          meetingId: "custom_0"
-        }
-      ]
-    }))
-    
-    // Build the update payload - use the Netlify backend approach
-    // Netlify function will handle token and GHL API call
+    // Use the new updateServiceClean endpoint which only sends allowed fields
+    // This avoids the validation errors from the old updateFullService endpoint
     const updatePayload = {
       serviceId: serviceId,
+      selectedStaff: staffIds,
       name: service.name,
       description: service.description || '',
-      selectedStaff: staffIds,
       duration: service.slotDuration,
       durationUnit: service.slotDurationUnit,
       slotInterval: service.slotInterval,
@@ -81,10 +63,10 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('Updating service with staff IDs:', staffIds)
-    console.log('Calling Netlify updateFullService with proper payload')
+    console.log('Calling Netlify updateServiceClean endpoint')
     
-    // Call Netlify backend which handles token management
-    const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateFullService', {
+    // Call the new clean update endpoint
+    const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateServiceClean', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -93,7 +75,7 @@ export async function POST(request: NextRequest) {
     })
     
     const data = await response.json()
-    console.log('Netlify backend response:', { status: response.status, success: response.ok })
+    console.log('updateServiceClean response:', { status: response.status, success: response.ok })
     
     if (!response.ok) {
       console.error('Failed to update service staff:', response.status, data)
