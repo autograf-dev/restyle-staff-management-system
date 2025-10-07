@@ -43,21 +43,31 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('Found service:', service.name)
+    console.log('Full service object keys:', Object.keys(service))
+    
+    // Extract only the exact fields needed - create a completely new object
+    // to ensure no extra properties leak through
+    const svcId = String(service.id)
+    const svcName = String(service.name)
+    const svcDescription = String(service.description || '')
+    const svcDuration = Number(service.duration) || 60
+    const svcDurationUnit = String(service.durationUnit || 'mins')
+    const svcPrice = String(service.price || '0.00')
     
     // Prepare payload with only the fields updateFullService expects
     const updatePayload = {
-      serviceId: service.id,
-      name: service.name,
-      description: service.description || '',
-      duration: service.duration || 60,
-      durationUnit: service.durationUnit || 'mins',
-      price: service.price || '0.00',
+      serviceId: svcId,
+      name: svcName,
+      description: svcDescription,
+      duration: svcDuration,
+      durationUnit: svcDurationUnit,
+      price: svcPrice,
       selectedStaff: staffIds // Replace staff with new selection
     }
     
     // Update the service with new staff assignment using updateFullService endpoint
     console.log('Updating service with staff IDs:', staffIds)
-    console.log('Update payload:', updatePayload)
+    console.log('Update payload:', JSON.stringify(updatePayload, null, 2))
     
     const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateFullService', {
       method: 'PUT',
