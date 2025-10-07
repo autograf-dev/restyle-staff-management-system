@@ -596,79 +596,54 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
 
     console.log('Transaction deleted successfully:', deletedTransaction)
 
-    // Update the booking's payment_status if there was an associated booking
-    // Try multiple strategies to find the matching booking
-    let matchedBooking = null
-
+    // Clear payment status for the booking linked to this transaction
+    // Transactions["Booking/ID"] = restyle_bookings.id
     if (ghlAppointmentId) {
-      console.log('🔍 Strategy 1: Trying to find booking with GHL appointment ID:', ghlAppointmentId)
+      console.log('🔍 Looking for booking with id:', ghlAppointmentId)
       
-      // Try searching by apptId field
-      const { data: bookingByApptId } = await supabaseAdmin
+      const { data: matchedBooking, error: bookingError } = await supabaseAdmin
         .from('restyle_bookings')
         .select('id, payment_status')
-        .eq('apptId', ghlAppointmentId)
-        .maybeSingle()
-
-      if (bookingByApptId) {
-        console.log('✅ Found booking by apptId:', bookingByApptId)
-        matchedBooking = bookingByApptId
-      }
-    }
-
-    // If not found by apptId, try searching by customer phone near the payment date
-    if (!matchedBooking && customerPhone && paymentDate) {
-      console.log('🔍 Strategy 2: Searching by customer phone and payment date:', { customerPhone, paymentDate })
+        .eq('id', ghlAppointmentId)
+        .single()
       
-      // Search for bookings with same phone, paid status, within 24 hours of payment
-      const paymentDateTime = new Date(paymentDate)
-      const startTime = new Date(paymentDateTime.getTime() - 24 * 60 * 60 * 1000).toISOString()
-      const endTime = new Date(paymentDateTime.getTime() + 24 * 60 * 60 * 1000).toISOString()
-      
-      const { data: bookingsByPhone } = await supabaseAdmin
-        .from('restyle_bookings')
-        .select('id, payment_status, start_time, customer_name_')
-        .ilike('customer_name_', `%${customerPhone.slice(-4)}%`) // Last 4 digits
-        .eq('payment_status', 'paid')
-        .gte('start_time', startTime)
-        .lte('start_time', endTime)
-        .limit(1)
-
-      if (bookingsByPhone && bookingsByPhone.length > 0) {
-        console.log('✅ Found booking by phone and date:', bookingsByPhone[0])
-        matchedBooking = bookingsByPhone[0]
-      }
-    }
-
-    if (matchedBooking) {
-      console.log('🔍 Updating payment status for booking:', matchedBooking.id)
-      
-      const { data: updatedBooking, error: bookingUpdateError } = await supabaseAdmin
-        .from('restyle_bookings')
-        .update({ 
-          payment_status: null,
-          payment_method: null,
-          payment_date: null,
-          total_paid: null
-        })
-        .eq('id', matchedBooking.id)
-        .select()
-
-      if (bookingUpdateError) {
-        console.error('❌ Failed to update booking payment_status:', bookingUpdateError)
+      if (bookingError) {
+        console.error('❌ Error finding booking:', bookingError)
+      } else if (matchedBooking) {
+        console.log('📋 Found booking:', matchedBooking)
+        
+        // Only update if it's marked as paid
+        if (matchedBooking.payment_status === 'paid') {
+          const { error: updateError } = await supabaseAdmin
+            .from('restyle_bookings')
+            .update({ 
+              payment_status: null,
+              payment_method: null,
+              payment_date: null,
+              total_paid: null
+            })
+            .eq('id', ghlAppointmentId)
+          
+          if (updateError) {
+            console.error('❌ Error clearing payment status:', updateError)
+          } else {
+            console.log('✅ Cleared payment status for booking:', ghlAppointmentId)
+          }
+        } else {
+          console.log('ℹ️ Booking not marked as paid, skipping update. Status:', matchedBooking.payment_status)
+        }
       } else {
-        console.log('✅ Booking payment_status cleared:', updatedBooking)
+        console.log('⚠️ No booking found with id:', ghlAppointmentId)
       }
     } else {
-      console.log('⚠️ No matching booking found - this might be a walk-in transaction')
+      console.log('⚠️ No Booking/ID in transaction, skipping booking update')
     }
 
     return NextResponse.json({ 
       ok: true, 
       message: 'Transaction deleted successfully',
       deletedItems: deletedItems?.length || 0,
-      deletedTransaction: deletedTransaction?.length || 0,
-      bookingUpdated: !!matchedBooking
+      deletedTransaction: deletedTransaction?.length || 0
     })
 
   } catch (error) {
