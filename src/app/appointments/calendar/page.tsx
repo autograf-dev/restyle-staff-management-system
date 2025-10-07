@@ -401,8 +401,9 @@ const StaffOverviewView = ({
   const [selectStaffId, setSelectStaffId] = React.useState<string | null>(null)
   const [selectStartY, setSelectStartY] = React.useState<number | null>(null)
   const [selectEndY, setSelectEndY] = React.useState<number | null>(null)
+  type BreakPrefill = { ghl_id: string; name?: string; startMinutes: number; endMinutes: number; date?: string }
   const [breakDialogOpen, setBreakDialogOpen] = React.useState(false)
-  const [prefillBlock, setPrefillBlock] = React.useState<Record<string, unknown> | null>(null)
+  const [prefillBlock, setPrefillBlock] = React.useState<BreakPrefill | null>(null)
 
   const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
 
@@ -1615,7 +1616,7 @@ const StaffOverviewView = ({
               }}
               staff={staff.map(s => ({ ghl_id: s.ghl_id, "Barber/Name": s.name }))}
               editingBlock={null}
-              prefill={prefillBlock as any}
+              prefill={prefillBlock ?? undefined}
               onSuccess={refreshBreaks}
             />
           </div>
