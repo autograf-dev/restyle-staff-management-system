@@ -44,22 +44,27 @@ export async function POST(request: NextRequest) {
     
     console.log('Found service:', service.name)
     
+    // Prepare payload with only the fields updateFullService expects
+    const updatePayload = {
+      serviceId: service.id,
+      name: service.name,
+      description: service.description || '',
+      duration: service.duration || 60,
+      durationUnit: service.durationUnit || 'mins',
+      price: service.price || '0.00',
+      selectedStaff: staffIds // Replace staff with new selection
+    }
+    
     // Update the service with new staff assignment using updateFullService endpoint
     console.log('Updating service with staff IDs:', staffIds)
+    console.log('Update payload:', updatePayload)
+    
     const response = await fetch('https://restyle-backend.netlify.app/.netlify/functions/updateFullService', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        serviceId: service.id,
-        name: service.name,
-        description: service.description || '',
-        duration: service.duration,
-        durationUnit: service.durationUnit || 'mins',
-        price: service.price,
-        selectedStaff: staffIds // Replace staff with new selection
-      })
+      body: JSON.stringify(updatePayload)
     })
     
     const data = await response.json()
