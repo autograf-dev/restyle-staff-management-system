@@ -617,10 +617,7 @@ export const DELETE = async (req: Request): Promise<NextResponse> => {
           const { error: updateError } = await supabaseAdmin
             .from('restyle_bookings')
             .update({ 
-              payment_status: null,
-              payment_method: null,
-              payment_date: null,
-              total_paid: null
+              payment_status: null
             })
             .eq('id', ghlAppointmentId)
           
