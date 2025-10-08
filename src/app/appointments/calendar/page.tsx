@@ -1276,8 +1276,8 @@ const StaffOverviewView = ({
                   title={isUnavailable ? (isCollapsed ? "Click to expand" : "Click to collapse") : undefined}
                 >
                   {isCollapsed ? (
-                    // Collapsed view - vertical text with expand hint
-                    <div className="flex flex-col items-center justify-center h-full relative group">
+                    // Collapsed view - vertical text with always-visible expand hint
+                    <div className="flex flex-col items-center justify-center h-full relative">
                       <div 
                         className="font-medium text-xs text-[#601625] whitespace-nowrap"
                         style={{ 
@@ -1301,19 +1301,19 @@ const StaffOverviewView = ({
                       )}
                       {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
                         <div className="mt-2 w-5 h-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center" title="Day Off">
-                          <span className="text-[10px] opacity-60">💤</span>
+                          <span className="text-[10px] opacity-60 grayscale">💤</span>
                         </div>
                       )}
-                      {/* Expand hint - shown on hover */}
-                      <div className="absolute bottom-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <div className="text-[9px] text-[#601625] font-medium px-1.5 py-0.5 rounded bg-white/90 border border-[#601625]/20 shadow-sm whitespace-nowrap">
-                          Click to expand
+                      {/* Expand hint - always visible with subtle animation */}
+                      <div className="absolute bottom-1 animate-pulse">
+                        <div className="text-[9px] text-[#601625] font-semibold px-2 py-1 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-md whitespace-nowrap">
+                          ↔ Click to expand
                         </div>
                       </div>
                     </div>
                   ) : (
-                    // Expanded view with collapse hint for unavailable staff
-                    <div className="text-center relative group">
+                    // Expanded view with always-visible collapse hint for unavailable staff
+                    <div className="text-center relative">
                       <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
                         {staffMember.name}
                       </div>
@@ -1327,10 +1327,10 @@ const StaffOverviewView = ({
                             {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
                              !getSalonWorkingHours() ? "Salon Closed" : "Day Off"}
                           </div>
-                          {/* Collapse hint - shown on hover */}
-                          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-                            <div className="text-[9px] text-[#601625] font-medium px-1.5 py-0.5 rounded bg-white/90 border border-[#601625]/20 shadow-sm whitespace-nowrap">
-                              Click to collapse
+                          {/* Collapse hint - always visible with subtle animation */}
+                          <div className="mt-1.5">
+                            <div className="text-[9px] text-[#601625] font-semibold px-2 py-0.5 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-sm whitespace-nowrap animate-pulse inline-block">
+                              ↔ Click to collapse
                             </div>
                           </div>
                         </>
@@ -1500,7 +1500,7 @@ const StaffOverviewView = ({
                           <div className="text-2xl mb-1">🔒</div>
                         )}
                         {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
-                          <div className="text-2xl mb-1 opacity-50">💤</div>
+                          <div className="text-2xl mb-1 opacity-50 grayscale">💤</div>
                         )}
                         <div 
                           className="text-[10px] text-[#601625] font-medium whitespace-nowrap"
@@ -1670,13 +1670,26 @@ const StaffOverviewView = ({
 
                   {/* Breaks for this staff member */}
                   {!isCollapsed && getStaffBreaks(staffMember.ghl_id).map((breakItem) => {
-                    // For recurring breaks, we need to check if it applies to the selected calendar date
+                    // For recurring breaks, check if it applies to the selected calendar date's day of week
                     const selectedDay = currentDate.getDay() // 0 = Sunday, 1 = Monday, etc.
                     const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
                     
-                    // Skip if it's a recurring break and doesn't apply to the selected date
-                    if (breakItem["Block/Recurring"] === "true" && !recurringDays.includes(selectedDay.toString())) {
-                      return null
+                    if (breakItem["Block/Recurring"] === "true") {
+                      // Skip if it's a recurring break and doesn't apply to the selected date's day of week
+                      if (!recurringDays.includes(selectedDay.toString())) {
+                        return null
+                      }
+                    } else {
+                      // For non-recurring breaks, check if the break date matches the selected calendar date
+                      if (breakItem["Block/Date"]) {
+                        const breakDate = new Date(breakItem["Block/Date"])
+                        const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+                        const breakDateOnly = new Date(breakDate.getFullYear(), breakDate.getMonth(), breakDate.getDate())
+                        
+                        if (breakDateOnly.getTime() !== calendarDate.getTime()) {
+                          return null // Skip if break is not scheduled for this date
+                        }
+                      }
                     }
 
                     // Create start and end times for the break
