@@ -1276,8 +1276,8 @@ const StaffOverviewView = ({
                   title={isUnavailable ? (isCollapsed ? "Click to expand" : "Click to collapse") : undefined}
                 >
                   {isCollapsed ? (
-                    // Collapsed view - vertical text
-                    <div className="flex flex-col items-center justify-center h-full">
+                    // Collapsed view - vertical text with expand hint
+                    <div className="flex flex-col items-center justify-center h-full relative group">
                       <div 
                         className="font-medium text-xs text-[#601625] whitespace-nowrap"
                         style={{ 
@@ -1300,26 +1300,40 @@ const StaffOverviewView = ({
                         </div>
                       )}
                       {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
-                        <div className="mt-2 w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center" title="Day Off">
-                          <span className="text-[10px]">💤</span>
+                        <div className="mt-2 w-5 h-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center" title="Day Off">
+                          <span className="text-[10px] opacity-60">💤</span>
                         </div>
                       )}
+                      {/* Expand hint - shown on hover */}
+                      <div className="absolute bottom-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="text-[9px] text-[#601625] font-medium px-1.5 py-0.5 rounded bg-white/90 border border-[#601625]/20 shadow-sm whitespace-nowrap">
+                          Click to expand
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    // Expanded view
-                    <div className="text-center">
+                    // Expanded view with collapse hint for unavailable staff
+                    <div className="text-center relative group">
                       <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
                         {staffMember.name}
                       </div>
                       <div className="text-xs text-[#751a29]/70">
                         {appts.length} appointments
                       </div>
-                      {/* Show unavailability badge */}
+                      {/* Show unavailability badge with collapse hint */}
                       {isUnavailable && (
-                        <div className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                          {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
-                           !getSalonWorkingHours() ? "Salon Closed" : "Day Off"}
-                        </div>
+                        <>
+                          <div className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                            {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
+                             !getSalonWorkingHours() ? "Salon Closed" : "Day Off"}
+                          </div>
+                          {/* Collapse hint - shown on hover */}
+                          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                            <div className="text-[9px] text-[#601625] font-medium px-1.5 py-0.5 rounded bg-white/90 border border-[#601625]/20 shadow-sm whitespace-nowrap">
+                              Click to collapse
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
@@ -1380,14 +1394,9 @@ const StaffOverviewView = ({
                   key={staffMember.ghl_id}
                   className={cn(
                     "border-r last:border-r-0 flex-shrink-0 relative transition-all duration-300",
-                    isCollapsed ? "bg-[#601625]/5 cursor-pointer hover:bg-[#601625]/10" : "bg-background select-none"
+                    isCollapsed ? "bg-[#601625]/5" : "bg-background select-none"
                   )}
                   style={{ width: `${columnWidth}px` }}
-                  onClick={(e) => {
-                    if (isCollapsed && isUnavailable) {
-                      toggleColumnCollapse(staffMember.ghl_id)
-                    }
-                  }}
                   onMouseDown={(e) => {
                     // Prevent drag selection when collapsed
                     if (isCollapsed) return
@@ -1491,7 +1500,7 @@ const StaffOverviewView = ({
                           <div className="text-2xl mb-1">🔒</div>
                         )}
                         {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
-                          <div className="text-2xl mb-1">💤</div>
+                          <div className="text-2xl mb-1 opacity-50">💤</div>
                         )}
                         <div 
                           className="text-[10px] text-[#601625] font-medium whitespace-nowrap"
@@ -1504,9 +1513,6 @@ const StaffOverviewView = ({
                           {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
                            !getSalonWorkingHours() ? "Closed" : "Day Off"}
                         </div>
-                      </div>
-                      <div className="mt-4 text-[10px] text-gray-500 px-2 py-1 rounded bg-white/80 border border-gray-200">
-                        Click to expand
                       </div>
                     </div>
                   )}
@@ -1664,12 +1670,12 @@ const StaffOverviewView = ({
 
                   {/* Breaks for this staff member */}
                   {!isCollapsed && getStaffBreaks(staffMember.ghl_id).map((breakItem) => {
-                    // For recurring breaks, we need to check if it applies to current day
-                    const currentDay = new Date().getDay() // 0 = Sunday, 1 = Monday, etc.
+                    // For recurring breaks, we need to check if it applies to the selected calendar date
+                    const selectedDay = currentDate.getDay() // 0 = Sunday, 1 = Monday, etc.
                     const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
                     
-                    // Skip if it's a recurring break and doesn't apply to current day
-                    if (breakItem["Block/Recurring"] === "true" && !recurringDays.includes(currentDay.toString())) {
+                    // Skip if it's a recurring break and doesn't apply to the selected date
+                    if (breakItem["Block/Recurring"] === "true" && !recurringDays.includes(selectedDay.toString())) {
                       return null
                     }
 
