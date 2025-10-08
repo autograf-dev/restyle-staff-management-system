@@ -1277,37 +1277,11 @@ const StaffOverviewView = ({
                 >
                   {isCollapsed ? (
                     // Collapsed view - vertical text with always-visible expand hint
-                    <div className="flex flex-col items-center justify-center h-full relative">
-                      <div 
-                        className="font-medium text-xs text-[#601625] whitespace-nowrap"
-                        style={{ 
-                          writingMode: 'vertical-rl',
-                          textOrientation: 'mixed',
-                          transform: 'rotate(180deg)'
-                        }}
-                      >
-                        {staffMember.name}
-                      </div>
-                      {/* Unavailability indicator */}
-                      {isStaffOnLeave(staffMember.ghl_id) && (
-                        <div className="mt-2 w-5 h-5 rounded-full bg-orange-100 border border-orange-300 flex items-center justify-center" title="On Leave">
-                          <span className="text-[10px]">🏖️</span>
-                        </div>
-                      )}
-                      {!getSalonWorkingHours() && (
-                        <div className="mt-2 w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center" title="Salon Closed">
-                          <span className="text-[10px]">🔒</span>
-                        </div>
-                      )}
-                      {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
-                        <div className="mt-2 w-5 h-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center" title="Day Off">
-                          <span className="text-[10px] opacity-60 grayscale">💤</span>
-                        </div>
-                      )}
-                      {/* Expand hint - vertical text to fit in narrow column */}
-                      <div className="absolute bottom-1 animate-pulse">
+                    <div className="flex flex-col items-center justify-between h-full py-2">
+                      {/* Expand hint at top */}
+                      <div className="animate-pulse">
                         <div 
-                          className="text-[9px] text-[#601625] font-semibold px-1 py-2 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-md"
+                          className="text-[9px] text-[#601625] font-semibold px-1 py-1.5 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-md"
                           style={{ 
                             writingMode: 'vertical-rl',
                             textOrientation: 'mixed',
@@ -1316,6 +1290,36 @@ const StaffOverviewView = ({
                         >
                           Expand ↕
                         </div>
+                      </div>
+                      
+                      {/* Staff name and status in center area */}
+                      <div className="flex flex-col items-center gap-2 flex-1 justify-center">
+                        <div 
+                          className="font-medium text-xs text-[#601625] whitespace-nowrap"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)'
+                          }}
+                        >
+                          {staffMember.name}
+                        </div>
+                        {/* Unavailability indicator */}
+                        {isStaffOnLeave(staffMember.ghl_id) && (
+                          <div className="w-5 h-5 rounded-full bg-orange-100 border border-orange-300 flex items-center justify-center" title="On Leave">
+                            <span className="text-[10px]">🏖️</span>
+                          </div>
+                        )}
+                        {!getSalonWorkingHours() && (
+                          <div className="w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center" title="Salon Closed">
+                            <span className="text-[10px]">🔒</span>
+                          </div>
+                        )}
+                        {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
+                          <div className="w-5 h-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center" title="Day Off">
+                            <span className="text-[10px] opacity-60 grayscale">💤</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
