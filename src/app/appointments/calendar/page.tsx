@@ -1304,10 +1304,17 @@ const StaffOverviewView = ({
                           <span className="text-[10px] opacity-60 grayscale">💤</span>
                         </div>
                       )}
-                      {/* Expand hint - always visible with subtle animation */}
+                      {/* Expand hint - vertical text to fit in narrow column */}
                       <div className="absolute bottom-1 animate-pulse">
-                        <div className="text-[9px] text-[#601625] font-semibold px-2 py-1 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-md whitespace-nowrap">
-                          ↔ Click to expand
+                        <div 
+                          className="text-[9px] text-[#601625] font-semibold px-1 py-2 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-md"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)'
+                          }}
+                        >
+                          Expand ↕
                         </div>
                       </div>
                     </div>
@@ -1330,7 +1337,7 @@ const StaffOverviewView = ({
                           {/* Collapse hint - always visible with subtle animation */}
                           <div className="mt-1.5">
                             <div className="text-[9px] text-[#601625] font-semibold px-2 py-0.5 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-sm whitespace-nowrap animate-pulse inline-block">
-                              ↔ Click to collapse
+                              ↕ Collapse
                             </div>
                           </div>
                         </>

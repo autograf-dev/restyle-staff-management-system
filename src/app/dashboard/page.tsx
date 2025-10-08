@@ -336,10 +336,13 @@ export default function DashboardPage() {
     const count = filteredRows.length
     const revenue = filteredRows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0)
     const tips = filteredRows.reduce((sum, r) => sum + Number(r.tip || 0), 0)
-    // Service revenue ONLY from Transaction Items → strict sum of item.price
+    // Service revenue ONLY from Transaction Items (excluding products)
     const subtotal = filteredRows.reduce((sum, r) => {
       const itemsTotal = Array.isArray(r.items)
-        ? r.items.reduce((s: number, it: TxItem) => s + Number(it.price || 0), 0)
+        ? r.items.reduce((s: number, it: TxItem) => {
+            const isProduct = String(it.serviceId || '').toLowerCase().startsWith('product-')
+            return isProduct ? s : s + Number(it.price || 0)
+          }, 0)
         : 0
       return sum + itemsTotal
     }, 0)
@@ -570,17 +573,30 @@ export default function DashboardPage() {
     filteredRows.forEach(row => {
       const items = Array.isArray(row.items) ? row.items : []
       const itemsTotal = items.reduce((s: number, it: TxItem) => s + Number(it.price || 0), 0)
+      
       items.forEach((it: TxItem) => {
         const canonicalName = resolveCanonical(String(it.staffName || ''))
         if (!canonicalName) return // skip non-staff-hours names
+        
         const price = Number(it.price || 0)
         const tip = Number(it.staffTipCollected || 0)
         const taxShare = itemsTotal > 0 ? Number(row.tax || 0) * (price / itemsTotal) : 0
+        
+        // Check if this item is a product (serviceId starts with "product-")
+        const isProduct = String(it.serviceId || '').toLowerCase().startsWith('product-')
+        
         const totalRevenueShare = price + taxShare + tip
         const emp = employees.get(canonicalName)!
         emp.totalRevenue += totalRevenueShare
         emp.totalTax += taxShare
-        emp.serviceRevenue += price
+        
+        // Separate products from services
+        if (isProduct) {
+          emp.productRevenue += price
+        } else {
+          emp.serviceRevenue += price
+        }
+        
         emp.totalTips += tip
         // Count unique transactions per staff
         const txId = String(row.id)
