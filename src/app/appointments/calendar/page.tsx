@@ -357,6 +357,15 @@ const StaffOverviewView = ({
     name: string;
     email: string;
     role: string;
+    workingHours?: {
+      monday: { start: string | number | null, end: string | number | null };
+      tuesday: { start: string | number | null, end: string | number | null };
+      wednesday: { start: string | number | null, end: string | number | null };
+      thursday: { start: string | number | null, end: string | number | null };
+      friday: { start: string | number | null, end: string | number | null };
+      saturday: { start: string | number | null, end: string | number | null };
+      sunday: { start: string | number | null, end: string | number | null };
+    };
   }[]>([])
   const [loading, setLoading] = React.useState(true)
   const [leaves, setLeaves] = React.useState<{
@@ -389,7 +398,9 @@ const StaffOverviewView = ({
   const baseColumnWidth = 220
   const minColumnWidth = 180
   const maxColumnWidth = 400
+  const collapsedColumnWidth = 48 // Width when collapsed
   const [currentTime, setCurrentTime] = React.useState(new Date())
+  const [collapsedColumns, setCollapsedColumns] = React.useState<Set<string>>(new Set())
   // Minimal padding for the time grid
   const GRID_TOP_PADDING = 8
   const GRID_BOTTOM_PADDING = 16
@@ -685,6 +696,12 @@ const StaffOverviewView = ({
     const columnWidths: Record<string, number> = {}
     
     staff.forEach((staffMember) => {
+      // Check if column should be collapsed
+      if (collapsedColumns.has(staffMember.ghl_id)) {
+        columnWidths[staffMember.ghl_id] = collapsedColumnWidth
+        return
+      }
+      
       const staffAppointments = getStaffAppointments(staffMember.ghl_id)
       
       if (staffAppointments.length === 0) {
@@ -725,8 +742,8 @@ const StaffOverviewView = ({
     return columnWidths
   }
 
-  // Calculate dynamic column widths
-  const dynamicColumnWidths = React.useMemo(() => calculateDynamicColumnWidths(), [staff, appointments])
+  // Calculate dynamic column widths - now depends on collapsedColumns state
+  const dynamicColumnWidths = React.useMemo(() => calculateDynamicColumnWidths(), [staff, appointments, collapsedColumns])
 
   // Helper function to get appointment position and height with overlap handling (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment, staffGhlId: string) => {
@@ -937,6 +954,46 @@ const StaffOverviewView = ({
       return currentDay >= startDay && currentDay < endDayExclusive
     })
   }
+
+  // Helper function to check if staff is unavailable for entire day
+  const isStaffUnavailableAllDay = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, ghl_id?: string }) => {
+    // Check if salon is closed
+    const salonHours = getSalonWorkingHours()
+    if (!salonHours) return true
+    
+    // Check if staff is on leave
+    if (staffMember.ghl_id && isStaffOnLeave(staffMember.ghl_id)) return true
+    
+    // Check if staff has no working hours for this day
+    const workingHours = getStaffWorkingHours(staffMember)
+    if (!workingHours) return true
+    
+    return false
+  }
+
+  // Toggle column collapsed state
+  const toggleColumnCollapse = (staffGhlId: string) => {
+    setCollapsedColumns(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(staffGhlId)) {
+        newSet.delete(staffGhlId)
+      } else {
+        newSet.add(staffGhlId)
+      }
+      return newSet
+    })
+  }
+
+  // Auto-collapse unavailable columns on date change
+  React.useEffect(() => {
+    const newCollapsed = new Set<string>()
+    staff.forEach(staffMember => {
+      if (isStaffUnavailableAllDay(staffMember)) {
+        newCollapsed.add(staffMember.ghl_id)
+      }
+    })
+    setCollapsedColumns(newCollapsed)
+  }, [currentDate, staff, leaves, salonHours])
 
   // Helper function to get break periods for staff member on current day
   const getStaffBreakPeriods = (staffGhlId: string) => {
@@ -1197,22 +1254,75 @@ const StaffOverviewView = ({
             {staff.map((staffMember) => {
               const appts = getStaffAppointments(staffMember.ghl_id)
               const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
+              const isCollapsed = collapsedColumns.has(staffMember.ghl_id)
+              const isUnavailable = isStaffUnavailableAllDay(staffMember)
+              
               // Build a compact list of time chips for that day
               const chips = appts
                 .filter((a: Appointment) => a.startTime)
                 .sort((a: Appointment, b: Appointment) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
                 .slice(0,4) // show first 4
                 .map((a: Appointment) => new Date(a.startTime!))
+              
               return (
-                <div key={staffMember.ghl_id} className="p-4 border-r last:border-r-0 border-[#601625]/20 bg-background flex-shrink-0" style={{ width: `${columnWidth}px` }}>
-                  <div className="text-center">
-                    <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
-                      {staffMember.name}
+                <div 
+                  key={staffMember.ghl_id} 
+                  className={cn(
+                    "p-4 border-r last:border-r-0 border-[#601625]/20 flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
+                    isCollapsed ? "bg-[#601625]/5" : "bg-background"
+                  )}
+                  style={{ width: `${columnWidth}px` }}
+                  onClick={() => isUnavailable && toggleColumnCollapse(staffMember.ghl_id)}
+                  title={isUnavailable ? (isCollapsed ? "Click to expand" : "Click to collapse") : undefined}
+                >
+                  {isCollapsed ? (
+                    // Collapsed view - vertical text
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <div 
+                        className="font-medium text-xs text-[#601625] whitespace-nowrap"
+                        style={{ 
+                          writingMode: 'vertical-rl',
+                          textOrientation: 'mixed',
+                          transform: 'rotate(180deg)'
+                        }}
+                      >
+                        {staffMember.name}
+                      </div>
+                      {/* Unavailability indicator */}
+                      {isStaffOnLeave(staffMember.ghl_id) && (
+                        <div className="mt-2 w-5 h-5 rounded-full bg-orange-100 border border-orange-300 flex items-center justify-center" title="On Leave">
+                          <span className="text-[10px]">🏖️</span>
+                        </div>
+                      )}
+                      {!getSalonWorkingHours() && (
+                        <div className="mt-2 w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center" title="Salon Closed">
+                          <span className="text-[10px]">🔒</span>
+                        </div>
+                      )}
+                      {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
+                        <div className="mt-2 w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center" title="Day Off">
+                          <span className="text-[10px]">💤</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-xs text-[#751a29]/70">
-                      {appts.length} appointments
+                  ) : (
+                    // Expanded view
+                    <div className="text-center">
+                      <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
+                        {staffMember.name}
+                      </div>
+                      <div className="text-xs text-[#751a29]/70">
+                        {appts.length} appointments
+                      </div>
+                      {/* Show unavailability badge */}
+                      {isUnavailable && (
+                        <div className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                          {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
+                           !getSalonWorkingHours() ? "Salon Closed" : "Day Off"}
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
               )
             })}
@@ -1262,12 +1372,25 @@ const StaffOverviewView = ({
               {/* Staff columns */}
               {staff.map((staffMember) => {
                 const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
+                const isCollapsed = collapsedColumns.has(staffMember.ghl_id)
+                const isUnavailable = isStaffUnavailableAllDay(staffMember)
+                
                 return (
                 <div
                   key={staffMember.ghl_id}
-                  className="border-r last:border-r-0 bg-background flex-shrink-0 relative select-none"
+                  className={cn(
+                    "border-r last:border-r-0 flex-shrink-0 relative transition-all duration-300",
+                    isCollapsed ? "bg-[#601625]/5 cursor-pointer hover:bg-[#601625]/10" : "bg-background select-none"
+                  )}
                   style={{ width: `${columnWidth}px` }}
+                  onClick={(e) => {
+                    if (isCollapsed && isUnavailable) {
+                      toggleColumnCollapse(staffMember.ghl_id)
+                    }
+                  }}
                   onMouseDown={(e) => {
+                    // Prevent drag selection when collapsed
+                    if (isCollapsed) return
                     // Only left click within grid area
                     if (e.button !== 0) return
                     const container = e.currentTarget as HTMLDivElement
@@ -1346,8 +1469,50 @@ const StaffOverviewView = ({
                     openPrefilledBreakDialog(staffMember.ghl_id, startAbs, endAbs)
                   }}
                 >
+                  {/* Collapsed indicator - show throughout the column */}
+                  {isCollapsed && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <div 
+                        className="font-medium text-xs text-[#601625] whitespace-nowrap mb-4"
+                        style={{ 
+                          writingMode: 'vertical-rl',
+                          textOrientation: 'mixed',
+                          transform: 'rotate(180deg)'
+                        }}
+                      >
+                        {staffMember.name}
+                      </div>
+                      {/* Unavailability reason */}
+                      <div className="text-center">
+                        {isStaffOnLeave(staffMember.ghl_id) && (
+                          <div className="text-2xl mb-1">🏖️</div>
+                        )}
+                        {!getSalonWorkingHours() && (
+                          <div className="text-2xl mb-1">🔒</div>
+                        )}
+                        {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
+                          <div className="text-2xl mb-1">💤</div>
+                        )}
+                        <div 
+                          className="text-[10px] text-[#601625] font-medium whitespace-nowrap"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)'
+                          }}
+                        >
+                          {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
+                           !getSalonWorkingHours() ? "Closed" : "Day Off"}
+                        </div>
+                      </div>
+                      <div className="mt-4 text-[10px] text-gray-500 px-2 py-1 rounded bg-white/80 border border-gray-200">
+                        Click to expand
+                      </div>
+                    </div>
+                  )}
+
                   {/* Hour lines for this staff column */}
-                  {timeSlots.map((time, index) => {
+                  {!isCollapsed && timeSlots.map((time, index) => {
                     return (
                       <div
                         key={time}
@@ -1361,7 +1526,7 @@ const StaffOverviewView = ({
                   })}
 
                   {/* Non-working hours grey overlay */}
-                  {getNonWorkingPeriods(staffMember).map((period, index) => {
+                  {!isCollapsed && getNonWorkingPeriods(staffMember).map((period, index) => {
                     // Calculate slot index based on time
     // Each slot is 60 minutes, starting from 8:00 AM (slot 0)
     const startSlotIndex = (period.startMinutes - (8 * 60)) / 60
@@ -1450,7 +1615,7 @@ const StaffOverviewView = ({
                   })}
 
                   {/* Live time indicator */}
-                  {(() => {
+                  {!isCollapsed && (() => {
                     const currentTimePosition = getCurrentTimePosition()
                     if (currentTimePosition === null) return null
                     
@@ -1465,7 +1630,7 @@ const StaffOverviewView = ({
                   })()}
 
                   {/* Selection overlay while dragging */}
-                  {isSelecting && selectStaffId === staffMember.ghl_id && selectStartY !== null && selectEndY !== null && (
+                  {!isCollapsed && isSelecting && selectStaffId === staffMember.ghl_id && selectStartY !== null && selectEndY !== null && (
                     <div
                       className="absolute left-0 right-0 bg-primary/10 border-l-4 border-l-primary z-30"
                       style={{
@@ -1476,7 +1641,7 @@ const StaffOverviewView = ({
                   )}
 
                   {/* Leaves for this staff member */}
-                  {getStaffLeaves(staffMember.ghl_id).map((leave) => {
+                  {!isCollapsed && getStaffLeaves(staffMember.ghl_id).map((leave) => {
                     const style = getLeaveBreakStyle(leave["Event/Start"], leave["Event/End"])
                     if (style.display === 'none') return null
 
@@ -1498,7 +1663,7 @@ const StaffOverviewView = ({
                   })}
 
                   {/* Breaks for this staff member */}
-                  {getStaffBreaks(staffMember.ghl_id).map((breakItem) => {
+                  {!isCollapsed && getStaffBreaks(staffMember.ghl_id).map((breakItem) => {
                     // For recurring breaks, we need to check if it applies to current day
                     const currentDay = new Date().getDay() // 0 = Sunday, 1 = Monday, etc.
                     const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
@@ -1542,7 +1707,7 @@ const StaffOverviewView = ({
                   })}
 
                   {/* Appointments for this staff member */}
-                  {getStaffAppointments(staffMember.ghl_id).map((appointment: Appointment) => {
+                  {!isCollapsed && getStaffAppointments(staffMember.ghl_id).map((appointment: Appointment) => {
                     const style = getAppointmentStyleImproved(appointment, staffMember.ghl_id)
                     if (style.display === 'none') return null
 
