@@ -414,6 +414,15 @@ const StaffOverviewView = ({
   const [selectEndY, setSelectEndY] = React.useState<number | null>(null)
   type BreakPrefill = { ghl_id: string; name?: string; startMinutes: number; endMinutes: number; date?: string }
   const [breakDialogOpen, setBreakDialogOpen] = React.useState(false)
+  // Small action menu after drag selection
+  const [selectionMenu, setSelectionMenu] = React.useState<{
+    open: boolean;
+    x: number;
+    y: number;
+    staffId?: string;
+    startAbs?: number;
+    endAbs?: number;
+  }>({ open: false, x: 0, y: 0 })
   const [prefillBlock, setPrefillBlock] = React.useState<BreakPrefill | null>(null)
 
   const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
@@ -1241,6 +1250,49 @@ const StaffOverviewView = ({
         </div>
       )}
       
+              {/* Selection quick actions */}
+              {selectionMenu.open && (
+                <div
+                  className="fixed z-50 bg-white border border-neutral-200 rounded-md shadow-md"
+                  style={{ left: selectionMenu.x + 8, top: selectionMenu.y + 8 }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <div className="flex flex-col divide-y">
+                    <button
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
+                      onClick={() => {
+                        setSelectionMenu((m) => ({ ...m, open: false }))
+                        if (selectionMenu.staffId && selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined) {
+                          openPrefilledBreakDialog(selectionMenu.staffId, selectionMenu.startAbs, selectionMenu.endAbs)
+                        }
+                      }}
+                    >
+                      + Add Break
+                    </button>
+                    <button
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
+                      onClick={() => {
+                        // Open the existing new appointment dialog with prefilled time via URL params
+                        setSelectionMenu((m) => ({ ...m, open: false }))
+                        if (selectionMenu.startAbs !== undefined) {
+                          const hours = Math.floor(selectionMenu.startAbs / 60)
+                          const mins = selectionMenu.startAbs % 60
+                          const dateStr = currentDate.toISOString().slice(0,10)
+                          const params = new URLSearchParams({
+                            openBooking: '1',
+                            date: dateStr,
+                            hour: String(hours),
+                            minute: String(mins)
+                          })
+                          window.open(`/appointments?${params.toString()}`, '_blank')
+                        }
+                      }}
+                    >
+                      + Add Appointment
+                    </button>
+                  </div>
+                </div>
+              )}
       {/* Header - Sticky time column + scrollable staff columns */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
         {/* Sticky Time Header */}
@@ -1485,7 +1537,15 @@ const StaffOverviewView = ({
                       return false
                     }
                     if (overlaps(startAbs, endAbs)) return
-                    openPrefilledBreakDialog(staffMember.ghl_id, startAbs, endAbs)
+                    // Show quick action menu at mouse position
+                    setSelectionMenu({
+                      open: true,
+                      x: e.clientX,
+                      y: e.clientY,
+                      staffId: staffMember.ghl_id,
+                      startAbs,
+                      endAbs,
+                    })
                   }}
                 >
                   {/* Collapsed indicator - show throughout the column */}

@@ -412,6 +412,8 @@ function BookingsPageInner() {
   const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
   const [newAppLoadingSlots, setNewAppLoadingSlots] = React.useState(false)
   const [newAppLoadingDates, setNewAppLoadingDates] = React.useState(false)
+  // Track requested date from deep link to choose nearest available
+  const desiredNewAppDateRef = React.useRef<string | null>(null)
 
   // Fetch GHL booking details
   const fetchGHLBookingDetails = React.useCallback(async (bookingId: string) => {
@@ -445,6 +447,44 @@ function BookingsPageInner() {
       }
     }
   }, [searchParams, data, fetchGHLBookingDetails])
+
+  // Open New Appointment dialog from calendar deep-link and prefill date/time
+  React.useEffect(() => {
+    const openBooking = searchParams?.get("openBooking") === "1"
+    if (!openBooking) return
+    setNewAppointmentOpen(true)
+    const dateParam = searchParams?.get("date")
+    const hourParam = searchParams?.get("hour")
+    const minuteParam = searchParams?.get("minute")
+    if (dateParam) {
+      desiredNewAppDateRef.current = dateParam
+      setNewAppSelectedDate(dateParam)
+    }
+    if (hourParam && minuteParam) {
+      const h = Number(hourParam)
+      const m = Number(minuteParam)
+      const ampm = h >= 12 ? 'PM' : 'AM'
+      const h12 = ((h + 11) % 12) + 1
+      const mm = String(m).padStart(2, '0')
+      setNewAppSelectedTime(`${h12}:${mm} ${ampm}`)
+    }
+  }, [searchParams])
+
+  // When available dates load, if requested date is not available, pick the next available date >= requested
+  React.useEffect(() => {
+    const desired = desiredNewAppDateRef.current
+    if (!desired) return
+    if (!newAppDates || newAppDates.length === 0) return
+    const hasDesired = newAppDates.some(d => d.dateString === desired)
+    if (hasDesired) return
+    const next = newAppDates.find(d => d.dateString >= desired)
+    if (next) {
+      setNewAppSelectedDate(next.dateString)
+    } else {
+      // fallback to the first available date
+      setNewAppSelectedDate(newAppDates[0].dateString)
+    }
+  }, [newAppDates])
 
   // Fetch bookings on mount and when filters change (server-side pagination + filtering)
   React.useEffect(() => {
@@ -2445,6 +2485,13 @@ function BookingsPageInner() {
             setNewAppointmentOpen(open)
             if (!open) {
               resetNewAppointmentForm()
+              // Remove deep-link params when dialog closes
+              const params = new URLSearchParams(Array.from(searchParams?.entries?.() || []))
+              params.delete('openBooking')
+              params.delete('date')
+              params.delete('hour')
+              params.delete('minute')
+              router.replace(`?${params.toString()}`)
             }
           }}>
             <ConfirmContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
