@@ -12,6 +12,10 @@ import {
   CreditCard,
   ChevronDown,
   ChevronRight,
+  Scissors,
+  CalendarDays,
+  AlarmClock,
+  Coffee,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -30,15 +34,10 @@ import { useUser } from "@/contexts/user-context"
 
 const ACCENT = "#601625"
 
-type Item = {
-  title: string
-  url: string
-  icon?: LucideIcon
-}
+type Item = { title: string; url: string; icon: LucideIcon }
+type ManageItem = { title: string; url: string; icon: LucideIcon }
 
-type ManageItem = { title: string; url: string }
-
-/* ---------- Section heading with line that continues after the text ---------- */
+/* ---------------- Section heading with a line through the middle --------------- */
 function SectionHeading({
   children,
   action,
@@ -49,10 +48,12 @@ function SectionHeading({
   return (
     <div className="px-3 pt-5">
       <div className="flex items-center gap-2">
-        <span className="text-[12px] font-semibold text-black tracking-wide whitespace-nowrap relative">
-          {/* the “line after text” effect */}
-          <span className="after:content-[''] after:ml-2 after:block after:h-px after:w-[9999px] after:bg-neutral-200 after:relative after:top-[-0.55em] inline-flex">
+        {/* The label + the line that continues from its RIGHT, aligned to center */}
+        <span className="relative inline-flex items-center text-[12px] font-semibold text-black tracking-wide">
+          <span className="relative">
             {children}
+            {/* extend line from the middle-right of the word */}
+            <span className="absolute left-full top-1/2 ml-2 h-px w-[9999px] -translate-y-1/2 bg-neutral-200" />
           </span>
         </span>
         {action ? <div className="ml-auto">{action}</div> : null}
@@ -61,7 +62,7 @@ function SectionHeading({
   )
 }
 
-/* --------------------------- Main link (with icon) --------------------------- */
+/* --------------------------- Main link (with icon) ---------------------------- */
 function NavLink({
   href,
   icon: Icon,
@@ -98,19 +99,38 @@ function NavLink({
   )
 }
 
-/* ------------------------------ Sub (Manage) link --------------------------- */
-function SubNavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+/* ------------------------- Manage sublink (with icon) ------------------------- */
+function SubNavLink({
+  href,
+  label,
+  icon: Icon,
+  active,
+}: {
+  href: string
+  label: string
+  icon: LucideIcon
+  active: boolean
+}) {
   return (
     <Link
       href={href}
       className={[
-        "mx-4 my-1.5 block rounded-lg px-3 py-2 text-[14px] transition-colors",
+        "mx-3 my-1.5 flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition-colors",
         active
           ? "bg-[#601625]/10 text-black ring-1 ring-[#601625]/15"
           : "text-neutral-800 hover:bg-neutral-100/70",
       ].join(" ")}
     >
-      {label}
+      <span
+        className={[
+          "flex h-7 w-7 items-center justify-center rounded-md",
+          active ? "bg-[#601625]/15" : "bg-neutral-100",
+        ].join(" ")}
+        style={{ color: ACCENT }}
+      >
+        <Icon size={15} />
+      </span>
+      <span className="truncate">{label}</span>
     </Link>
   )
 }
@@ -127,7 +147,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { user } = useUser()
   const [manageOpen, setManageOpen] = React.useState(true)
 
-  // ------- unchanged auth logic -------
+  /* -------------------------- unchanged auth logic -------------------------- */
   React.useEffect(() => {
     let isMounted = true
     supabase.auth.getUser().then(({ data: result }) => {
@@ -143,9 +163,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       isMounted = false
     }
   }, [])
-  // -----------------------------------
+  /* ------------------------------------------------------------------------- */
 
   const prefix = getTeamPrefix()
+  const isActive = (url: string) =>
+    url === "/" ? pathname === "/" : pathname === url || pathname.startsWith(url + "/")
 
   // Today
   const todayItems: Item[] = [
@@ -160,27 +182,26 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     { title: "Reports", url: `${prefix}/dashboard`, icon: IconDashboard },
   ]
 
-  // Manage
+  // Manage (same routing logic, now with icons)
   const manageItems: ManageItem[] =
     user?.role === "barber"
       ? [
-          { title: "Hours", url: user?.ghlId ? `${prefix}/manage/staff-hours/${user.ghlId}` : `${prefix}/manage/staff-hours` },
-          { title: "Holidays", url: `${prefix}/manage/leaves` },
-          { title: "Breaks", url: `${prefix}/manage/breaks` },
+          {
+            title: "Hours",
+            url: user?.ghlId ? `${prefix}/manage/staff-hours/${user.ghlId}` : `${prefix}/manage/staff-hours`,
+            icon: AlarmClock,
+          },
+          { title: "Holidays", url: `${prefix}/manage/leaves`, icon: CalendarDays },
+          { title: "Breaks", url: `${prefix}/manage/breaks`, icon: Coffee },
         ]
       : [
-          { title: "Services", url: `${prefix}/manage/services` },
-          { title: "Salon Hours", url: `${prefix}/manage/salon-hours` },
-          { title: "Stylists", url: `${prefix}/manage/stylists` },
-          { title: "Holidays", url: `${prefix}/manage/leaves` },
-          { title: "Breaks", url: `${prefix}/manage/breaks` },
-          ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams" }] : []),
+          { title: "Services", url: `${prefix}/manage/services`, icon: Scissors },
+          { title: "Salon Hours", url: `${prefix}/manage/salon-hours`, icon: AlarmClock },
+          { title: "Stylists", url: `${prefix}/manage/stylists`, icon: UsersRound },
+          { title: "Holidays", url: `${prefix}/manage/leaves`, icon: CalendarDays },
+          { title: "Breaks", url: `${prefix}/manage/breaks`, icon: Coffee },
+          ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams", icon: Settings }] : []),
         ]
-
-  const isActive = (url: string) =>
-    url === "/"
-      ? pathname === "/"
-      : pathname === url || pathname.startsWith(url + "/")
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -195,7 +216,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SectionHeading>Today</SectionHeading>
         <nav className="mt-1">
           {todayItems.map((it) => (
-            <NavLink key={it.title} href={it.url} icon={it.icon!} label={it.title} active={isActive(it.url)} />
+            <NavLink key={it.title} href={it.url} icon={it.icon} label={it.title} active={isActive(it.url)} />
           ))}
         </nav>
 
@@ -203,11 +224,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SectionHeading>View</SectionHeading>
         <nav className="mt-1">
           {viewItems.map((it) => (
-            <NavLink key={it.title} href={it.url} icon={it.icon!} label={it.title} active={isActive(it.url)} />
+            <NavLink key={it.title} href={it.url} icon={it.icon} label={it.title} active={isActive(it.url)} />
           ))}
         </nav>
 
-        {/* MANAGE (heading holds the collapse control; no duplicate word below) */}
+        {/* MANAGE (header contains the collapse control, no duplicate title below) */}
         <SectionHeading
           action={
             <button
@@ -217,9 +238,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
               title={manageOpen ? "Collapse" : "Expand"}
             >
               {manageOpen ? (
-                <ChevronDown size={16} className="text-neutral-500 group-hover:text-black" />
+                <ChevronDown size={16} className="text-neutral-600 group-hover:text-black" />
               ) : (
-                <ChevronRight size={16} className="text-neutral-500 group-hover:text-black" />
+                <ChevronRight size={16} className="text-neutral-600 group-hover:text-black" />
               )}
             </button>
           }
@@ -230,7 +251,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         {manageOpen && (
           <div className="mt-2">
             {manageItems.map((it) => (
-              <SubNavLink key={it.title} href={it.url} label={it.title} active={isActive(it.url)} />
+              <SubNavLink
+                key={it.title}
+                href={it.url}
+                label={it.title}
+                icon={it.icon}
+                active={isActive(it.url)}
+              />
             ))}
           </div>
         )}
