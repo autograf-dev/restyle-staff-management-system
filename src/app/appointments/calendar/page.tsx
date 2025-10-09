@@ -1006,21 +1006,45 @@ const StaffOverviewView = ({
 
   // Helper function to get break periods for staff member on current day
   const getStaffBreakPeriods = (staffGhlId: string) => {
-    const dayBreaks = getStaffBreaks(staffGhlId)
+    const allBreaks = getStaffBreaks(staffGhlId)
     const periods: { startMinutes: number, endMinutes: number }[] = []
     
-    dayBreaks.forEach(breakItem => {
-      const startTime = breakItem["Block/Start"]
-      const endTime = breakItem["Block/End"]
+    allBreaks.forEach(breakItem => {
+      // Check if this break applies to the current date
+      const selectedDay = currentDate.getDay() // 0 = Sunday, 1 = Monday, etc.
+      const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
       
-      if (startTime && endTime) {
-        // Break times are stored as minutes from midnight
-        const startMinutes = parseInt(startTime)
-        const endMinutes = parseInt(endTime)
+      let shouldIncludeBreak = false
+      
+      if (breakItem["Block/Recurring"] === "true") {
+        // For recurring breaks, check if it applies to the selected calendar date's day of week
+        shouldIncludeBreak = recurringDays.includes(selectedDay.toString())
+      } else {
+        // For non-recurring breaks, check if the break date matches the selected calendar date
+        if (breakItem["Block/Date"]) {
+          const dateString = breakItem["Block/Date"]
+          const datePart = dateString.split(',')[0].trim() // "10/9/2025"
+          const [month, day, year] = datePart.split('/').map(num => parseInt(num))
+          const breakDateOnly = new Date(year, month - 1, day) // month is 0-indexed
+          const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+          
+          shouldIncludeBreak = breakDateOnly.getTime() === calendarDate.getTime()
+        }
+      }
+      
+      if (shouldIncludeBreak) {
+        const startTime = breakItem["Block/Start"]
+        const endTime = breakItem["Block/End"]
         
-        // Only include breaks within our calendar range (8AM-8PM)
-        if (startMinutes >= 8 * 60 && endMinutes <= 20 * 60) {
-          periods.push({ startMinutes, endMinutes })
+        if (startTime && endTime) {
+          // Break times are stored as minutes from midnight
+          const startMinutes = parseInt(startTime)
+          const endMinutes = parseInt(endTime)
+          
+          // Only include breaks within our calendar range (8AM-8PM)
+          if (startMinutes >= 8 * 60 && endMinutes <= 20 * 60) {
+            periods.push({ startMinutes, endMinutes })
+          }
         }
       }
     })
@@ -1749,18 +1773,33 @@ const StaffOverviewView = ({
                       if (!recurringDays.includes(selectedDay.toString())) {
                         return null
                       }
-                    } else {
-                      // For non-recurring breaks, check if the break date matches the selected calendar date
-                      if (breakItem["Block/Date"]) {
-                        const breakDate = new Date(breakItem["Block/Date"])
-                        const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
-                        const breakDateOnly = new Date(breakDate.getFullYear(), breakDate.getMonth(), breakDate.getDate())
-                        
-                        if (breakDateOnly.getTime() !== calendarDate.getTime()) {
-                          return null // Skip if break is not scheduled for this date
+                      } else {
+                        // For non-recurring breaks, check if the break date matches the selected calendar date
+                        if (breakItem["Block/Date"]) {
+                          // Parse the date string more carefully
+                          const dateString = breakItem["Block/Date"]
+                          const datePart = dateString.split(',')[0].trim() // "10/9/2025"
+                          const [month, day, year] = datePart.split('/').map(num => parseInt(num))
+                          const breakDateOnly = new Date(year, month - 1, day) // month is 0-indexed
+                          
+                          const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+                          
+                          // Debug logging
+                          console.log(`🔍 Date comparison for ${staffMember.name}:`)
+                          console.log(`   Break Date String: "${dateString}"`)
+                          console.log(`   Parsed Break Date: ${breakDateOnly.toDateString()}`)
+                          console.log(`   Calendar Date: ${calendarDate.toDateString()}`)
+                          console.log(`   Break Date Time: ${breakDateOnly.getTime()}`)
+                          console.log(`   Calendar Date Time: ${calendarDate.getTime()}`)
+                          console.log(`   Dates Match: ${breakDateOnly.getTime() === calendarDate.getTime()}`)
+                          
+                          if (breakDateOnly.getTime() !== calendarDate.getTime()) {
+                            return null // Skip if break is not scheduled for this date
+                          }
+                        } else {
+                          return null
                         }
                       }
-                    }
 
                     // Create start and end times for the break
                     const startMinutes = parseInt(breakItem["Block/Start"]) || 0
@@ -2556,8 +2595,14 @@ export default function CalendarPage() {
         return days.includes(dow)
       }
       if (!bk['Block/Date']) return false
-      const d = new Date(bk['Block/Date'])
-      return isSameDay(d, date)
+      
+      // Parse the date string more carefully (same logic as in the main break display)
+      const dateString = bk['Block/Date']
+      const datePart = dateString.split(',')[0].trim() // "10/9/2025"
+      const [month, day, year] = datePart.split('/').map(num => parseInt(num))
+      const breakDateOnly = new Date(year, month - 1, day) // month is 0-indexed
+      
+      return isSameDay(breakDateOnly, date)
     })
     if (user?.role === 'barber' && user.ghlId) return items.filter(i => i.ghl_id === user.ghlId)
     return items
