@@ -948,7 +948,25 @@ function BookingsPageInner() {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
       
-      const services = (data.calendars || []).map((service: any) => {
+      const services = (data.calendars || []).map((service: {
+        id?: string;
+        name?: string;
+        description?: string;
+        slotDuration?: number;
+        duration?: number;
+        slotDurationUnit?: string;
+        durationUnit?: string;
+        durationMinutes?: number;
+        timeSlotDuration?: number;
+        length?: number;
+        serviceDuration?: number;
+        durationInMinutes?: number;
+        timeDuration?: number;
+        appointmentDuration?: number;
+        bookingDuration?: number;
+        sessionDuration?: number;
+        teamMembers?: Array<{ userId: string; priority?: number; selected?: boolean }>;
+      }) => {
         // Debug: Log ALL possible duration fields
         console.log(`Service: ${service.name}`, {
           slotDuration: service.slotDuration,

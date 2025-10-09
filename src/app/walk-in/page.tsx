@@ -431,7 +431,16 @@ export default function WalkInPage() {
       const data = await response.json()
       
       // Transform the services data to match our interface
-      const transformedServices = (data.services || []).map((service: any) => {
+      const transformedServices = (data.services || []).map((service: {
+        id?: string;
+        name?: string;
+        description?: string;
+        slotDuration?: number;
+        duration?: number;
+        slotDurationUnit?: string;
+        durationUnit?: string;
+        teamMembers?: Array<{ userId: string; priority: number; selected: boolean }>
+      }) => {
         const price = extractPriceFromDescription(service.description || '')
         // Compute duration in minutes using slotDuration and slotDurationUnit when available
         const rawDuration = Number(service.slotDuration) || Number(service.duration) || 0
