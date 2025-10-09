@@ -172,7 +172,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   // Today
   const todayItems: Item[] = [
     { title: "Calendar", url: `${prefix}/calendar`, icon: CalendarIcon },
-    { title: "Dashboard", url: `${prefix}/today/dashboard`, icon: IconDashboard },
+    { title: "Overview", url: `${prefix}/today/dashboard`, icon: IconDashboard },
   ]
 
   // View
@@ -214,7 +214,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent className="pb-2">
         {/* TODAY */}
-        <SectionHeading>Today</SectionHeading>
+        <SectionHeading>Today's</SectionHeading>
         <nav className="mt-1">
           {todayItems.map((it) => (
             <NavLink key={it.title} href={it.url} icon={it.icon} label={it.title} active={isActive(it.url)} />

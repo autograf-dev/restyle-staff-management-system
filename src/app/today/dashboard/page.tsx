@@ -186,7 +186,7 @@ export default function TodayDashboardPage() {
       if (txData.ok) setTransactions(txData.data || [])
       
       if (staffData.ok) {
-        const staff = (staffData.data || []).map((s: any) => ({
+        const staff = (staffData.data || []).map((s: { [key: string]: string | number | null | undefined }) => ({
           id: s["🔒 Row ID"] || s["ð Row ID"] || "",
           name: s["Barber/Name"],
           ghl_id: s["ghl_id"]
@@ -232,7 +232,7 @@ export default function TodayDashboardPage() {
             <header className="flex h-16 shrink-0 items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Today's Dashboard</h1>
+              <h1 className="text-xl font-semibold">Today&apos;s Dashboard</h1>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
               <div className="flex items-center justify-center h-64">
@@ -254,9 +254,9 @@ export default function TodayDashboardPage() {
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Today's Dashboard</h1>
+              <h1 className="text-xl font-semibold">Today&apos;s Dashboard</h1>
             </div>
-            <p className="text-sm text-muted-foreground ml-12">View today's performance metrics and staff activity</p>
+            <p className="text-sm text-muted-foreground ml-12">View today&apos;s performance metrics and staff activity</p>
           </header>
           
           <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
@@ -285,7 +285,7 @@ export default function TodayDashboardPage() {
                   ) : (
                     <>
                       <div className="text-2xl font-bold">{formatCurrency(kpiData.totalRevenue)}</div>
-                      <p className="text-xs text-muted-foreground">Today's total revenue</p>
+                      <p className="text-xs text-muted-foreground">Today&apos;s total revenue</p>
                     </>
                   )}
                 </CardContent>
@@ -481,7 +481,7 @@ export default function TodayDashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <CreditCard className="h-5 w-5" />
-                    Today's Transactions - {selectedStaff}
+                    Today&apos;s Transactions - {selectedStaff}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
