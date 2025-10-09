@@ -247,6 +247,15 @@ function formatDuration(startIso?: string, endIso?: string) {
   return `${m} mins`
 }
 
+function formatServiceDuration(durationMinutes?: number) {
+  if (!durationMinutes || durationMinutes <= 0) return '—'
+  const h = Math.floor(durationMinutes / 60)
+  const m = durationMinutes % 60
+  if (h && m) return `${h}h ${m}m`
+  if (h) return `${h}h`
+  return `${m} mins`
+}
+
 // Convert America/Denver wall time to UTC ISO, mirroring supabase.vue
 function getTimeZoneOffsetInMs(timeZone: string, utcDate: Date) {
   const dtf = new Intl.DateTimeFormat('en-US', {
@@ -939,8 +948,75 @@ function BookingsPageInner() {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
       
-      const services = (data.calendars || []).map((service: { id: string; name: string; duration?: number; slotDuration?: number; teamMembers?: Array<{ userId: string; name: string }>; description?: string }) => {
-        const durationInMins = service.slotDuration || service.duration || 0
+      const services = (data.calendars || []).map((service: any) => {
+        // Debug: Log ALL possible duration fields
+        console.log(`Service: ${service.name}`, {
+          slotDuration: service.slotDuration,
+          slotDurationUnit: service.slotDurationUnit,
+          duration: service.duration,
+          durationMinutes: service.durationMinutes,
+          timeSlotDuration: service.timeSlotDuration,
+          length: service.length,
+          serviceDuration: service.serviceDuration,
+          durationInMinutes: service.durationInMinutes,
+          timeDuration: service.timeDuration,
+          appointmentDuration: service.appointmentDuration,
+          bookingDuration: service.bookingDuration,
+          sessionDuration: service.sessionDuration
+        })
+        
+        // Try multiple possible duration field names - check ALL possible fields
+        const possibleDurations = [
+          service.slotDuration,
+          service.duration,
+          service.durationMinutes,
+          service.timeSlotDuration,
+          service.length,
+          service.serviceDuration,
+          service.durationInMinutes,
+          service.timeDuration,
+          service.appointmentDuration,
+          service.bookingDuration,
+          service.sessionDuration
+        ].filter(d => d !== null && d !== undefined && d > 0)
+        
+        const rawDuration = possibleDurations[0] || 0
+        
+        // Try to determine the correct duration conversion
+        let durationInMins = 0
+        
+        if (rawDuration > 0) {
+          // Check the slotDurationUnit to determine conversion
+          const durationUnit = service.slotDurationUnit || 'hours'
+          
+          if (durationUnit === 'hours') {
+            durationInMins = rawDuration * 60 // Convert hours to minutes
+          } else if (durationUnit === 'mins' || durationUnit === 'minutes') {
+            durationInMins = rawDuration // Already in minutes
+          } else {
+            // Fallback: if duration is very small (likely in hours), convert to minutes
+            if (rawDuration < 10) {
+              durationInMins = rawDuration * 60 // Convert hours to minutes
+            } else if (rawDuration >= 10) {
+              durationInMins = rawDuration // Already in minutes
+            }
+          }
+        }
+        
+        // If still no duration found, try to extract from description
+        if (durationInMins === 0 && service.description) {
+          const durationMatch = service.description.match(/(\d+)\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours)/i)
+          if (durationMatch) {
+            const durationValue = parseInt(durationMatch[1])
+            const unit = durationMatch[0].toLowerCase()
+            if (unit.includes('hr') || unit.includes('hour')) {
+              durationInMins = durationValue * 60
+            } else {
+              durationInMins = durationValue
+            }
+          }
+        }
+        
         
         // Extract price from description HTML (like supabase.vue)
         let price = 0
@@ -950,6 +1026,9 @@ function BookingsPageInner() {
             price = parseFloat(priceMatch[1])
           }
         }
+        
+        // Debug: Log the final duration
+        console.log(`Final duration for ${service.name}: ${durationInMins} minutes (from raw: ${rawDuration}, used field: ${possibleDurations[0] ? 'found' : 'none'})`)
         
         return {
           label: service.name,
@@ -2452,7 +2531,7 @@ function BookingsPageInner() {
                                             <div className="flex items-center gap-2 mt-2">
                                               <Clock className="h-4 w-4 text-neutral-500" />
                                               <span className="text-sm text-neutral-600">
-                                                {serviceDuration} min
+                                                {formatServiceDuration(serviceDuration)}
                                               </span>
                                               <span className="text-neutral-300">•</span>
                                               <span className="text-sm font-semibold text-[#7b1d1d]">

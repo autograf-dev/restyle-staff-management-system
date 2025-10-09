@@ -431,16 +431,24 @@ export default function WalkInPage() {
       const data = await response.json()
       
       // Transform the services data to match our interface
-      const transformedServices = (data.services || []).map((service: { id: string; name: string; description?: string; slotDuration?: number; teamMembers?: Array<{ userId: string; priority: number; selected: boolean }> }) => {
-          const price = extractPriceFromDescription(service.description || '')
-        console.log(`Service: ${service.name}, Price: ${price}, Duration: ${service.slotDuration}`)
+      const transformedServices = (data.services || []).map((service: any) => {
+        const price = extractPriceFromDescription(service.description || '')
+        // Compute duration in minutes using slotDuration and slotDurationUnit when available
+        const rawDuration = Number(service.slotDuration) || Number(service.duration) || 0
+        const unit = (service.slotDurationUnit || service.durationUnit || '').toString().toLowerCase()
+        const durationMinutes = rawDuration > 0
+          ? (unit === 'hours' || unit === 'hour')
+            ? rawDuration * 60
+            : rawDuration // assume minutes
+          : 0
+        console.log(`Service: ${service.name}, Price: ${price}, Duration: ${rawDuration} ${unit || '(mins assumed)'} => ${durationMinutes} mins`)
         return {
-            id: service.id,
+          id: service.id,
           name: service.name,
           price: price,
-          duration: service.slotDuration || 0,
+          duration: durationMinutes,
           description: service.description,
-            teamMembers: service.teamMembers || []
+          teamMembers: service.teamMembers || []
         }
       })
       
@@ -1508,7 +1516,7 @@ export default function WalkInPage() {
                                                       <div className="flex items-center gap-2 mt-2">
                                                         <Clock className="h-4 w-4 text-neutral-500" />
                                                         <span className="text-sm text-neutral-600">
-                                                          {serviceDuration} min
+                                                          {formatDuration(serviceDuration)}
                                                         </span>
                                                         <span className="text-neutral-300">•</span>
                                                         <span className="text-sm font-semibold text-[#7b1d1d]">
@@ -1877,7 +1885,7 @@ export default function WalkInPage() {
                           <div key={`additional-${index}`} className="flex items-center justify-between px-4 py-3">
                             <div>
                               <div className="text-[14px] font-medium text-neutral-900">{service.name}</div>
-                              <div className="text-[12px] text-neutral-500">{service.duration} min • {service.staffNames?.join(', ') || 'Multiple staff'}</div>
+                              <div className="text-[12px] text-neutral-500">{formatDuration(service.duration)} • {service.staffNames?.join(', ') || 'Multiple staff'}</div>
                       </div>
                             <div className="flex items-center gap-2">
                               <div className="text-[14px] font-medium text-neutral-900">{formatCurrency(service.price)}</div>
