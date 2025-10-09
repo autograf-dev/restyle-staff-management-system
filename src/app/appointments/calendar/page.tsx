@@ -1276,24 +1276,10 @@ const StaffOverviewView = ({
                   title={isUnavailable ? (isCollapsed ? "Click to expand" : "Click to collapse") : undefined}
                 >
                   {isCollapsed ? (
-                    // Collapsed view - vertical text with always-visible expand hint
-                    <div className="flex flex-col items-center justify-between h-full py-2">
-                      {/* Expand hint at top */}
-                      <div className="animate-pulse">
-                        <div 
-                          className="text-[9px] text-[#601625] font-semibold px-1 py-1.5 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-md"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)'
-                          }}
-                        >
-                          Expand ↕
-                        </div>
-                      </div>
-                      
-                      {/* Staff name and status in center area */}
-                      <div className="flex flex-col items-center gap-2 flex-1 justify-center">
+                    // Collapsed view - compact vertical layout
+                    <div className="flex flex-col items-center justify-center h-full relative">
+                      {/* Staff name with expand hint overlaid at bottom */}
+                      <div className="flex flex-col items-center gap-1.5">
                         <div 
                           className="font-medium text-xs text-[#601625] whitespace-nowrap"
                           style={{ 
@@ -1320,6 +1306,19 @@ const StaffOverviewView = ({
                             <span className="text-[10px] opacity-60 grayscale">💤</span>
                           </div>
                         )}
+                      </div>
+                      {/* Compact expand hint at bottom - overlaid */}
+                      <div className="absolute bottom-0.5 animate-pulse">
+                        <div 
+                          className="text-[8px] text-[#601625]/70 font-medium px-0.5"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)'
+                          }}
+                        >
+                          ↕
+                        </div>
                       </div>
                     </div>
                   ) : (

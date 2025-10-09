@@ -346,6 +346,16 @@ export default function DashboardPage() {
         : 0
       return sum + itemsTotal
     }, 0)
+    // Product revenue ONLY from Transaction Items (products only)
+    const productRevenue = filteredRows.reduce((sum, r) => {
+      const productsTotal = Array.isArray(r.items)
+        ? r.items.reduce((s: number, it: TxItem) => {
+            const isProduct = String(it.serviceId || '').toLowerCase().startsWith('product-')
+            return isProduct ? s + Number(it.price || 0) : s
+          }, 0)
+        : 0
+      return sum + productsTotal
+    }, 0)
     const tax = filteredRows.reduce((sum, r) => sum + Number(r.tax || 0), 0)
     const avg = count > 0 ? revenue / count : 0
     
@@ -376,7 +386,7 @@ export default function DashboardPage() {
       return acc
     }, { cash: 0, card: 0, giftCard: 0, other: 0 })
     
-    return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods }
+    return { count, revenue, tips, avg, uniqueStaff, subtotal, tax, paymentMethods, productRevenue }
   }, [filteredRows])
 
   // Calculate V1 metrics from old transaction items (comprehensive structure)
@@ -1485,7 +1495,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="text-[12px] font-medium text-[#601625]/70 uppercase tracking-wide">Product Revenue</div>
-                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(Math.max(0, kpis.revenue - kpis.subtotal))}</div>
+                              <div className="text-[20px] font-bold text-[#601625] mt-1">{formatCurrency(kpis.productRevenue)}</div>
                             </div>
                             <div className="h-10 w-10 rounded-xl bg-[#601625]/15 flex items-center justify-center">
                               <Package className="h-5 w-5 text-[#601625]" />

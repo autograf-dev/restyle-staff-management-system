@@ -39,7 +39,7 @@ export function LoginForm({
     } catch {}
     
     // Determine redirect based on user role
-    let redirectUrl = "/dashboard" // Default for admin
+    let redirectUrl = "/calendar" // Default for admin
     if (data.user) {
       const role = data.user.user_metadata?.role
       if (role === "legal") {

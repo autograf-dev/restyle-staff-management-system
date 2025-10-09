@@ -68,14 +68,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items?: { title: string; url: string }[]
     }[] = [
       {
-        title: "Dashboard",
-        url: `${prefix}/dashboard`,
-        icon: IconDashboard,
-      },
-      {
         title: "Calendar",
         url: `${prefix}/calendar`,
         icon: CalendarIcon,
+      },
+      {
+        title: "Reports",
+        url: `${prefix}/dashboard`,
+        icon: IconDashboard,
       },
       {
         title: "Appointments",
