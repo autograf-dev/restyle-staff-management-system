@@ -75,6 +75,39 @@ export default function TodayDashboardPage() {
   const formatCurrency = (n?: number | null) =>
     new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(Number(n || 0))
 
+  const formatDate = (s?: string | null) => {
+    if (!s) return "—"
+    try {
+      const date = new Date(s)
+      return date.toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" })
+    } catch {
+      return "—"
+    }
+  }
+
+  const getCustomerName = (transaction: TxRow) => {
+    if (transaction.walkInCustomerId && transaction.walkInCustomerId.trim() !== "") {
+      return transaction.walkInCustomerId.trim()
+    }
+    if (transaction.customerLookup && transaction.customerLookup.trim() !== "") {
+      return transaction.customerLookup.trim()
+    }
+    if (transaction.customerPhone) return `Guest (${transaction.customerPhone})`
+    return "Walk-in Guest"
+  }
+
+  const getServiceName = (transaction: TxRow) => {
+    if (transaction.services && transaction.services.trim() !== "") return transaction.services.trim()
+    if (transaction.items?.length) {
+      const names = transaction.items.map(i => i.serviceName).filter(Boolean).join(", ")
+      if (names) return names
+    }
+    return "Service Not Specified"
+  }
+
+  const getCustomerPhone = (transaction: TxRow) =>
+    transaction.customerPhone && transaction.customerPhone.trim() !== "" ? transaction.customerPhone.trim() : "No Phone Provided"
+
   // Filter transactions for today
   const todayTransactions = useMemo(() => {
     const today = new Date()
@@ -161,15 +194,21 @@ export default function TodayDashboardPage() {
   const loadData = async () => {
     setLoading(true)
     try {
+      // Use exact same date range logic as payments page
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+      const end = new Date(new Date(start).getTime() + 24 * 60 * 60 * 1000).toISOString()
+      const rangeQuery = `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+      
       const [txRes, staffRes, kpiRevenueRes, kpiTipsRes, kpiCountRes, kpiStaffRes, kpiTaxRes, paymentMethodRes] = await Promise.all([
         fetch('/api/transactions?limit=10000'),
         fetch('/api/barber-hours'),
-        fetch('/api/kpi/total-revenue?filter=today'),
-        fetch('/api/kpi/total-tips?filter=today'),
-        fetch('/api/kpi/transactions-count?filter=today'),
-        fetch('/api/kpi/active-staff?filter=today'),
-        fetch('/api/kpi/total-tax?filter=today'),
-        fetch('/api/kpi/revenue-by-payment-method?filter=today')
+        fetch(`/api/kpi/total-revenue?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/total-tips?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/transactions-count?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/active-staff?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/total-tax?filter=today${rangeQuery}`),
+        fetch(`/api/kpi/revenue-by-payment-method?filter=today${rangeQuery}`)
       ])
 
       const [txData, staffData, revenueData, tipsData, countData, staffCountData, taxData, paymentData] = await Promise.all([
@@ -232,7 +271,7 @@ export default function TodayDashboardPage() {
             <header className="flex h-16 shrink-0 items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Today&apos;s Dashboard</h1>
+              <h1 className="text-xl font-semibold">Today&apos;s Overview</h1>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
               <div className="flex items-center justify-center h-64">
@@ -251,26 +290,26 @@ export default function TodayDashboardPage() {
         <AppSidebar />
         <SidebarInset>
           <header className="flex flex-col gap-2 px-4 py-4">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
-              <h1 className="text-xl font-semibold">Today&apos;s Dashboard</h1>
-            </div>
-            <p className="text-sm text-muted-foreground ml-12">View today&apos;s performance metrics and staff activity</p>
-          </header>
-          
-          <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h1 className="text-xl font-semibold">Today&apos;s Overview</h1>
+              </div>
               <Button 
                 onClick={loadData} 
                 variant="outline" 
                 size="sm"
                 disabled={loading}
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
             </div>
+            <p className="text-sm text-muted-foreground ml-12">View today&apos;s performance metrics and staff activity</p>
+          </header>
+          
+          <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
 
             {/* KPI Cards from Payments Tab */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -363,27 +402,26 @@ export default function TodayDashboardPage() {
             {/* Payment Methods Section */}
             <div className="space-y-3">
               <h3 className="text-lg font-semibold">Revenue by Payment Method</h3>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                 {paymentMethodData.map((method, index) => (
-                  <Card key={method.method}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          index === 0 ? 'bg-green-500' :
-                          index === 1 ? 'bg-blue-500' :
-                          index === 2 ? 'bg-purple-500' :
-                          'bg-orange-500'
-                        }`}></div>
-                        <span className="text-xs font-medium text-gray-600 capitalize">{method.method}</span>
-                      </div>
-                      <div className="text-lg font-bold text-gray-900 mb-1">
-                        {formatCurrency(method.totalRevenue)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {method.transactionCount} transaction{method.transactionCount !== 1 ? 's' : ''}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div key={method.method} className="rounded-lg border border-neutral-200 p-3 hover:shadow-sm transition-shadow bg-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-neutral-600 capitalize truncate">{method.method}</span>
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          index === 0 ? "bg-green-500" : 
+                          index === 1 ? "bg-blue-500" : 
+                          index === 2 ? "bg-purple-500" : 
+                          index === 3 ? "bg-orange-500" : 
+                          "bg-gray-500"
+                        }`}
+                      />
+                    </div>
+                    <div className="text-lg font-bold text-neutral-900">{formatCurrency(method.totalRevenue)}</div>
+                    <div className="text-[11px] text-neutral-500 mt-0.5">
+                      {method.transactionCount} transaction{method.transactionCount !== 1 ? "s" : ""}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -392,7 +430,7 @@ export default function TodayDashboardPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Select Staff Member</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
-                {Array.from(staffMetrics.values()).map((staff) => {
+                {Array.from(staffMetrics.values()).filter(staff => staff.transactions > 0).map((staff) => {
                   const isSelected = staff.name === selectedStaff
                   return (
                     <button
@@ -477,47 +515,147 @@ export default function TodayDashboardPage() {
 
             {/* Transactions Table for Selected Staff */}
             {selectedStaff && selectedStaffTransactions.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
+              <Card className="border-neutral-200 shadow-none">
+                <CardHeader className="py-3 px-4 border-b border-gray-100">
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <div className="w-2 h-2 bg-[#601625] rounded-full" />
                     Today&apos;s Transactions - {selectedStaff}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Time</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Services</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead className="text-right">Tips</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedStaffTransactions.map((tx) => (
-                        <TableRow key={tx.id}>
-                          <TableCell className="font-medium">
-                            {tx.paymentDate ? new Date(tx.paymentDate).toLocaleTimeString('en-CA', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            }) : '—'}
-                          </TableCell>
-                          <TableCell>
-                            {tx.walkInCustomerId || tx.customerLookup || `Guest (${tx.customerPhone})`}
-                          </TableCell>
-                          <TableCell>
-                            {tx.items?.map(i => i.serviceName).filter(Boolean).join(', ') || tx.services || '—'}
-                          </TableCell>
-                          <TableCell className="capitalize">{tx.method || '—'}</TableCell>
-                          <TableCell className="text-right font-semibold">{formatCurrency(tx.totalPaid)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(tx.tip)}</TableCell>
-                        </TableRow>
+                <CardContent className="pt-4">
+                  <div className="overflow-hidden rounded-xl border border-gray-200 shadow-lg bg-white">
+                    {/* Header */}
+                    <div className="hidden lg:grid grid-cols-12 bg-white border-b-2 border-gray-100 px-6 py-4">
+                      <div className="col-span-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 bg-[#601625] rounded-full" />
+                          <span className="text-sm font-semibold text-gray-700 tracking-wide">SERVICE</span>
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-sm font-semibold text-gray-700 tracking-wide">CUSTOMER</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-sm font-semibold text-gray-700 tracking-wide">PHONE</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-sm font-semibold text-gray-700 tracking-wide">TIPS</span>
+                      </div>
+                      <div className="col-span-3">
+                        <span className="text-sm font-semibold text-gray-700 tracking-wide">PAYMENT</span>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-gray-100">
+                      {selectedStaffTransactions.map((r, index) => (
+                        <div
+                          key={r.id}
+                          className={`hidden lg:grid grid-cols-12 items-center px-6 py-6 hover:bg-gray-50/50 transition-all duration-200 ${
+                            index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                          }`}
+                        >
+                          {/* Service */}
+                          <div className="col-span-3 min-w-0">
+                            <div className="flex items-center gap-4">
+                              <div className="w-2 h-2 bg-[#601625] rounded-full flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-base font-semibold text-gray-900 truncate leading-tight">
+                                  {getServiceName(r)}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {r.paymentDate ? new Date(r.paymentDate).toLocaleTimeString('en-CA', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  }) : '—'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Customer */}
+                          <div className="col-span-2 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-base font-semibold text-gray-900 truncate">
+                                {getCustomerName(r)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Phone */}
+                          <div className="col-span-2">
+                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20">
+                              <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-1.5" />
+                              {getCustomerPhone(r)}
+                            </span>
+                          </div>
+
+                          {/* Tips */}
+                          <div className="col-span-2">
+                            <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
+                          </div>
+
+                          {/* Payment */}
+                          <div className="col-span-3">
+                            <div className="flex flex-col gap-1">
+                              <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5" />
+                                  {r.method || "Unknown"}
+                                </span>
+                                <span className="text-xs text-gray-500 font-mono">{formatDate(r.paymentDate)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </TableBody>
-                  </Table>
+
+                      {/* Mobile cards */}
+                      {selectedStaffTransactions.map((r) => (
+                        <div key={`mobile-${r.id}`} className="lg:hidden p-4 border-b border-gray-100 last:border-b-0">
+                          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4 shadow-sm">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-[#601625] rounded-full" />
+                                <div>
+                                  <div className="text-base font-semibold text-gray-900">{getServiceName(r)}</div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {r.paymentDate ? new Date(r.paymentDate).toLocaleTimeString('en-CA', { 
+                                      hour: '2-digit', 
+                                      minute: '2-digit' 
+                                    }) : '—'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5" />
+                                    {r.method || "Unknown"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Customer</div>
+                                <div className="text-sm font-medium text-gray-900">{getCustomerName(r)}</div>
+                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20 mt-1">
+                                  {getCustomerPhone(r)}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Tips</div>
+                                <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}

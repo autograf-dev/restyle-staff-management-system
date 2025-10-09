@@ -214,7 +214,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent className="pb-2">
         {/* TODAY */}
-        <SectionHeading>Today&apos</SectionHeading>
+        <SectionHeading>Today</SectionHeading>
         <nav className="mt-1">
           {todayItems.map((it) => (
             <NavLink key={it.title} href={it.url} icon={it.icon} label={it.title} active={isActive(it.url)} />
