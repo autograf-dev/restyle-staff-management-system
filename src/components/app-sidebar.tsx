@@ -172,11 +172,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   // Today
   const todayItems: Item[] = [
     { title: "Calendar", url: `${prefix}/calendar`, icon: CalendarIcon },
-    { title: "Payments", url: `${prefix}/payments`, icon: CreditCard },
+    { title: "Dashboard", url: `${prefix}/today/dashboard`, icon: IconDashboard },
   ]
 
   // View
   const viewItems: Item[] = [
+    { title: "Payments", url: `${prefix}/payments`, icon: CreditCard },
     { title: "Appointments", url: `${prefix}/appointments`, icon: Clock },
     ...(user?.role !== "barber" ? [{ title: "Customers", url: `${prefix}/customers`, icon: UsersRound }] : []),
     { title: "Reports", url: `${prefix}/dashboard`, icon: IconDashboard },
