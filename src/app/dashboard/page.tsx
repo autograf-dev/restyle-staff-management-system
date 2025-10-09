@@ -1198,7 +1198,7 @@ export default function DashboardPage() {
   }
 
   const handleGoBack = () => {
-    router.push('/appointments')
+    router.push('/calendar')
   }
 
   // Check if user has access to dashboard

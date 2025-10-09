@@ -31,6 +31,7 @@ export const NavMain = React.memo(function NavMain({
       title: string
       url: string
     }[]
+    isSeparator?: boolean
   }[]
 }) {
   const pathname = usePathname()
@@ -77,6 +78,15 @@ export const NavMain = React.memo(function NavMain({
     <SidebarGroup>
       <SidebarMenu>
         {items.map((item) => {
+          // Render separator
+          if (item.isSeparator) {
+            return (
+              <div key={item.title} className="my-2 px-2">
+                <div className="h-px bg-sidebar-border" />
+              </div>
+            )
+          }
+
           const subItems = item.items || []
           const parentActive = activeStatesMap.get(`${item.title}-parent`) || false
           

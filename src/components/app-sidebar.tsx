@@ -66,26 +66,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       url: string
       icon?: LucideIcon
       items?: { title: string; url: string }[]
+      isSeparator?: boolean
     }[] = [
+      // Primary navigation
       {
         title: "Calendar",
         url: `${prefix}/calendar`,
         icon: CalendarIcon,
       },
       {
-        title: "Reports",
-        url: `${prefix}/dashboard`,
-        icon: IconDashboard,
+        title: "Payments",
+        url: `${prefix}/payments`,
+        icon: CreditCard,
       },
+      // Separator
+      {
+        title: "separator-1",
+        url: "#",
+        isSeparator: true,
+      },
+      // Secondary navigation
       {
         title: "Appointments",
         url: `${prefix}/appointments`,
         icon: Clock,
-      },
-      {
-        title: "Payments",
-        url: `${prefix}/payments`,
-        icon: CreditCard,
       },
     ]
 
@@ -97,6 +101,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: UsersRound,
       })
     }
+
+    baseItems.push({
+      title: "Reports",
+      url: `${prefix}/dashboard`,
+      icon: IconDashboard,
+    })
+
+    // Add separator before Manage
+    baseItems.push({
+      title: "separator-2",
+      url: "#",
+      isSeparator: true,
+    })
 
     // Add manage section based on role
     if (user?.role === 'barber') {
