@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   Clock,
   UsersRound,
@@ -27,7 +28,6 @@ import { supabase } from "@/lib/supabase"
 import { useTeam } from "@/contexts/team-context"
 import { useUser } from "@/contexts/user-context"
 
-// Accent used in the rest of your app
 const ACCENT = "#601625"
 
 type Item = {
@@ -38,44 +38,85 @@ type Item = {
 
 type ManageItem = { title: string; url: string }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+/* ---------- Section heading with line that continues after the text ---------- */
+function SectionHeading({
+  children,
+  action,
+}: {
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
   return (
-    <div className="px-3 pt-6 pb-2 text-[12px] font-semibold tracking-wide text-neutral-500 select-none">
-      {children}
-      <div className="mt-2 h-px w-full bg-neutral-200/70" />
+    <div className="px-3 pt-5">
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] font-semibold text-black tracking-wide whitespace-nowrap relative">
+          {/* the “line after text” effect */}
+          <span className="after:content-[''] after:ml-2 after:block after:h-px after:w-[9999px] after:bg-neutral-200 after:relative after:top-[-0.55em] inline-flex">
+            {children}
+          </span>
+        </span>
+        {action ? <div className="ml-auto">{action}</div> : null}
+      </div>
     </div>
   )
 }
 
-function NavLink({ href, icon: Icon, children }: { href: string; icon: LucideIcon; children: React.ReactNode }) {
+/* --------------------------- Main link (with icon) --------------------------- */
+function NavLink({
+  href,
+  icon: Icon,
+  label,
+  active,
+}: {
+  href: string
+  icon: LucideIcon
+  label: string
+  active: boolean
+}) {
   return (
     <Link
       href={href}
-      className="mx-2 my-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium text-neutral-800 hover:bg-neutral-100/90 transition-colors"
+      className={[
+        "mx-2 my-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition-colors",
+        active
+          ? "bg-[#601625]/10 text-black ring-1 ring-[#601625]/20"
+          : "text-neutral-800 hover:bg-neutral-100/90",
+      ].join(" ")}
     >
       <span
-        className="flex h-8 w-8 items-center justify-center rounded-lg"
-        style={{ backgroundColor: "rgba(96, 22, 37, 0.08)", color: ACCENT }}
+        className={[
+          "flex h-8 w-8 items-center justify-center rounded-lg",
+          active ? "bg-[#601625]/15" : "bg-neutral-100",
+        ].join(" ")}
+        style={{ color: ACCENT }}
       >
         <Icon size={16} />
       </span>
-      <span className="truncate">{children}</span>
+      <span className="truncate">{label}</span>
+      {active && <span className="ml-auto h-2 w-2 rounded-full" style={{ background: ACCENT }} />}
     </Link>
   )
 }
 
-function SubNavLink({ href, children }: { href: string; children: React.ReactNode }) {
+/* ------------------------------ Sub (Manage) link --------------------------- */
+function SubNavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
   return (
     <Link
       href={href}
-      className="mx-4 my-1.5 block rounded-lg px-3 py-2 text-[14px] text-neutral-800 hover:bg-neutral-100/70 transition-colors"
+      className={[
+        "mx-4 my-1.5 block rounded-lg px-3 py-2 text-[14px] transition-colors",
+        active
+          ? "bg-[#601625]/10 text-black ring-1 ring-[#601625]/15"
+          : "text-neutral-800 hover:bg-neutral-100/70",
+      ].join(" ")}
     >
-      {children}
+      {label}
     </Link>
   )
 }
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname()
   const [authUser, setAuthUser] = React.useState<{ name: string; email: string; avatar: string }>({
     name: "Sutej",
     email: "sutej@autgraph.com",
@@ -86,7 +127,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { user } = useUser()
   const [manageOpen, setManageOpen] = React.useState(true)
 
-  // ---- unchanged auth logic ----
+  // ------- unchanged auth logic -------
   React.useEffect(() => {
     let isMounted = true
     supabase.auth.getUser().then(({ data: result }) => {
@@ -102,9 +143,8 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       isMounted = false
     }
   }, [])
-  // --------------------------------
+  // -----------------------------------
 
-  // Build URLs (unchanged logic)
   const prefix = getTeamPrefix()
 
   // Today
@@ -137,6 +177,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams" }] : []),
         ]
 
+  const isActive = (url: string) =>
+    url === "/"
+      ? pathname === "/"
+      : pathname === url || pathname.startsWith(url + "/")
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="pb-3">
@@ -147,54 +192,48 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent className="pb-2">
         {/* TODAY */}
-        <SectionLabel>Today</SectionLabel>
+        <SectionHeading>Today</SectionHeading>
         <nav className="mt-1">
           {todayItems.map((it) => (
-            <NavLink key={it.title} href={it.url} icon={it.icon!}>
-              {it.title}
-            </NavLink>
+            <NavLink key={it.title} href={it.url} icon={it.icon!} label={it.title} active={isActive(it.url)} />
           ))}
         </nav>
 
         {/* VIEW */}
-        <SectionLabel>View</SectionLabel>
+        <SectionHeading>View</SectionHeading>
         <nav className="mt-1">
           {viewItems.map((it) => (
-            <NavLink key={it.title} href={it.url} icon={it.icon!}>
-              {it.title}
-            </NavLink>
+            <NavLink key={it.title} href={it.url} icon={it.icon!} label={it.title} active={isActive(it.url)} />
           ))}
         </nav>
 
-        {/* MANAGE */}
-        <SectionLabel>Manage</SectionLabel>
-        <div className="mx-2 mt-1 rounded-xl border border-neutral-200/70 bg-white/70">
-          <button
-            onClick={() => setManageOpen((v) => !v)}
-            className="flex w-full items-center justify-between px-3 py-2.5 text-[14px] font-semibold text-neutral-800"
-          >
-            <span className="inline-flex items-center gap-3">
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-lg"
-                style={{ backgroundColor: "rgba(96, 22, 37, 0.08)", color: ACCENT }}
-              >
-                <Settings size={16} />
-              </span>
-              Manage
-            </span>
-            {manageOpen ? <ChevronDown size={16} className="text-neutral-500" /> : <ChevronRight size={16} className="text-neutral-500" />}
-          </button>
+        {/* MANAGE (heading holds the collapse control; no duplicate word below) */}
+        <SectionHeading
+          action={
+            <button
+              onClick={() => setManageOpen((v) => !v)}
+              className="group inline-flex h-6 w-6 items-center justify-center rounded-md hover:bg-neutral-100"
+              aria-label={manageOpen ? "Collapse Manage" : "Expand Manage"}
+              title={manageOpen ? "Collapse" : "Expand"}
+            >
+              {manageOpen ? (
+                <ChevronDown size={16} className="text-neutral-500 group-hover:text-black" />
+              ) : (
+                <ChevronRight size={16} className="text-neutral-500 group-hover:text-black" />
+              )}
+            </button>
+          }
+        >
+          Manage
+        </SectionHeading>
 
-          {manageOpen && (
-            <div className="pb-2">
-              {manageItems.map((it) => (
-                <SubNavLink key={it.title} href={it.url}>
-                  {it.title}
-                </SubNavLink>
-              ))}
-            </div>
-          )}
-        </div>
+        {manageOpen && (
+          <div className="mt-2">
+            {manageItems.map((it) => (
+              <SubNavLink key={it.title} href={it.url} label={it.title} active={isActive(it.url)} />
+            ))}
+          </div>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-neutral-200/70 pt-3">
