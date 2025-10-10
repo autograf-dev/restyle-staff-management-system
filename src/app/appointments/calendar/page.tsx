@@ -409,6 +409,22 @@ const StaffOverviewView = ({
     startAbs?: number;
     endAbs?: number;
   }>({ open: false, x: 0, y: 0 })
+
+  // Close the quick action menu on outside click or right click
+  React.useEffect(() => {
+    const closeMenu = () => setSelectionMenu(m => m.open ? { ...m, open: false } : m)
+    document.addEventListener('mousedown', closeMenu)
+    document.addEventListener('contextmenu', closeMenu)
+    return () => {
+      document.removeEventListener('mousedown', closeMenu)
+      document.removeEventListener('contextmenu', closeMenu)
+    }
+  }, [])
+
+  // Close the menu when view changes or date changes
+  React.useEffect(() => {
+    setSelectionMenu(m => m.open ? { ...m, open: false } : m)
+  }, [currentDate])
   const [prefillBlock, setPrefillBlock] = React.useState<BreakPrefill | null>(null)
   // Break edit/delete state for overlay actions
   const [editingBreak, setEditingBreak] = React.useState<Record<string, unknown> | null>(null)
@@ -1317,19 +1333,6 @@ const StaffOverviewView = ({
                     const container = e.currentTarget as HTMLDivElement
                     const rect = container.getBoundingClientRect()
                     const y = e.clientY - rect.top
-                    // Prevent starting selection over existing appointment/break/non-working overlay
-                    const elements = document.elementsFromPoint(e.clientX, e.clientY)
-                    const isOverBusyItem = elements.some(el => {
-                      const className = (el as HTMLElement).className?.toString?.() || ''
-                      return (
-                        className.includes('border-l-[#601625]') || // appointment element
-                        className.includes('bg-orange-100/50') || // leave
-                        className.includes('bg-gray-100/50') || // break box
-                        className.includes('bg-gray-200/40') || // staff-off
-                        className.includes('bg-red-200/50')      // salon-closed
-                      )
-                    })
-                    if (isOverBusyItem) return
                     setIsSelecting(true)
                     setSelectStaffId(staffMember.ghl_id)
                     setSelectStartY(y)
@@ -1349,6 +1352,8 @@ const StaffOverviewView = ({
                     setIsSelecting(false)
                     const startY = Math.min(selectStartY ?? 0, selectEndY ?? 0)
                     const endY = Math.max(selectStartY ?? 0, selectEndY ?? 0)
+                    // Require a minimum drag height (>1px) to trigger the menu; avoid click-to-open
+                    if (Math.abs(endY - startY) <= 1) return
                     // Convert Y positions into minutes from 8:00
                     // Snap to 15-minute grid: start floors, end ceils to match user drag end
                     const toFloor15 = (val: number) => Math.floor(val / 15) * 15
@@ -1358,11 +1363,9 @@ const StaffOverviewView = ({
                     const minutesFrom8Start = toFloor15(rawStart)
                     const minutesFrom8End = toCeil15(rawEnd)
                     const startAbs = (8 * 60) + minutesFrom8Start
-                    const endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
-                    if (endAbs - startAbs < 15) {
-                      // Minimum 15 minutes
-                      return
-                    }
+                    let endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
+                    // If selection duration < 15 minutes, ignore (user didn't select enough)
+                    if (endAbs - startAbs < 15) return
                     // Ensure selection does not overlap with existing appointments or breaks
                     const overlaps = (rangeStart: number, rangeEnd: number) => {
                       // Appointments
@@ -1386,15 +1389,26 @@ const StaffOverviewView = ({
                       }
                       return false
                     }
-                    if (overlaps(startAbs, endAbs)) return
-                    // Show quick action menu at mouse position
+                    // If overlapping, try nudging the proposed window forward up to 3 times
+                    let proposedStart = startAbs
+                    let proposedEnd = endAbs
+                    let attempts = 0
+                    while (attempts < 4 && overlaps(proposedStart, proposedEnd)) {
+                      proposedStart += 15
+                      proposedEnd += 15
+                      attempts++
+                    }
+                    if (overlaps(proposedStart, proposedEnd)) return
+                    // Show quick action menu at a clamped on-screen position
+                    const menuX = Math.min(window.innerWidth - 200, Math.max(8, e.clientX))
+                    const menuY = Math.min(window.innerHeight - 100, Math.max(8, e.clientY))
                     setSelectionMenu({
                       open: true,
-                      x: e.clientX,
-                      y: e.clientY,
+                      x: menuX,
+                      y: menuY,
                       staffId: staffMember.ghl_id,
-                      startAbs,
-                      endAbs,
+                      startAbs: proposedStart,
+                      endAbs: proposedEnd,
                     })
                   }}
                 >
@@ -1980,15 +1994,52 @@ export default function CalendarPage() {
     try {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
-      const items = (data?.services || []).map((s: any) => ({
-        id: s.id,
-        value: s.id,
-        label: s.name || s.id,
-        duration: s.duration,
-        price: s.price,
-        staffCount: (s.teamMembers || []).length
-      }))
-      setNewAppServices(items)
+      const services = (data.calendars || []).map((service: any) => {
+        const possibleDurations = [
+          service.slotDuration,
+          service.duration,
+          service.durationMinutes,
+          service.timeSlotDuration,
+          service.length,
+          service.serviceDuration,
+          service.durationInMinutes,
+          service.timeDuration,
+          service.appointmentDuration,
+          service.bookingDuration,
+          service.sessionDuration
+        ].filter((d: number) => d !== null && d !== undefined && d > 0)
+        const rawDuration = possibleDurations[0] || 0
+        let durationInMins = 0
+        if (rawDuration > 0) {
+          const durationUnit = service.slotDurationUnit || 'hours'
+          if (durationUnit === 'hours') durationInMins = rawDuration * 60
+          else if (durationUnit === 'mins' || durationUnit === 'minutes') durationInMins = rawDuration
+          else if (rawDuration < 10) durationInMins = rawDuration * 60
+          else durationInMins = rawDuration
+        }
+        if (durationInMins === 0 && service.description) {
+          const m = service.description.match(/(\n+)?(\d+)\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours)/i)
+          if (m) {
+            const v = parseInt(m[2])
+            const unit = m[0].toLowerCase()
+            durationInMins = unit.includes('hr') ? v * 60 : v
+          }
+        }
+        let price = 0
+        if (service.description) {
+          const pm = service.description.match(/CA\$(\d+\.?\d*)/i)
+          if (pm) price = parseFloat(pm[1])
+        }
+        return {
+          label: service.name,
+          value: service.id,
+          duration: durationInMins,
+          price,
+          description: `Duration: ${durationInMins} mins | Staff: ${(service.teamMembers || []).length}`,
+          staffCount: (service.teamMembers || []).length
+        }
+      })
+      setNewAppServices(services)
     } catch (e) {
       console.error('fetchNewAppServices', e)
     } finally {
@@ -2009,14 +2060,31 @@ export default function CalendarPage() {
     try {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
       const data = await res.json()
-      const serviceObj = (data?.services || []).find((s: any) => s.id === serviceId)
+      const serviceObj = (data.calendars || []).find((s: any) => s.id === serviceId)
       const teamMembers = serviceObj?.teamMembers || []
-      const staffItems = [{ label: 'Any available staff', value: 'any', badge: 'Recommended', icon: 'user' }, ...teamMembers.map((m: any) => ({
-        label: m.name || m.userId,
-        value: m.userId,
-        icon: 'user'
-      }))]
-      setNewAppStaff(staffItems)
+      const baseItems = [{ label: 'Any available staff', value: 'any', badge: 'Recommended', icon: 'user' }]
+      const staffPromises = teamMembers.map(async (member: { userId: string; name?: string }) => {
+        try {
+          const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${member.userId}`)
+          const staffData = await staffRes.json().catch(() => ({}))
+          const derivedName =
+            staffData?.data?.name ||
+            staffData?.name ||
+            staffData?.fullName ||
+            staffData?.displayName ||
+            [staffData?.staff?.firstName, staffData?.staff?.lastName].filter(Boolean).join(' ') ||
+            [staffData?.users?.firstName, staffData?.users?.lastName].filter(Boolean).join(' ') ||
+            [staffData?.firstName, staffData?.lastName].filter(Boolean).join(' ') ||
+            staffData?.user?.name ||
+            member.name ||
+            member.userId
+          return { label: derivedName, value: member.userId, icon: 'user' }
+        } catch {
+          return { label: member.name || member.userId, value: member.userId, icon: 'user' }
+        }
+      })
+      const resolved = await Promise.all(staffPromises)
+      setNewAppStaff([...baseItems, ...resolved])
     } catch (e) {
       console.error('fetchNewAppStaff', e)
     } finally {
@@ -2096,17 +2164,22 @@ export default function CalendarPage() {
   const submitNewAppointment = async () => {
     setNewAppLoading(true)
     try {
-      // Create contact first
+      // Create contact first (same flow as appointments page)
       const params = new URLSearchParams({
         firstName: newAppContactForm.firstName,
         lastName: newAppContactForm.lastName,
         phone: newAppContactForm.phone,
         notes: 'From calendar'
       })
-      const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/CreateContact?${params.toString()}`)
+      const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/customer?${params.toString()}`)
       const contactData = await contactRes.json()
-      if (!contactData?.contactId) throw new Error('Failed to create contact')
-      const contactId = contactData.contactId
+      let contactId: string | null = null
+      if (contactData?.details?.message === 'This location does not allow duplicated contacts.' && contactData?.details?.meta?.contactId) {
+        contactId = contactData.details.meta.contactId
+      } else if (contactData.success && contactData.contact?.contact?.id) {
+        contactId = contactData.contact.contact.id
+      }
+      if (!contactId) throw new Error('Contact creation failed')
 
       const [year, month, day] = newAppSelectedDate.split('-').map(Number)
       const jsDate = new Date(year, month - 1, day)
