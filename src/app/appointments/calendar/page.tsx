@@ -1318,17 +1318,15 @@ const StaffOverviewView = ({
                 </div>
               )}
       
-      {/* Main calendar container with overflow for sticky to work */}
-      <div className="w-full overflow-y-auto overflow-x-hidden" style={{ maxHeight: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING + 100}px` }} ref={scrollContainerRef}>
-        {/* Header - Sticky time column + scrollable staff columns */}
-        <div className="sticky top-0 z-30 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-sm">
-          {/* Sticky Time Header */}
-          <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
-            
-          </div>
+      {/* Header - Fixed at top, does not scroll */}
+      <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-sm">
+        {/* Time Header */}
+        <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
           
-          {/* Scrollable Staff Headers */}
-          <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
+        </div>
+        
+        {/* Scrollable Staff Headers */}
+        <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
             <div className="flex" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px` }}>
               {staff.map((staffMember) => {
                 const appts = getStaffAppointments(staffMember.ghl_id)
@@ -1386,8 +1384,10 @@ const StaffOverviewView = ({
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Time grid container */}
+      {/* Time grid container - this scrolls while header stays fixed */}
+      <div className="w-full overflow-y-auto overflow-x-hidden" style={{ maxHeight: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }} ref={scrollContainerRef}>
         <div className="w-full pb-6">
         <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
@@ -1846,7 +1846,6 @@ const StaffOverviewView = ({
               onSuccess={refreshBreaks}
             />
           </div>
-        </div>
         </div>
       </div>
     </div>
