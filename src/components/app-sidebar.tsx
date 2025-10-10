@@ -194,12 +194,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           { title: "Breaks", url: `${prefix}/manage/breaks`, icon: Coffee },
         ]
       : [
-          { title: "Reports", url: `${prefix}/dashboard`, icon: IconDashboard },
           { title: "Services", url: `${prefix}/manage/services`, icon: Scissors },
           { title: "Salon Hours", url: `${prefix}/manage/salon-hours`, icon: AlarmClock },
           { title: "Stylists", url: `${prefix}/manage/stylists`, icon: UsersRound },
           { title: "Holidays", url: `${prefix}/manage/leaves`, icon: CalendarDays },
           { title: "Breaks", url: `${prefix}/manage/breaks`, icon: Coffee },
+          { title: "Reports", url: `${prefix}/dashboard`, icon: IconDashboard },
           ...(user?.role === "admin" ? [{ title: "Admin", url: "/teams", icon: Settings }] : []),
         ]
 

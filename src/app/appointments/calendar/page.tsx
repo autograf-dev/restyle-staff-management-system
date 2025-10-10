@@ -1318,7 +1318,7 @@ const StaffOverviewView = ({
                 </div>
               )}
       {/* Header - Sticky time column + scrollable staff columns */}
-      <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
+      <div className="sticky top-0 z-30 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-sm">
         {/* Sticky Time Header */}
         <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
           
@@ -1539,29 +1539,7 @@ const StaffOverviewView = ({
                       >
                         {staffMember.name}
                       </div>
-                      {/* Unavailability reason */}
-                      <div className="text-center">
-                        {isStaffOnLeave(staffMember.ghl_id) && (
-                          <div className="text-2xl mb-1">🏖️</div>
-                        )}
-                        {!getSalonWorkingHours() && (
-                          <div className="text-2xl mb-1">🔒</div>
-                        )}
-                        {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
-                          <div className="text-2xl mb-1 opacity-50 grayscale">💤</div>
-                        )}
-                        <div 
-                          className="text-[10px] text-[#601625] font-medium whitespace-nowrap"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)'
-                          }}
-                        >
-                          {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
-                           !getSalonWorkingHours() ? "Closed" : "Day Off"}
-                        </div>
-                      </div>
+                      {/* Unavailability reason - removed to save space */}
                     </div>
                   )}
 
