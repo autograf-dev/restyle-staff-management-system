@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,12 +26,14 @@ import {
   DollarSign,
   CheckCircle,
   X,
-  Eye
+  Eye,
+  Pencil
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useUser, type User } from "@/contexts/user-context"
 import { toast } from "sonner"
+import { AppointmentNew } from "@/components/appointment-new"
 
 // Types
 type Appointment = {
@@ -113,10 +114,8 @@ function useAppointments(view: CalendarView, currentDate: Date) {
             setData(cached?.data || [])
             setLastUpdated(cached?.fetchedAt || Date.now())
             setLoading(false)
-            console.log(`📅 Calendar ${view}: Using cached data (${cached?.data?.length || 0} appointments)`)
             return
           } else if (cached) {
-            console.log(`📅 Calendar ${view}: Bypassing cache (had ${cached.data?.length || 0} appointments, age: ${Math.round((Date.now() - cached.fetchedAt) / 60000)} min)`)
           }
         } catch {}
 
@@ -129,13 +128,11 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           params.append('endDate', endDate)
           // Use a generous limit to include all appointments in range
           params.append('pageSize', view === 'year' ? '20000' : '5000')
-          console.log(`📅 Calendar ${view}: Fetching appointments for date range ${startDate} to ${endDate}`)
         }
         params.append('page', '1')
         
         apiUrl += params.toString()
         
-        console.log(`📅 Calendar ${view}: Fetching from ${apiUrl}`)
         const res = await fetch(apiUrl)
         
         if (!res.ok) {
@@ -148,8 +145,7 @@ function useAppointments(view: CalendarView, currentDate: Date) {
         const allBookings = json?.bookings || []
         const total = json?.total || 0
         
-        console.log(`📅 Calendar: Fetched ${allBookings.length} of ${total} total appointments`)
-        console.log('📅 Calendar: Sample booking:', allBookings[0])
+       
         
         // Map the API response data to Appointment format
         const appointments: Appointment[] = allBookings.map((booking: {
@@ -206,36 +202,25 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           }
         })
         
-        console.log(`📅 Calendar: Mapped ${appointments.length} appointments`)
         
         // Filter appointments with valid start times - but be more lenient
         const filtered = appointments.filter(apt => {
           const hasStartTime = apt.startTime && apt.startTime.trim() !== ''
           if (!hasStartTime) {
-            console.warn('📅 Calendar: Appointment missing startTime:', apt.id, apt.title)
           }
           return hasStartTime
         })
         
-        console.log(`📅 Calendar: After filtering for startTime: ${filtered.length} appointments`)
         
         if (filtered.length > 0) {
           const dates = filtered.map(a => new Date(a.startTime!).getTime()).filter(t => !isNaN(t))
           if (dates.length > 0) {
-            console.log(`📅 Calendar: Date range: ${new Date(Math.min(...dates)).toLocaleDateString()} to ${new Date(Math.max(...dates)).toLocaleDateString()}`)
           }
           
           // Sample some appointments for debugging
-          console.log('📅 Calendar: Sample appointments:', filtered.slice(0, 3).map(a => ({
-            id: a.id,
-            title: a.title,
-            startTime: a.startTime,
-            serviceName: a.serviceName,
-            contactName: a.contactName
-          })))
+     
         } else {
-          console.warn('📅 Calendar: No appointments with valid start times found!')
-          console.log('📅 Calendar: Sample raw bookings:', allBookings.slice(0, 3))
+        
         }
         
         setData(filtered)
@@ -423,18 +408,47 @@ const StaffOverviewView = ({
     startAbs?: number;
     endAbs?: number;
   }>({ open: false, x: 0, y: 0 })
+  const selectionMenuRef = React.useRef<HTMLDivElement | null>(null)
+
+  // Close the quick action menu on outside click or right click
+  React.useEffect(() => {
+    const closeMenuIfOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (selectionMenuRef.current && selectionMenuRef.current.contains(target)) {
+        return
+      }
+      setSelectionMenu(m => (m.open ? { ...m, open: false } : m))
+    }
+    document.addEventListener('mousedown', closeMenuIfOutside)
+    document.addEventListener('contextmenu', closeMenuIfOutside)
+    return () => {
+      document.removeEventListener('mousedown', closeMenuIfOutside)
+      document.removeEventListener('contextmenu', closeMenuIfOutside)
+    }
+  }, [])
+
+  // Close the menu when view changes or date changes
+  React.useEffect(() => {
+    setSelectionMenu(m => m.open ? { ...m, open: false } : m)
+  }, [currentDate])
   const [prefillBlock, setPrefillBlock] = React.useState<BreakPrefill | null>(null)
+  // Break edit/delete state for overlay actions
+  const [editingBreak, setEditingBreak] = React.useState<Record<string, unknown> | null>(null)
+  const [deleteBreakOpen, setDeleteBreakOpen] = React.useState(false)
+  const [breakToDelete, setBreakToDelete] = React.useState<Record<string, unknown> | null>(null)
 
   const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
 
-  const openPrefilledBreakDialog = (ghlId: string, startMinutesAbs: number, endMinutesAbs: number) => {
-    const blockDateIso = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).toISOString()
+  const openPrefilledBreakDialog = (ghlId: string, startMinutesAbs: number, endMinutesAbs: number, selectedDate?: Date) => {
+    const dateToUse = selectedDate || currentDate
+    // Create date at noon to avoid timezone issues
+    const blockDate = new Date(dateToUse.getFullYear(), dateToUse.getMonth(), dateToUse.getDate(), 12, 0, 0)
     setPrefillBlock({
       ghl_id: ghlId,
       name: 'Break',
       startMinutes: startMinutesAbs,
       endMinutes: endMinutesAbs,
-      date: blockDateIso,
+      date: blockDate.toISOString(),
     })
     setBreakDialogOpen(true)
   }
@@ -509,18 +523,8 @@ const StaffOverviewView = ({
 
           // Debug: Log the first staff member's working hours
           if (staffMembers.length > 0) {
-            console.log("📅 Staff working hours sample:", {
-              staff: staffMembers[0].name,
-              workingHours: staffMembers[0].workingHours,
-              currentDate: currentDate,
-              dayOfWeek: currentDate.getDay()
-            })
+         
             
-            console.log("📅 All Staff Members loaded:", staffMembers.map((s: { name: string; ghl_id: string; role: string }) => ({
-              name: s.name,
-              ghl_id: s.ghl_id,
-              role: s.role
-            })))
             
             // Debug staff IDs vs appointment IDs for today
             const todayAppointments = appointments.filter(apt => {
@@ -532,12 +536,7 @@ const StaffOverviewView = ({
             if (todayAppointments.length > 0) {
               const appointmentStaffIds = todayAppointments.map((a: Appointment) => a.assigned_user_id)
               const staffGhlIds = staffMembers.map((s: { ghl_id: string }) => s.ghl_id)
-              console.log("📅 Staff ID Matching Debug:", {
-                appointmentStaffIds,
-                staffGhlIds,
-                matchingIds: appointmentStaffIds.filter((id: string) => staffGhlIds.includes(id)),
-                missingStaffIds: appointmentStaffIds.filter((id: string) => !staffGhlIds.includes(id))
-              })
+           
             }
           }
           
@@ -568,10 +567,8 @@ const StaffOverviewView = ({
         // Fetch salon hours data
         const salonRes = await fetch('/api/business-hours')
         const salonJson = await salonRes.json()
-        console.log('📅 Salon hours API response:', salonJson)
         if (salonJson.ok) {
           setSalonHours(salonJson.data || [])
-          console.log('📅 Salon hours data set:', salonJson.data)
         }
       } catch (error) {
         console.error('Failed to fetch data:', error)
@@ -617,24 +614,12 @@ const StaffOverviewView = ({
   const timeSlots = generateTimeSlots()
   
   // Debug: Log the first few time slots
-  console.log(`📅 Time slots generated:`, timeSlots.slice(0, 10))
 
   // Get staff appointments for the current day
   const getStaffAppointments = (staffGhlId: string) => {
     // Filter from the appointments prop (already filtered to current day)
     const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
-    console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
-      staffGhlId,
-      currentDate: currentDate.toDateString(),
-      totalAppointments: appointments.length,
-      filteredAppointments: filtered.length,
-      sampleFiltered: filtered.slice(0, 2).map((a: Appointment) => ({
-        id: a.id,
-        title: a.title,
-        assigned_user_id: a.assigned_user_id,
-        startTime: a.startTime
-      }))
-    })
+ 
     return filtered
   }
 
@@ -686,15 +671,7 @@ const StaffOverviewView = ({
     
     // Debug logging for overlap groups
     if (groups.some(group => group.length > 1)) {
-      console.log(`📅 Overlap groups found:`, groups.map(group => ({
-        size: group.length,
-        appointments: group.map(apt => ({
-          id: apt.id,
-          title: apt.title,
-          startTime: apt.startTime,
-          endTime: apt.endTime
-        }))
-      })))
+      
     }
     
     return groups
@@ -739,13 +716,7 @@ const StaffOverviewView = ({
       
       columnWidths[staffMember.ghl_id] = dynamicWidth
       
-      console.log(`📅 Dynamic column width for ${staffMember.name}:`, {
-        maxConcurrent,
-        dynamicWidth,
-        totalAppointments: staffAppointments.length,
-        overlapGroups: overlapGroups.length,
-        groupsWithOverlaps: overlapGroups.filter(group => group.length > 1).length
-      })
+     
     })
     
     return columnWidths
@@ -757,7 +728,6 @@ const StaffOverviewView = ({
   // Helper function to get appointment position and height with overlap handling (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment, staffGhlId: string) => {
     if (!appointment.startTime || !appointment.endTime) {
-      console.log(`📅 Appointment ${appointment.id} missing time:`, { startTime: appointment.startTime, endTime: appointment.endTime })
       return { display: 'none' }
     }
     
@@ -774,14 +744,7 @@ const StaffOverviewView = ({
     // Only show appointments within 8AM-8PM range
     const dayEndMinutesExclusive = 20 * 60 // 8:00 PM end-of-day
     if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
-      console.log(`📅 Appointment ${appointment.id} outside time range:`, {
-        title: appointment.title,
-        startTime: appointment.startTime,
-        startMinutes,
-        dayStartMinutes,
-        dayEndMinutesExclusive,
-        reason: startMinutes < dayStartMinutes ? 'before 8AM' : 'after 8PM'
-      })
+      
       return { display: 'none' }
     }
     
@@ -821,22 +784,7 @@ const StaffOverviewView = ({
       zIndex = 10 + appointmentIndex
     }
     
-    console.log(`📅 Appointment ${appointment.id} positioned with overlaps:`, {
-      title: appointment.title,
-      startTime: appointment.startTime,
-      endTime: appointment.endTime,
-      startMinutes,
-      endMinutes,
-      topOffset,
-      height,
-      assigned_user_id: appointment.assigned_user_id,
-      groupSize: appointmentGroup.length,
-      appointmentIndex,
-      leftOffset,
-      width,
-      zIndex,
-      columnWidth: dynamicColumnWidths[staffGhlId] || baseColumnWidth
-    })
+
     
     return {
       position: 'absolute' as const,
@@ -923,16 +871,9 @@ const StaffOverviewView = ({
     const currentDayName = currentDate.getDay()
     const dayHours = salonHours.find(hour => hour.day_of_week === currentDayName)
     
-    console.log(`📅 Salon hours debug:`, {
-      currentDate: currentDate,
-      currentDayName: currentDayName,
-      dayHours: dayHours,
-      allSalonHours: salonHours,
-      lookingForDay: currentDayName
-    })
+    
     
     if (!dayHours || !dayHours.is_open || !dayHours.open_time || !dayHours.close_time) {
-      console.log(`📅 Salon is closed for day ${currentDayName}`)
       return null // Salon is closed
     }
 
@@ -941,12 +882,7 @@ const StaffOverviewView = ({
       endMinutes: dayHours.close_time
     }
     
-    console.log(`📅 Salon working hours:`, {
-      openTime: `${Math.floor(dayHours.open_time/60)}:${(dayHours.open_time%60).toString().padStart(2,'0')}`,
-      closeTime: `${Math.floor(dayHours.close_time/60)}:${(dayHours.close_time%60).toString().padStart(2,'0')}`,
-      startMinutes: dayHours.open_time,
-      endMinutes: dayHours.close_time
-    })
+   
     
     return result
   }
@@ -1007,7 +943,7 @@ const StaffOverviewView = ({
   // Helper function to get break periods for staff member on current day
   const getStaffBreakPeriods = (staffGhlId: string) => {
     const allBreaks = getStaffBreaks(staffGhlId)
-    const periods: { startMinutes: number, endMinutes: number }[] = []
+    const periods: { startMinutes: number, endMinutes: number, block: Record<string, unknown> }[] = []
     
     allBreaks.forEach(breakItem => {
       // Check if this break applies to the current date
@@ -1043,7 +979,7 @@ const StaffOverviewView = ({
           
           // Only include breaks within our calendar range (8AM-8PM)
           if (startMinutes >= 8 * 60 && endMinutes <= 20 * 60) {
-            periods.push({ startMinutes, endMinutes })
+            periods.push({ startMinutes, endMinutes, block: breakItem as unknown as Record<string, unknown> })
           }
         }
       }
@@ -1054,13 +990,13 @@ const StaffOverviewView = ({
 
   // Helper function to get non-working time periods for a staff member
   const getNonWorkingPeriods = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, name?: string, ghl_id?: string }) => {
-    const periods: { startMinutes: number, endMinutes: number, type: string }[] = []
+    const periods: { startMinutes: number, endMinutes: number, type: string, block?: Record<string, unknown> }[] = []
     const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
     const dayEndMinutes = 20 * 60  // Gray area extends till 8PM (even though view ends at 7PM)
 
     // Check if staff member is on leave - grey out entire day
     if (staffMember.ghl_id && isStaffOnLeave(staffMember.ghl_id)) {
-      console.log(`📅 ${staffMember.name} is on leave - greying entire day`)
+      
       return [{
         startMinutes: 8 * 60, // 8AM
         endMinutes: 20 * 60,  // 8PM
@@ -1076,7 +1012,6 @@ const StaffOverviewView = ({
     
     // If salon is closed, grey out entire day
     if (!salonHours) {
-      console.log(`📅 Salon is closed - greying entire day for ${staffMember.name}`)
       return [{
         startMinutes: 8 * 60, // 8AM
         endMinutes: 20 * 60,  // 8PM
@@ -1086,7 +1021,6 @@ const StaffOverviewView = ({
 
     // If staff has no working hours, grey out entire day
     if (!workingHours) {
-      console.log(`📅 ${staffMember.name} has no working hours - greying entire day`)
       return [{
         startMinutes: 8 * 60, // 8AM
         endMinutes: 20 * 60,  // 8PM
@@ -1094,24 +1028,10 @@ const StaffOverviewView = ({
       }]
     }
 
-    console.log(`📅 ${staffMember.name} working analysis:`, {
-      salon: {
-        hours: `${Math.floor(salonHours.startMinutes/60)}:${(salonHours.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(salonHours.endMinutes/60)}:${(salonHours.endMinutes%60).toString().padStart(2,'0')}`,
-        minutes: `${salonHours.startMinutes} - ${salonHours.endMinutes}`
-      },
-      staff: {
-        hours: `${Math.floor(workingHours.startMinutes/60)}:${(workingHours.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(workingHours.endMinutes/60)}:${(workingHours.endMinutes%60).toString().padStart(2,'0')}`,
-        minutes: `${workingHours.startMinutes} - ${workingHours.endMinutes}`
-      }
-    })
+  
 
     // Salon hours greying (before salon opens and after salon closes)
-    console.log(`📅 Salon hours calculation for ${staffMember.name}:`, {
-      dayStart: `${dayStartMinutes} (${Math.floor(dayStartMinutes/60)}:${(dayStartMinutes%60).toString().padStart(2,'0')})`,
-      dayEnd: `${dayEndMinutes} (${Math.floor(dayEndMinutes/60)}:${(dayEndMinutes%60).toString().padStart(2,'0')})`,
-      salonStart: `${salonHours.startMinutes} (${Math.floor(salonHours.startMinutes/60)}:${(salonHours.startMinutes%60).toString().padStart(2,'0')})`,
-      salonEnd: `${salonHours.endMinutes} (${Math.floor(salonHours.endMinutes/60)}:${(salonHours.endMinutes%60).toString().padStart(2,'0')})`
-    })
+   
     
     if (salonHours.startMinutes > dayStartMinutes) {
       const beforeOpenPeriod = {
@@ -1119,7 +1039,6 @@ const StaffOverviewView = ({
         endMinutes: Math.min(salonHours.startMinutes, dayEndMinutes),
         type: 'salon-closed'
       }
-      console.log(`📅 Adding before-open period:`, beforeOpenPeriod)
       periods.push(beforeOpenPeriod)
     }
     
@@ -1129,11 +1048,7 @@ const StaffOverviewView = ({
         endMinutes: dayEndMinutes,
         type: 'salon-closed'
       }
-      console.log(`📅 Adding after-close period:`, {
-        ...afterClosePeriod,
-        timeRange: `${Math.floor(afterClosePeriod.startMinutes/60)}:${(afterClosePeriod.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(afterClosePeriod.endMinutes/60)}:${(afterClosePeriod.endMinutes%60).toString().padStart(2,'0')}`,
-        shouldCover: "Should gray out entire area after salon closes"
-      })
+     
       periods.push(afterClosePeriod)
     }
 
@@ -1142,14 +1057,6 @@ const StaffOverviewView = ({
     const effectiveWorkStart = Math.max(workingHours.startMinutes, salonHours.startMinutes)
     const effectiveWorkEnd = Math.min(workingHours.endMinutes, salonHours.endMinutes)
     
-    console.log(`📅 Staff hours calculation for ${staffMember.name}:`, {
-      salonOpen: salonHours.startMinutes,
-      salonClose: salonHours.endMinutes,
-      staffStart: workingHours.startMinutes,
-      staffEnd: workingHours.endMinutes,
-      effectiveStart: effectiveWorkStart,
-      effectiveEnd: effectiveWorkEnd
-    })
     
     // Before staff starts (within salon hours only)
     if (effectiveWorkStart > salonHours.startMinutes) {
@@ -1158,7 +1065,6 @@ const StaffOverviewView = ({
         endMinutes: effectiveWorkStart,
         type: 'staff-off'
       }
-      console.log(`📅 Adding before-staff period:`, beforeStaffPeriod)
       periods.push(beforeStaffPeriod)
     }
     
@@ -1169,7 +1075,6 @@ const StaffOverviewView = ({
         endMinutes: salonHours.endMinutes,
         type: 'staff-off'
       }
-      console.log(`📅 Adding after-staff period:`, afterStaffPeriod)
       periods.push(afterStaffPeriod)
     }
 
@@ -1177,9 +1082,8 @@ const StaffOverviewView = ({
     if (staffMember.ghl_id) {
       const breakPeriods = getStaffBreakPeriods(staffMember.ghl_id)
       if (breakPeriods.length > 0) {
-        console.log(`📅 ${staffMember.name} has ${breakPeriods.length} break periods:`, breakPeriods)
       }
-      periods.push(...breakPeriods.map(period => ({ ...period, type: 'break' })))
+      periods.push(...breakPeriods.map(period => ({ startMinutes: period.startMinutes, endMinutes: period.endMinutes, type: 'break', block: period.block })))
     }
     
     // Sort periods by start time 
@@ -1189,12 +1093,7 @@ const StaffOverviewView = ({
     // Let CSS handle overlapping with z-index and opacity
     const finalPeriods = periods.filter(p => p.startMinutes < p.endMinutes)
     
-    console.log(`📅 ${staffMember.name} non-working periods (final):`, finalPeriods.map(p => ({
-      type: p.type,
-      time: `${Math.floor(p.startMinutes/60)}:${(p.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(p.endMinutes/60)}:${(p.endMinutes%60).toString().padStart(2,'0')}`,
-      startMinutes: p.startMinutes,
-      endMinutes: p.endMinutes
-    })))
+ 
     
     return finalPeriods
   }
@@ -1277,38 +1176,35 @@ const StaffOverviewView = ({
               {/* Selection quick actions */}
               {selectionMenu.open && (
                 <div
-                  className="fixed z-50 bg-white border border-neutral-200 rounded-md shadow-md"
+                  ref={selectionMenuRef}
+                  className="fixed z-[1000] bg-white border border-neutral-200 rounded-md shadow-md"
                   style={{ left: selectionMenu.x + 8, top: selectionMenu.y + 8 }}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
                   <div className="flex flex-col divide-y">
                     <button
-                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left relative z-[1001]"
                       onClick={() => {
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.staffId && selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined) {
-                          openPrefilledBreakDialog(selectionMenu.staffId, selectionMenu.startAbs, selectionMenu.endAbs)
+                          openPrefilledBreakDialog(selectionMenu.staffId, selectionMenu.startAbs, selectionMenu.endAbs, currentDate)
                         }
                       }}
                     >
                       + Add Break
                     </button>
                     <button
-                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left relative z-[1001]"
                       onClick={() => {
-                        // Open the existing new appointment dialog with prefilled time via URL params
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.startAbs !== undefined) {
                           const hours = Math.floor(selectionMenu.startAbs / 60)
                           const mins = selectionMenu.startAbs % 60
                           const dateStr = currentDate.toISOString().slice(0,10)
-                          const params = new URLSearchParams({
-                            openBooking: '1',
-                            date: dateStr,
-                            hour: String(hours),
-                            minute: String(mins)
-                          })
-                          window.open(`/appointments?${params.toString()}`, '_blank')
+                          window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr, hours, mins } }))
+                        } else {
+                          const dateStr = currentDate.toISOString().slice(0,10)
+                          window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr } }))
                         }
                       }}
                     >
@@ -1445,19 +1341,6 @@ const StaffOverviewView = ({
                     const container = e.currentTarget as HTMLDivElement
                     const rect = container.getBoundingClientRect()
                     const y = e.clientY - rect.top
-                    // Prevent starting selection over existing appointment/break/non-working overlay
-                    const elements = document.elementsFromPoint(e.clientX, e.clientY)
-                    const isOverBusyItem = elements.some(el => {
-                      const className = (el as HTMLElement).className?.toString?.() || ''
-                      return (
-                        className.includes('border-l-[#601625]') || // appointment element
-                        className.includes('bg-orange-100/50') || // leave
-                        className.includes('bg-gray-100/50') || // break box
-                        className.includes('bg-gray-200/40') || // staff-off
-                        className.includes('bg-red-200/50')      // salon-closed
-                      )
-                    })
-                    if (isOverBusyItem) return
                     setIsSelecting(true)
                     setSelectStaffId(staffMember.ghl_id)
                     setSelectStartY(y)
@@ -1477,6 +1360,8 @@ const StaffOverviewView = ({
                     setIsSelecting(false)
                     const startY = Math.min(selectStartY ?? 0, selectEndY ?? 0)
                     const endY = Math.max(selectStartY ?? 0, selectEndY ?? 0)
+                    // Require a minimal drag height to trigger the menu (>= 4px)
+                    if (Math.abs(endY - startY) < 4) return
                     // Convert Y positions into minutes from 8:00
                     // Snap to 15-minute grid: start floors, end ceils to match user drag end
                     const toFloor15 = (val: number) => Math.floor(val / 15) * 15
@@ -1487,10 +1372,8 @@ const StaffOverviewView = ({
                     const minutesFrom8End = toCeil15(rawEnd)
                     const startAbs = (8 * 60) + minutesFrom8Start
                     const endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
-                    if (endAbs - startAbs < 15) {
-                      // Minimum 15 minutes
-                      return
-                    }
+                    // If selection duration < 15 minutes, ignore (user didn't select enough)
+                    if (endAbs - startAbs < 15) return
                     // Ensure selection does not overlap with existing appointments or breaks
                     const overlaps = (rangeStart: number, rangeEnd: number) => {
                       // Appointments
@@ -1514,15 +1397,19 @@ const StaffOverviewView = ({
                       }
                       return false
                     }
-                    if (overlaps(startAbs, endAbs)) return
-                    // Show quick action menu at mouse position
+                    // Always show the quick action menu; actions will validate conflicts
+                    const proposedStart = startAbs
+                    const proposedEnd = endAbs
+                    // Show quick action menu at a clamped on-screen position
+                    const menuX = Math.min(window.innerWidth - 200, Math.max(8, e.clientX))
+                    const menuY = Math.min(window.innerHeight - 100, Math.max(8, e.clientY))
                     setSelectionMenu({
                       open: true,
-                      x: e.clientX,
-                      y: e.clientY,
+                      x: menuX,
+                      y: menuY,
                       staffId: staffMember.ghl_id,
-                      startAbs,
-                      endAbs,
+                      startAbs: proposedStart,
+                      endAbs: proposedEnd,
                     })
                   }}
                 >
@@ -1570,25 +1457,7 @@ const StaffOverviewView = ({
     const endPosition = GRID_TOP_PADDING + endSlotIndex * HOUR_SLOT_HEIGHT
                     const height = endPosition - startPosition
                     
-                    // Debug logging
-                    console.log(`📅 ${staffMember.name} period ${index}:`, {
-                      type: period.type,
-                      startMinutes: period.startMinutes,
-                      endMinutes: period.endMinutes,
-                      startTime: `${Math.floor(period.startMinutes/60)}:${(period.startMinutes%60).toString().padStart(2,'0')}`,
-                      endTime: `${Math.floor(period.endMinutes/60)}:${(period.endMinutes%60).toString().padStart(2,'0')}`,
-                      startSlotIndex,
-                      endSlotIndex,
-                      startPosition,
-                      endPosition,
-                      height,
-                      GRID_TOP_PADDING,
-                      expectedSlots: `Should cover slots ${startSlotIndex} to ${endSlotIndex} (${endSlotIndex - startSlotIndex} slots)`,
-                      timeSlotMapping: {
-                        slot10: '18:00 (6 PM)',
-                        slot11: '19:00 (7 PM)'
-                      }
-                    })
+                  
                     
                     // Validate positioning
                     if (height <= 0) {
@@ -1642,6 +1511,32 @@ const StaffOverviewView = ({
                             {Math.floor(period.startMinutes/60)}:{(period.startMinutes%60).toString().padStart(2,'0')} - {Math.floor(period.endMinutes/60)}:{(period.endMinutes%60).toString().padStart(2,'0')}
                           </div>
                         </div>
+                        {period.type === 'break' && (
+                          <div className="absolute right-2 top-1 z-[60] opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1">
+                            <button
+                              className="p-1 rounded bg-white/90 shadow border border-neutral-200 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPrefillBlock(null)
+                                setEditingBreak(period.block as unknown as Record<string, unknown>)
+                                setBreakDialogOpen(true)
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              className="p-1 rounded bg-white/70 shadow border border-neutral-200 cursor-pointer "
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setBreakToDelete(period.block as unknown as Record<string, unknown>)
+                                setDeleteBreakOpen(true)
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </button>
+                          </div>
+                        )}
+
                       </div>
                     )
                   })}
@@ -1716,14 +1611,7 @@ const StaffOverviewView = ({
                           
                           const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
                           
-                          // Debug logging
-                          console.log(`🔍 Date comparison for ${staffMember.name}:`)
-                          console.log(`   Break Date String: "${dateString}"`)
-                          console.log(`   Parsed Break Date: ${breakDateOnly.toDateString()}`)
-                          console.log(`   Calendar Date: ${calendarDate.toDateString()}`)
-                          console.log(`   Break Date Time: ${breakDateOnly.getTime()}`)
-                          console.log(`   Calendar Date Time: ${calendarDate.getTime()}`)
-                          console.log(`   Dates Match: ${breakDateOnly.getTime() === calendarDate.getTime()}`)
+                         
                           
                           if (breakDateOnly.getTime() !== calendarDate.getTime()) {
                             return null // Skip if break is not scheduled for this date
@@ -1752,7 +1640,7 @@ const StaffOverviewView = ({
                     return (
                       <div
                         key={`break-${breakItem["🔒 Row ID"]}`}
-                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-gray-400 bg-gray-100/50 backdrop-blur-sm"
+                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-gray-400 bg-gray-100/50 backdrop-blur-sm hidden"
                         style={style}
                         title={`Break: ${breakItem["Block/Name"]}`}
                       >
@@ -1791,7 +1679,7 @@ const StaffOverviewView = ({
                         title={`${appointment.contactName || 'Unknown Client'} - ${appointment.serviceName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
                       >
                         {/* Client name at top - always show */}
-                        <div className={`font-medium truncate leading-tight ${
+                        <div className={`uppercase font-medium truncate leading-tight ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-500 line-through' 
                             : 'text-[#601625]'
@@ -1837,13 +1725,50 @@ const StaffOverviewView = ({
               open={breakDialogOpen}
               onOpenChange={(open) => {
                 setBreakDialogOpen(open)
-                if (!open) setPrefillBlock(null)
+                if (!open) {
+                  setPrefillBlock(null)
+                  setEditingBreak(null)
+                }
               }}
               staff={staff.map(s => ({ ghl_id: s.ghl_id, "Barber/Name": s.name }))}
-              editingBlock={null}
+              editingBlock={editingBreak}
               prefill={prefillBlock ?? undefined}
-              onSuccess={refreshBreaks}
+              onSuccess={() => { refreshBreaks(); setEditingBreak(null) }}
             />
+
+            {/* Delete Break Confirmation Dialog */}
+            <Dialog open={deleteBreakOpen} onOpenChange={(o) => { setDeleteBreakOpen(o); if (!o) setBreakToDelete(null) }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete break?</DialogTitle>
+                  <DialogDescription>
+                    This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2">
+                  <button className="px-3 py-2 text-sm border rounded" onClick={() => setDeleteBreakOpen(false)}>Cancel</button>
+                  <button
+                    className="px-3 py-2 text-sm rounded bg-red-600 text-white"
+                    onClick={async () => {
+                      if (!breakToDelete) return
+                      try {
+                        const id = String((breakToDelete as Record<string, unknown>)['🔒 Row ID'] as string || '')
+                        if (!id) { setDeleteBreakOpen(false); return }
+                        const res = await fetch(`/api/time-blocks?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+                        const r = await res.json().catch(() => ({ ok: false }))
+                        if (r?.ok) {
+                          setDeleteBreakOpen(false)
+                          setBreakToDelete(null)
+                          await refreshBreaks()
+                        }
+                      } catch {}
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
     </div>
@@ -1932,6 +1857,7 @@ export default function CalendarPage() {
   const [bookingToReschedule, setBookingToReschedule] = React.useState<Appointment | null>(null)
   const [rescheduleLoading, setRescheduleLoading] = React.useState(false)
   
+  
   // Reschedule form data
   const [selectedStaff, setSelectedStaff] = React.useState<string>("")
   const [staffOptions, setStaffOptions] = React.useState<Array<{
@@ -1961,6 +1887,401 @@ export default function CalendarPage() {
   const [loadingStaff, setLoadingStaff] = React.useState(false)
   const [loadingSlots, setLoadingSlots] = React.useState(false)
   const [workingSlots, setWorkingSlots] = React.useState<Record<string, string[]>>({})
+
+  // New Appointment state (mirror appointments/page.tsx)
+  const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false)
+  const [newAppCurrentStep, setNewAppCurrentStep] = React.useState(1)
+  const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id?: string; name?: string; label?: string; value?: string; description?: string; icon?: string }>>([])
+  const [newAppSelectedDepartment, setNewAppSelectedDepartment] = React.useState<string>("")
+  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; price?: number; label?: string; value?: string; description?: string; staffCount?: number }>>([])
+  const [newAppSelectedService, setNewAppSelectedService] = React.useState<string>("")
+  const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id?: string; name?: string; email?: string; label?: string; value?: string; badge?: string; icon?: string }>>([])
+  const [newAppSelectedStaff, setNewAppSelectedStaff] = React.useState<string>("")
+  const [newAppDates, setNewAppDates] = React.useState<Array<{ dateString: string; dayName: string; dateDisplay: string; label: string; date: Date }>>([])
+  const [newAppSelectedDate, setNewAppSelectedDate] = React.useState<string>("")
+  const [newAppSlots, setNewAppSlots] = React.useState<Array<{ time: string; isPast: boolean }>>([])
+  const [newAppSelectedTime, setNewAppSelectedTime] = React.useState<string>("")
+  const [newAppContactForm, setNewAppContactForm] = React.useState({ firstName: '', lastName: '', phone: '', optIn: false })
+  const [newAppLoading, setNewAppLoading] = React.useState(false)
+  const [newAppWorkingSlots, setNewAppWorkingSlots] = React.useState<Record<string, string[]>>({})
+  const [newAppLoadingDepts, setNewAppLoadingDepts] = React.useState(false)
+  const [newAppLoadingServices, setNewAppLoadingServices] = React.useState(false)
+  const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
+  const [newAppLoadingSlots, setNewAppLoadingSlots] = React.useState(false)
+  const [newAppLoadingDates, setNewAppLoadingDates] = React.useState(false)
+  const desiredNewAppDateRef = React.useRef<string | null>(null)
+  const desiredNewAppTimeRef = React.useRef<string | null>(null)
+
+  const formatServiceDuration = (durationMinutes?: number) => {
+    if (!durationMinutes || durationMinutes <= 0) return '—'
+    const h = Math.floor(durationMinutes / 60)
+    const m = durationMinutes % 60
+    if (h > 0 && m > 0) return `${h}h ${m}m`
+    if (h > 0) return `${h}h`
+    return `${m}m`
+  }
+
+  const formatSelectedDate = (dateString: string) => {
+    if (!dateString) return ''
+    try {
+      const [year, month, day] = dateString.split('-').map(Number)
+      const d = new Date(year, month - 1, day)
+      const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+      const monthName = d.toLocaleDateString('en-US', { month: 'long' })
+      return `${weekday}, ${monthName} ${d.getDate()}, ${d.getFullYear()}`
+    } catch {
+      return dateString
+    }
+  }
+
+  const resetNewAppointmentForm = () => {
+    setNewAppCurrentStep(1)
+    setNewAppSelectedDepartment("")
+    setNewAppSelectedService("")
+    setNewAppSelectedStaff("")
+    setNewAppSelectedDate("")
+    setNewAppSelectedTime("")
+    setNewAppContactForm({ firstName: '', lastName: '', phone: '', optIn: false })
+    setNewAppDepartments([])
+    setNewAppServices([])
+    setNewAppStaff([])
+    setNewAppDates([])
+    setNewAppSlots([])
+    setNewAppWorkingSlots({})
+    desiredNewAppDateRef.current = null
+    desiredNewAppTimeRef.current = null
+  }
+
+  const goToNextNewAppStep = () => setNewAppCurrentStep(prev => Math.min(prev + 1, 4))
+  const goToPrevNewAppStep = () => setNewAppCurrentStep(prev => Math.max(prev - 1, 1))
+
+  const fetchNewAppDepartments = async () => {
+    setNewAppLoadingDepts(true)
+    try {
+      const res = await fetch('https://restyle-backend.netlify.app/.netlify/functions/supabasegroups')
+      const data = await res.json()
+      const depts = (data?.groups || []).map((g: { id?: string; name?: string }) => ({
+        id: g.id,
+        value: g.id,
+        label: g.name || g.id,
+      }))
+      setNewAppDepartments(depts)
+      if (depts.length > 0) {
+        const firstId = depts[0].value || depts[0].id || ''
+        setNewAppSelectedDepartment(firstId)
+        // Immediately load services for the default-selected department
+        await fetchNewAppServices(firstId)
+      }
+    } catch (e) {
+      console.error('fetchNewAppDepartments', e)
+    } finally {
+      setNewAppLoadingDepts(false)
+    }
+  }
+
+  const handleNewAppDepartmentSelect = (departmentId: string) => {
+    setNewAppSelectedDepartment(departmentId)
+    setNewAppSelectedService("")
+    setNewAppSelectedStaff("")
+    setNewAppServices([])
+    setNewAppStaff([])
+    fetchNewAppServices(departmentId)
+  }
+
+  const fetchNewAppServices = async (departmentId: string) => {
+    if (!departmentId) return
+    setNewAppLoadingServices(true)
+    try {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
+      const data = await res.json()
+      const services = (data.calendars || []).map((service: Record<string, unknown> & { id: string; name?: string; description?: string; slotDuration?: number; duration?: number; durationMinutes?: number; timeSlotDuration?: number; length?: number; serviceDuration?: number; durationInMinutes?: number; timeDuration?: number; appointmentDuration?: number; bookingDuration?: number; sessionDuration?: number; teamMembers?: Array<unknown> }) => {
+        const possibleDurations = [
+          service.slotDuration,
+          service.duration,
+          service.durationMinutes,
+          service.timeSlotDuration,
+          service.length,
+          service.serviceDuration,
+          service.durationInMinutes,
+          service.timeDuration,
+          service.appointmentDuration,
+          service.bookingDuration,
+          service.sessionDuration
+        ].filter((d) => typeof d === 'number' && d > 0) as number[]
+        const rawDuration = possibleDurations[0] || 0
+        let durationInMins = 0
+        if (rawDuration > 0) {
+          const durationUnit = service.slotDurationUnit || 'hours'
+          if (durationUnit === 'hours') durationInMins = rawDuration * 60
+          else if (durationUnit === 'mins' || durationUnit === 'minutes') durationInMins = rawDuration
+          else if (rawDuration < 10) durationInMins = rawDuration * 60
+          else durationInMins = rawDuration
+        }
+        if (durationInMins === 0 && service.description) {
+          const m = service.description.match(/(\n+)?(\d+)\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours)/i)
+          if (m) {
+            const v = parseInt(m[2])
+            const unit = m[0].toLowerCase()
+            durationInMins = unit.includes('hr') ? v * 60 : v
+          }
+        }
+        let price = 0
+        if (service.description) {
+        const pm = service.description.match(/CA\$(\d+\.?\d*)/i)
+          if (pm) price = parseFloat(pm[1])
+        }
+        return {
+          label: service.name,
+          value: service.id,
+          duration: durationInMins,
+          price,
+          description: `Duration: ${durationInMins} mins | Staff: ${(service.teamMembers || []).length}`,
+          staffCount: (service.teamMembers || []).length
+        }
+      })
+      setNewAppServices(services)
+    } catch (e) {
+      console.error('fetchNewAppServices', e)
+    } finally {
+      setNewAppLoadingServices(false)
+    }
+  }
+
+  const handleNewAppServiceSelect = (serviceId: string) => {
+    setNewAppSelectedService(serviceId)
+    setNewAppSelectedStaff("")
+    fetchNewAppStaff(serviceId)
+    setNewAppCurrentStep(2)
+  }
+
+  const fetchNewAppStaff = async (serviceId: string) => {
+    if (!serviceId || !newAppSelectedDepartment) return
+    setNewAppLoadingStaff(true)
+    try {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
+      const data = await res.json()
+      const serviceObj = (data.calendars || []).find((s: { id: string }) => s.id === serviceId)
+      const teamMembers = serviceObj?.teamMembers || []
+      const baseItems = [{ label: 'Any available staff', value: 'any', badge: 'Recommended', icon: 'user' }]
+      const staffPromises = teamMembers.map(async (member: { userId: string; name?: string }) => {
+        try {
+          const staffRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Staff?id=${member.userId}`)
+          const staffData = await staffRes.json().catch(() => ({}))
+          const derivedName =
+            staffData?.data?.name ||
+            staffData?.name ||
+            staffData?.fullName ||
+            staffData?.displayName ||
+            [staffData?.staff?.firstName, staffData?.staff?.lastName].filter(Boolean).join(' ') ||
+            [staffData?.users?.firstName, staffData?.users?.lastName].filter(Boolean).join(' ') ||
+            [staffData?.firstName, staffData?.lastName].filter(Boolean).join(' ') ||
+            staffData?.user?.name ||
+            member.name ||
+            member.userId
+          return { label: derivedName, value: member.userId, icon: 'user' }
+        } catch {
+          return { label: member.name || member.userId, value: member.userId, icon: 'user' }
+        }
+      })
+      const resolved = await Promise.all(staffPromises)
+      setNewAppStaff([...baseItems, ...resolved])
+    } catch (e) {
+      console.error('fetchNewAppStaff', e)
+    } finally {
+      setNewAppLoadingStaff(false)
+    }
+  }
+
+  const handleNewAppStaffSelect = (staffId: string) => {
+    setNewAppSelectedStaff(staffId)
+    fetchNewAppWorkingSlots()
+  }
+
+  const fetchNewAppWorkingSlots = async () => {
+    if (!newAppSelectedService) return
+    setNewAppLoadingDates(true)
+    const userId = newAppSelectedStaff && newAppSelectedStaff !== 'any' ? newAppSelectedStaff : null
+    try {
+      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${newAppSelectedService}`
+      if (userId) apiUrl += `&userId=${userId}`
+      const response = await fetch(apiUrl)
+      const data = await response.json()
+      if (data.slots) {
+        const workingDates = Object.keys(data.slots).sort()
+        const dates = workingDates.map((dateString) => {
+          const [year, month, day] = dateString.split('-').map(Number)
+          const date = new Date(year, month - 1, day)
+          const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+          const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          return { dateString, dayName, dateDisplay, label: '', date }
+        })
+        setNewAppDates(dates)
+        setNewAppWorkingSlots(data.slots)
+        const desired = desiredNewAppDateRef.current
+        if (desired && dates.some(d => d.dateString === desired)) {
+          setNewAppSelectedDate(desired)
+          fetchNewAppSlotsForDate(desired)
+        } else if (dates.length > 0) {
+          const today = new Date().toISOString().split('T')[0]
+          const firstFutureDate = dates.find(d => d.dateString >= today) || dates[0]
+          setNewAppSelectedDate(firstFutureDate.dateString)
+          fetchNewAppSlotsForDate(firstFutureDate.dateString)
+        }
+      }
+    } catch (e) {
+      console.error('fetchNewAppWorkingSlots', e)
+    } finally {
+      setNewAppLoadingDates(false)
+    }
+  }
+
+  const fetchNewAppSlotsForDate = (dateString: string) => {
+    if (newAppWorkingSlots[dateString]) {
+      const slotsForSelectedDate = newAppWorkingSlots[dateString]
+      const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({ time: slot, isPast: isSlotInPast(slot, dateString) }))
+      const availableSlots = slotsWithStatus.filter((slot) => !slot.isPast)
+      setNewAppSlots(availableSlots)
+      const desiredTime = desiredNewAppTimeRef.current
+      if (desiredTime && availableSlots.some(s => s.time === desiredTime)) {
+        setNewAppSelectedTime(desiredTime)
+        setNewAppCurrentStep(4)
+      }
+    } else {
+      setNewAppSlots([])
+    }
+  }
+
+  const handleNewAppDateSelect = (dateString: string) => {
+    setNewAppSelectedDate(dateString)
+    setNewAppSelectedTime("")
+    fetchNewAppSlotsForDate(dateString)
+  }
+  const handleNewAppTimeSelect = (time: string) => {
+    setNewAppSelectedTime(time)
+    setNewAppCurrentStep(4)
+  }
+
+  const submitNewAppointment = async () => {
+    setNewAppLoading(true)
+    try {
+      // Create contact first (same flow as appointments page)
+      const params = new URLSearchParams({
+        firstName: newAppContactForm.firstName,
+        lastName: newAppContactForm.lastName,
+        phone: newAppContactForm.phone,
+        notes: 'From calendar'
+      })
+      const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/customer?${params.toString()}`)
+      const contactData = await contactRes.json()
+      let contactId: string | null = null
+      if (contactData?.details?.message === 'This location does not allow duplicated contacts.' && contactData?.details?.meta?.contactId) {
+        contactId = contactData.details.meta.contactId
+      } else if (contactData.success && contactData.contact?.contact?.id) {
+        contactId = contactData.contact.contact.id
+      }
+      if (!contactId) throw new Error('Contact creation failed')
+
+      const [year, month, day] = newAppSelectedDate.split('-').map(Number)
+      const jsDate = new Date(year, month - 1, day)
+      const slotMatch = newAppSelectedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
+      let hour = 9, minute = 0
+      if (slotMatch) {
+        hour = parseInt(slotMatch[1])
+        minute = parseInt(slotMatch[2])
+        const period = slotMatch[3].toUpperCase()
+        if (period === 'PM' && hour !== 12) hour += 12
+        if (period === 'AM' && hour === 12) hour = 0
+      }
+      jsDate.setHours(hour, minute, 0, 0)
+      const localStartTime = jsDate
+      const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
+      const duration = selectedServiceObj?.duration || 120
+      const localEndTime = new Date(localStartTime.getTime() + duration * 60 * 1000)
+      const y1 = localStartTime.getFullYear()
+      const m1 = localStartTime.getMonth() + 1
+      const d1 = localStartTime.getDate()
+      const h1 = localStartTime.getHours()
+      const min1 = localStartTime.getMinutes()
+      const startTime = denverWallTimeToUtcIso(y1, m1, d1, h1, min1)
+      const y2 = localEndTime.getFullYear()
+      const m2 = localEndTime.getMonth() + 1
+      const d2 = localEndTime.getDate()
+      const h2 = localEndTime.getHours()
+      const min2 = localEndTime.getMinutes()
+      const endTime = denverWallTimeToUtcIso(y2, m2, d2, h2, min2)
+      let assignedUserId = newAppSelectedStaff
+      if (assignedUserId === 'any' || !assignedUserId) {
+        const realStaff = newAppStaff.filter(item => item.value !== 'any')
+        if (realStaff.length > 0) {
+          assignedUserId = realStaff[Math.floor(Math.random() * realStaff.length)].value || ''
+        }
+      }
+      const serviceName = selectedServiceObj?.label || 'Service'
+      const contactName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
+      const title = `${serviceName} - ${contactName}`
+      let bookUrl = `https://restyle-backend.netlify.app/.netlify/functions/Apointment?contactId=${contactId}&calendarId=${newAppSelectedService}&startTime=${startTime}&endTime=${endTime}&title=${encodeURIComponent(title)}`
+      if (assignedUserId) bookUrl += `&assignedUserId=${assignedUserId}`
+      bookUrl += `&serviceDuration=${duration}`
+      const staffObj = newAppStaff.find(s => s.value === assignedUserId)
+      const staffName = staffObj?.label || 'Any available staff'
+      bookUrl += `&staffName=${encodeURIComponent(staffName)}`
+      bookUrl += `&customerFirstName=${encodeURIComponent(newAppContactForm.firstName)}`
+      bookUrl += `&customerLastName=${encodeURIComponent(newAppContactForm.lastName)}`
+      const res = await fetch(bookUrl)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) throw new Error(data.error || 'Booking failed')
+      toast.success('Appointment booked successfully')
+      setNewAppointmentOpen(false)
+      resetNewAppointmentForm()
+      await refresh()
+    } catch (e) {
+      console.error('submitNewAppointment', e)
+      toast.error(`Booking failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setNewAppLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (newAppointmentOpen) {
+      fetchNewAppDepartments()
+    }
+  }, [newAppointmentOpen])
+
+  React.useEffect(() => {
+    if (newAppSelectedStaff && newAppSelectedService) {
+      fetchNewAppWorkingSlots()
+    }
+  }, [newAppSelectedStaff, newAppSelectedService])
+
+  // Global event to open new appointment from various UI spots in this page
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { dateStr?: string; hours?: number; mins?: number }
+      setNewAppointmentOpen(true)
+      setNewAppCurrentStep(1)
+      setNewAppSelectedDepartment("")
+      setNewAppSelectedService("")
+      setNewAppSelectedStaff("")
+      setNewAppSelectedDate("")
+      setNewAppSelectedTime("")
+      if (detail?.dateStr) {
+        desiredNewAppDateRef.current = detail.dateStr
+      }
+      if (typeof detail?.hours === 'number' && typeof detail?.mins === 'number') {
+        const date = new Date()
+        date.setHours(detail.hours, detail.mins, 0, 0)
+        const ampm = date.getHours() >= 12 ? 'PM' : 'AM'
+        const displayHour = ((date.getHours() + 11) % 12 + 1)
+        const mm = String(date.getMinutes()).padStart(2, '0')
+        desiredNewAppTimeRef.current = `${displayHour}:${mm} ${ampm}`
+      } else {
+        desiredNewAppTimeRef.current = null
+      }
+    }
+    window.addEventListener('open-new-appointment', handler as EventListener)
+    return () => window.removeEventListener('open-new-appointment', handler as EventListener)
+  }, [])
 
   // Helper function to check if appointment is within 2 hours
   const isWithinTwoHours = (startTimeString?: string) => {
@@ -2106,8 +2427,7 @@ export default function CalendarPage() {
       const serviceObj = (serviceData.services || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
       const teamMembers = serviceObj?.teamMembers || []
 
-      console.log('Service found:', serviceObj?.name)
-      console.log('Team members:', teamMembers)
+
 
       // Start with "Any available staff" option
       const items = [{
@@ -2142,7 +2462,6 @@ export default function CalendarPage() {
 
       const allStaffOptions = [...items, ...assignedStaff]
       
-      console.log('Final staff options:', allStaffOptions)
       
       if (rescheduleOpen) {
         setStaffOptions(allStaffOptions)
@@ -2393,19 +2712,12 @@ export default function CalendarPage() {
 
   // Scope to barber's own appointments if barber
   const scopedAppointments = React.useMemo(() => {
-    console.log(`📅 Scoping appointments:`, {
-      totalAppointments: appointments.length,
-      userRole: user?.role,
-      userGhlId: user?.ghlId,
-      sampleAssignedUserIds: appointments.slice(0, 5).map(a => a.assigned_user_id)
-    })
+   
     
     if (user?.role === 'barber' && user.ghlId) {
       const filtered = appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
-      console.log(`📅 Barber filter: ${filtered.length} appointments match ghlId ${user.ghlId}`)
       return filtered
     }
-    console.log(`📅 No barber filter applied, returning all ${appointments.length} appointments`)
     return appointments
   }, [appointments, user?.role, user?.ghlId])
 
@@ -2549,37 +2861,16 @@ export default function CalendarPage() {
       return appointmentDate === dateKey
     })
     
-    console.log(`📅 DIRECT filter debug:`, {
-      currentDate: dateKey,
-      totalAppointments: appointments.length,
-      todaysAppointments: todaysAppointments.length,
-      sampleAppointments: appointments.slice(0, 3).map(a => ({
-        id: a.id,
-        startTime: a.startTime,
-        assigned_user_id: a.assigned_user_id
-      }))
-    })
+  
     
     return todaysAppointments
   }, [appointments, currentDate])
   
   // Debug day appointments
-  console.log(`📅 Calendar Day View Debug:`, {
-    currentDate: currentDate.toDateString(),
-    availableDates: Object.keys(appointmentsByDate).slice(0, 10),
-    dayAppointments: dayAppointments.length,
-    totalAppointments: scopedAppointments.length,
-    sampleDayAppointments: dayAppointments.slice(0, 3).map(a => ({
-      id: a.id,
-      title: a.title,
-      startTime: a.startTime,
-      assigned_user_id: a.assigned_user_id
-    }))
-  })
+
   
   // Debug today's appointment assigned_user_ids
   if (dayAppointments.length > 0) {
-    console.log(`📅 Today's appointments staff IDs:`, dayAppointments.map(a => a.assigned_user_id))
   }
 
   // Effect to fetch staff when reschedule dialog opens
@@ -2625,11 +2916,14 @@ export default function CalendarPage() {
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" className="h-8 bg-[#601625] hover:bg-[#751a29]" onClick={() => router.push('/walk-in')}>
+                <Button size="lg" className="h-12 bg-[#601625] hover:bg-[#751a29] cursor-pointer" onClick={() => router.push('/walk-in')}>
                   <UserIcon className="h-4 w-4 mr-2" />
                   Walk-in
                 </Button>
-                <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
+                <Button size="lg" className="h-12 cursor=pointer" onClick={() => {
+                  const dateStr = currentDate.toISOString().slice(0,10)
+                  window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr } }))
+                }}>
                   <Plus className="h-4 w-4 mr-2" />
                   New Appointment
                 </Button>
@@ -2711,6 +3005,46 @@ export default function CalendarPage() {
             </div>
 
             {/* Calendar Views */}
+          {/* New Appointment Dialog - Calendar scoped */}
+          <AppointmentNew
+            open={newAppointmentOpen}
+            onOpenChange={(open) => {
+              setNewAppointmentOpen(open)
+              if (!open) {
+                resetNewAppointmentForm()
+              }
+            }}
+            currentStep={newAppCurrentStep}
+            goToNextStep={() => setNewAppCurrentStep(prev => Math.min(prev + 1, 4))}
+            goToPrevStep={() => setNewAppCurrentStep(prev => Math.max(prev - 1, 1))}
+            loadingDepts={newAppLoadingDepts}
+            departments={newAppDepartments}
+            selectedDepartment={newAppSelectedDepartment}
+            setSelectedDepartment={setNewAppSelectedDepartment}
+            onDepartmentSelect={handleNewAppDepartmentSelect}
+            loadingServices={newAppLoadingServices}
+            services={newAppServices}
+            selectedService={newAppSelectedService}
+            onServiceSelect={handleNewAppServiceSelect}
+            loadingStaff={newAppLoadingStaff}
+            staff={newAppStaff}
+            selectedStaff={newAppSelectedStaff}
+            onStaffSelect={handleNewAppStaffSelect}
+            loadingDates={newAppLoadingDates}
+            dates={newAppDates}
+            selectedDate={newAppSelectedDate}
+            onDateSelect={handleNewAppDateSelect}
+            loadingSlots={newAppLoadingSlots}
+            slots={newAppSlots}
+            selectedTime={newAppSelectedTime}
+            onTimeSelect={handleNewAppTimeSelect}
+            contactForm={newAppContactForm}
+            setContactForm={setNewAppContactForm}
+            submitting={newAppLoading}
+            onSubmit={submitNewAppointment}
+            formatServiceDuration={formatServiceDuration}
+            formatSelectedDate={formatSelectedDate}
+          />
             {loading ? (
               <div className="flex-1 p-4 min-h-0">
                 <Skeleton className="h-full w-full" />
@@ -2900,27 +3234,43 @@ export default function CalendarPage() {
           </div>
 
           {/* Appointment Details Dialog */}
-          <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-lg bg-white p-4">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="text-lg font-semibold text-[#601625]">
+          <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <DialogContent className="max-w-lg bg-white rounded-2xl border-[#601625]/20">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold text-[#601625]">
                   Appointment Details
-                </SheetTitle>
-                <SheetDescription className="text-gray-600">
+                </DialogTitle>
+                <DialogDescription className="text-gray-600">
                   View and manage this appointment
-                </SheetDescription>
-              </SheetHeader>
+                </DialogDescription>
+              </DialogHeader>
               
               {selectedAppointment && (
-                <div className="space-y-6">
+                <div className="space-y-6 pt-4">
                   {/* Streamlined Appointment Card */}
                   <div className="p-5 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border border-[#601625]/20 rounded-2xl space-y-4">
                     <div className="flex items-start gap-3">
                       <CalendarIcon className="h-5 w-5 text-[#601625] mt-0.5 flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-[#601625] text-base leading-tight">
-                          {selectedAppointment.serviceName || selectedAppointment.title}
-                        </h3>
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-semibold text-[#601625] text-base leading-tight">
+                            {selectedAppointment.serviceName || selectedAppointment.title}
+                          </h3>
+                          <Badge 
+                            variant={
+                              selectedAppointment.appointment_status === 'confirmed' ? 'default' :
+                              selectedAppointment.appointment_status === 'cancelled' ? 'destructive' :
+                              'secondary'
+                            }
+                            className="px-2 py-1 text-xs font-medium"
+                            style={{
+                              backgroundColor: selectedAppointment.appointment_status === 'confirmed' ? '#601625' : undefined,
+                              color: selectedAppointment.appointment_status === 'confirmed' ? 'white' : undefined
+                            }}
+                          >
+                            {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
+                          </Badge>
+                        </div>
                         <p className="text-sm text-gray-600 mt-1">
                           {selectedAppointment.contactName}
                         </p>
@@ -2951,24 +3301,6 @@ export default function CalendarPage() {
                         {selectedAppointment.startTime && formatDate(new Date(selectedAppointment.startTime))}
                       </span>
                     </div>
-                  </div>
-                  
-                  {/* Status Badge */}
-                  <div className="flex items-center justify-center">
-                    <Badge 
-                      variant={
-                        selectedAppointment.appointment_status === 'confirmed' ? 'default' :
-                        selectedAppointment.appointment_status === 'cancelled' ? 'destructive' :
-                        'secondary'
-                      }
-                      className="px-4 py-1.5 text-sm font-medium"
-                      style={{
-                        backgroundColor: selectedAppointment.appointment_status === 'confirmed' ? '#601625' : undefined,
-                        color: selectedAppointment.appointment_status === 'confirmed' ? 'white' : undefined
-                      }}
-                    >
-                      {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
-                    </Badge>
                   </div>
                   
                   {/* Payment Section */}
@@ -3049,8 +3381,8 @@ export default function CalendarPage() {
                   </div>
                 </div>
               )}
-            </SheetContent>
-          </Sheet>
+            </DialogContent>
+          </Dialog>
 
           {/* Cancel Confirmation Dialog */}
           <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>

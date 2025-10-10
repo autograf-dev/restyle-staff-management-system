@@ -33,7 +33,7 @@ type User = {
   id: string
   email: string
   full_name: string
-  role: "admin" | "barber"
+  role: "admin" | "barber" | "owner" | "hq"
   created_at: string
   last_sign_in_at: string | null
 }
@@ -64,7 +64,7 @@ function useUsers() {
         id: u.id,
         email: u.email,
         full_name: u.user_metadata?.full_name || "",
-        role: (u.user_metadata?.role as "admin" | "barber") || "admin",
+        role: (u.user_metadata?.role as "admin" | "barber" | "owner" | "hq") || "admin",
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at,
       }))
@@ -104,7 +104,7 @@ export default function Page() {
     email: "",
     password: "",
     full_name: "",
-    role: "admin" as "admin" | "barber",
+    role: "admin" as "admin" | "barber" | "owner" | "hq",
   })
 
   const resetForm = () => {
@@ -249,7 +249,7 @@ export default function Page() {
       header: "Role",
       cell: ({ row }) => {
         const role = row.getValue("role") as string
-        const variant = role === "admin" ? "default" : role === "legal" ? "secondary" : "outline"
+        const variant = role === "admin" || role === "owner" || role === "hq" ? "default" : role === "barber" ? "secondary" : "outline"
         return <Badge variant={variant}>{role.toUpperCase()}</Badge>
       },
     },
@@ -498,7 +498,7 @@ export default function Page() {
                   <Label htmlFor="add-role">Role</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(value: "admin" | "barber") =>
+                    onValueChange={(value: "admin" | "barber" | "owner" | "hq") =>
                       setFormData({ ...formData, role: value })
                     }
                   >
@@ -508,6 +508,8 @@ export default function Page() {
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="barber">Barber</SelectItem>
+                      <SelectItem value="owner">Owner</SelectItem>
+                      <SelectItem value="hq">HQ</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -561,7 +563,7 @@ export default function Page() {
                   <Label htmlFor="edit-role">Role</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(value: "admin" | "barber") =>
+                    onValueChange={(value: "admin" | "barber" | "owner" | "hq") =>
                       setFormData({ ...formData, role: value })
                     }
                   >
@@ -571,6 +573,8 @@ export default function Page() {
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="barber">Barber</SelectItem>
+                      <SelectItem value="owner">Owner</SelectItem>
+                      <SelectItem value="hq">HQ</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

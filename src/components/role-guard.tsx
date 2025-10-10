@@ -6,7 +6,7 @@ import { useEffect } from "react"
 
 interface RoleGuardProps {
   children: React.ReactNode
-  requiredRole?: "admin" | "barber" | "manager"
+  requiredRole?: "admin" | "barber" | "manager" | "owner" | "hq"
   requiredTeamPrefix?: string
   fallbackUrl?: string
 }
@@ -29,7 +29,7 @@ export function RoleGuard({
     }
 
     // Check role-based access
-    if (requiredRole && user.role !== requiredRole && user.role !== "admin") {
+    if (requiredRole && user.role !== requiredRole && user.role !== "admin" && user.role !== "owner" && user.role !== "hq") {
       router.push(fallbackUrl)
       return
     }
@@ -54,7 +54,7 @@ export function RoleGuard({
   }
 
   // Check role-based access
-  if (requiredRole && user.role !== requiredRole && user.role !== "admin") {
+  if (requiredRole && user.role !== requiredRole && user.role !== "admin" && user.role !== "owner" && user.role !== "hq") {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
