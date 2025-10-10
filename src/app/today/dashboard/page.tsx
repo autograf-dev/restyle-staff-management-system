@@ -5,7 +5,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator"
 import { RoleGuard } from "@/components/role-guard"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -21,6 +21,8 @@ import {
 } from "lucide-react"
 import React, { useState, useEffect, useMemo } from "react"
 import { toast } from "sonner"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useRouter } from "next/navigation"
 
 // Transaction type
 interface TxRow {
@@ -55,6 +57,8 @@ type StaffMember = {
 }
 
 export default function TodayDashboardPage() {
+  const router = useRouter()
+  const isMobile = useIsMobile()
   const [loading, setLoading] = useState(true)
   const [transactions, setTransactions] = useState<TxRow[]>([])
   const [staffList, setStaffList] = useState<StaffMember[]>([])
@@ -515,147 +519,136 @@ export default function TodayDashboardPage() {
 
             {/* Transactions Table for Selected Staff */}
             {selectedStaff && selectedStaffTransactions.length > 0 && (
-              <Card className="border-neutral-200 shadow-none">
-                <CardHeader className="py-3 px-4 border-b border-gray-100">
-                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-[#601625] rounded-full" />
                     Today&apos;s Transactions - {selectedStaff}
                   </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="overflow-hidden rounded-xl border border-gray-200 shadow-lg bg-white">
-                    {/* Header */}
-                    <div className="hidden lg:grid grid-cols-12 bg-white border-b-2 border-gray-100 px-6 py-4">
-                      <div className="col-span-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-[#601625] rounded-full" />
-                          <span className="text-sm font-semibold text-gray-700 tracking-wide">SERVICE</span>
-                        </div>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">CUSTOMER</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">PHONE</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">TIPS</span>
-                      </div>
-                      <div className="col-span-3">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">PAYMENT</span>
-                      </div>
-                    </div>
-
-                    <div className="divide-y divide-gray-100">
-                      {selectedStaffTransactions.map((r, index) => (
-                        <div
-                          key={r.id}
-                          className={`hidden lg:grid grid-cols-12 items-center px-6 py-6 hover:bg-gray-50/50 transition-all duration-200 ${
-                            index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                          }`}
-                        >
-                          {/* Service */}
-                          <div className="col-span-3 min-w-0">
-                            <div className="flex items-center gap-4">
+                  <CardDescription>
+                    Complete transaction details for the selected staff member
+                  </CardDescription>
+                </CardHeader> 
+                <CardContent>
+                  {isMobile ? (
+                    <div className="grid gap-2">
+                      {selectedStaffTransactions.map((r) => (
+                        <Card key={r.id}>
+                          <CardContent className="p-3">
+                            {/* Row 1: Service and Payment */}
+                            <div className="flex items-center gap-3">
                               <div className="w-2 h-2 bg-[#601625] rounded-full flex-shrink-0" />
                               <div className="min-w-0 flex-1">
-                                <div className="text-base font-semibold text-gray-900 truncate leading-tight">
-                                  {getServiceName(r)}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {r.paymentDate ? new Date(r.paymentDate).toLocaleTimeString('en-CA', { 
-                                    hour: '2-digit', 
-                                    minute: '2-digit' 
-                                  }) : '—'}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Customer */}
-                          <div className="col-span-2 min-w-0">
-                            <div className="min-w-0 flex-1">
-                              <div className="text-base font-semibold text-gray-900 truncate">
-                                {getCustomerName(r)}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Phone */}
-                          <div className="col-span-2">
-                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20">
-                              <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-1.5" />
-                              {getCustomerPhone(r)}
-                            </span>
-                          </div>
-
-                          {/* Tips */}
-                          <div className="col-span-2">
-                            <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
-                          </div>
-
-                          {/* Payment */}
-                          <div className="col-span-3">
-                            <div className="flex flex-col gap-1">
-                              <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
-                              <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5" />
-                                  {r.method || "Unknown"}
-                                </span>
-                                <span className="text-xs text-gray-500 font-mono">{formatDate(r.paymentDate)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Mobile cards */}
-                      {selectedStaffTransactions.map((r) => (
-                        <div key={`mobile-${r.id}`} className="lg:hidden p-4 border-b border-gray-100 last:border-b-0">
-                          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4 shadow-sm">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-[#601625] rounded-full" />
-                                <div>
-                                  <div className="text-base font-semibold text-gray-900">{getServiceName(r)}</div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {r.paymentDate ? new Date(r.paymentDate).toLocaleTimeString('en-CA', { 
-                                      hour: '2-digit', 
-                                      minute: '2-digit' 
-                                    }) : '—'}
-                                  </div>
+                                <div className="font-medium leading-tight truncate">{getServiceName(r)}</div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+                                  <div className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                                  {getCustomerName(r)}
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5" />
-                                    {r.method || "Unknown"}
-                                  </span>
-                                </div>
+                                <div className="text-lg font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                                <div className="text-xs text-muted-foreground">{formatCurrency(r.tip)} tip</div>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Customer</div>
-                                <div className="text-sm font-medium text-gray-900">{getCustomerName(r)}</div>
-                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20 mt-1">
+                            {/* Row 2: Customer and Payment Method */}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1 text-xs">
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
                                   {getCustomerPhone(r)}
-                                </span>
+                                </Badge>
+                                <Badge 
+                                  variant="default"
+                                  className="bg-green-100 text-green-800 border-green-300 w-fit"
+                                >
+                                  {r.method || "Unknown"}
+                                </Badge>
                               </div>
-                              <div>
-                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Tips</div>
-                                <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
-                              </div>
+                              <Button
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90 px-3 h-8 shrink-0"
+                                onClick={() => {
+                                  router.push(`/payments/${r.id}`)
+                                }}
+                              >
+                                <div className="w-1.5 h-1.5 bg-white rounded-full mr-1.5" />
+                                View
+                              </Button>
                             </div>
-                          </div>
-                        </div>
+                          </CardContent>
+                        </Card>
                       ))}
                     </div>
-                  </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Service</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Tips</TableHead>
+                          <TableHead>Payment</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedStaffTransactions.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-[#601625] rounded-full flex-shrink-0" />
+                                <div>
+                                  <div className="font-medium">{getServiceName(r)}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                                {getCustomerName(r)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                                {getCustomerPhone(r)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant="default"
+                                className="bg-green-100 text-green-800 border-green-300"
+                              >
+                                {formatCurrency(r.tip)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                <div className="font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                                <Badge 
+                                  variant="secondary"
+                                  className="bg-blue-100 text-blue-800 border-blue-300 w-fit"
+                                >
+                                  {r.method || "Unknown"}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90"
+                                onClick={() => {
+                                  router.push(`/payments/${r.id}`)
+                                }}
+                              >
+                                <div className="w-1.5 h-1.5 bg-white rounded-full mr-1.5" />
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
               </Card>
             )}

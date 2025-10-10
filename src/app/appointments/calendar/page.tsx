@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -3237,27 +3236,43 @@ export default function CalendarPage() {
           </div>
 
           {/* Appointment Details Dialog */}
-          <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <SheetContent side="right" className="w-full sm:max-w-lg bg-white p-4">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="text-lg font-semibold text-[#601625]">
+          <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <DialogContent className="max-w-lg bg-white rounded-2xl border-[#601625]/20">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold text-[#601625]">
                   Appointment Details
-                </SheetTitle>
-                <SheetDescription className="text-gray-600">
+                </DialogTitle>
+                <DialogDescription className="text-gray-600">
                   View and manage this appointment
-                </SheetDescription>
-              </SheetHeader>
+                </DialogDescription>
+              </DialogHeader>
               
               {selectedAppointment && (
-                <div className="space-y-6">
+                <div className="space-y-6 pt-4">
                   {/* Streamlined Appointment Card */}
                   <div className="p-5 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border border-[#601625]/20 rounded-2xl space-y-4">
                     <div className="flex items-start gap-3">
                       <CalendarIcon className="h-5 w-5 text-[#601625] mt-0.5 flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-[#601625] text-base leading-tight">
-                          {selectedAppointment.serviceName || selectedAppointment.title}
-                        </h3>
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-semibold text-[#601625] text-base leading-tight">
+                            {selectedAppointment.serviceName || selectedAppointment.title}
+                          </h3>
+                          <Badge 
+                            variant={
+                              selectedAppointment.appointment_status === 'confirmed' ? 'default' :
+                              selectedAppointment.appointment_status === 'cancelled' ? 'destructive' :
+                              'secondary'
+                            }
+                            className="px-2 py-1 text-xs font-medium"
+                            style={{
+                              backgroundColor: selectedAppointment.appointment_status === 'confirmed' ? '#601625' : undefined,
+                              color: selectedAppointment.appointment_status === 'confirmed' ? 'white' : undefined
+                            }}
+                          >
+                            {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
+                          </Badge>
+                        </div>
                         <p className="text-sm text-gray-600 mt-1">
                           {selectedAppointment.contactName}
                         </p>
@@ -3288,24 +3303,6 @@ export default function CalendarPage() {
                         {selectedAppointment.startTime && formatDate(new Date(selectedAppointment.startTime))}
                       </span>
                     </div>
-                  </div>
-                  
-                  {/* Status Badge */}
-                  <div className="flex items-center justify-center">
-                    <Badge 
-                      variant={
-                        selectedAppointment.appointment_status === 'confirmed' ? 'default' :
-                        selectedAppointment.appointment_status === 'cancelled' ? 'destructive' :
-                        'secondary'
-                      }
-                      className="px-4 py-1.5 text-sm font-medium"
-                      style={{
-                        backgroundColor: selectedAppointment.appointment_status === 'confirmed' ? '#601625' : undefined,
-                        color: selectedAppointment.appointment_status === 'confirmed' ? 'white' : undefined
-                      }}
-                    >
-                      {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
-                    </Badge>
                   </div>
                   
                   {/* Payment Section */}
@@ -3386,8 +3383,8 @@ export default function CalendarPage() {
                   </div>
                 </div>
               )}
-            </SheetContent>
-          </Sheet>
+            </DialogContent>
+          </Dialog>
 
           {/* Cancel Confirmation Dialog */}
           <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
