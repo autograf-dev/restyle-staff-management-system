@@ -114,10 +114,8 @@ function useAppointments(view: CalendarView, currentDate: Date) {
             setData(cached?.data || [])
             setLastUpdated(cached?.fetchedAt || Date.now())
             setLoading(false)
-            console.log(`📅 Calendar ${view}: Using cached data (${cached?.data?.length || 0} appointments)`)
             return
           } else if (cached) {
-            console.log(`📅 Calendar ${view}: Bypassing cache (had ${cached.data?.length || 0} appointments, age: ${Math.round((Date.now() - cached.fetchedAt) / 60000)} min)`)
           }
         } catch {}
 
@@ -130,13 +128,11 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           params.append('endDate', endDate)
           // Use a generous limit to include all appointments in range
           params.append('pageSize', view === 'year' ? '20000' : '5000')
-          console.log(`📅 Calendar ${view}: Fetching appointments for date range ${startDate} to ${endDate}`)
         }
         params.append('page', '1')
         
         apiUrl += params.toString()
         
-        console.log(`📅 Calendar ${view}: Fetching from ${apiUrl}`)
         const res = await fetch(apiUrl)
         
         if (!res.ok) {
@@ -149,8 +145,7 @@ function useAppointments(view: CalendarView, currentDate: Date) {
         const allBookings = json?.bookings || []
         const total = json?.total || 0
         
-        console.log(`📅 Calendar: Fetched ${allBookings.length} of ${total} total appointments`)
-        console.log('📅 Calendar: Sample booking:', allBookings[0])
+       
         
         // Map the API response data to Appointment format
         const appointments: Appointment[] = allBookings.map((booking: {
@@ -207,36 +202,25 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           }
         })
         
-        console.log(`📅 Calendar: Mapped ${appointments.length} appointments`)
         
         // Filter appointments with valid start times - but be more lenient
         const filtered = appointments.filter(apt => {
           const hasStartTime = apt.startTime && apt.startTime.trim() !== ''
           if (!hasStartTime) {
-            console.warn('📅 Calendar: Appointment missing startTime:', apt.id, apt.title)
           }
           return hasStartTime
         })
         
-        console.log(`📅 Calendar: After filtering for startTime: ${filtered.length} appointments`)
         
         if (filtered.length > 0) {
           const dates = filtered.map(a => new Date(a.startTime!).getTime()).filter(t => !isNaN(t))
           if (dates.length > 0) {
-            console.log(`📅 Calendar: Date range: ${new Date(Math.min(...dates)).toLocaleDateString()} to ${new Date(Math.max(...dates)).toLocaleDateString()}`)
           }
           
           // Sample some appointments for debugging
-          console.log('📅 Calendar: Sample appointments:', filtered.slice(0, 3).map(a => ({
-            id: a.id,
-            title: a.title,
-            startTime: a.startTime,
-            serviceName: a.serviceName,
-            contactName: a.contactName
-          })))
+     
         } else {
-          console.warn('📅 Calendar: No appointments with valid start times found!')
-          console.log('📅 Calendar: Sample raw bookings:', allBookings.slice(0, 3))
+        
         }
         
         setData(filtered)
@@ -514,18 +498,8 @@ const StaffOverviewView = ({
 
           // Debug: Log the first staff member's working hours
           if (staffMembers.length > 0) {
-            console.log("📅 Staff working hours sample:", {
-              staff: staffMembers[0].name,
-              workingHours: staffMembers[0].workingHours,
-              currentDate: currentDate,
-              dayOfWeek: currentDate.getDay()
-            })
+         
             
-            console.log("📅 All Staff Members loaded:", staffMembers.map((s: { name: string; ghl_id: string; role: string }) => ({
-              name: s.name,
-              ghl_id: s.ghl_id,
-              role: s.role
-            })))
             
             // Debug staff IDs vs appointment IDs for today
             const todayAppointments = appointments.filter(apt => {
@@ -537,12 +511,7 @@ const StaffOverviewView = ({
             if (todayAppointments.length > 0) {
               const appointmentStaffIds = todayAppointments.map((a: Appointment) => a.assigned_user_id)
               const staffGhlIds = staffMembers.map((s: { ghl_id: string }) => s.ghl_id)
-              console.log("📅 Staff ID Matching Debug:", {
-                appointmentStaffIds,
-                staffGhlIds,
-                matchingIds: appointmentStaffIds.filter((id: string) => staffGhlIds.includes(id)),
-                missingStaffIds: appointmentStaffIds.filter((id: string) => !staffGhlIds.includes(id))
-              })
+           
             }
           }
           
@@ -573,10 +542,8 @@ const StaffOverviewView = ({
         // Fetch salon hours data
         const salonRes = await fetch('/api/business-hours')
         const salonJson = await salonRes.json()
-        console.log('📅 Salon hours API response:', salonJson)
         if (salonJson.ok) {
           setSalonHours(salonJson.data || [])
-          console.log('📅 Salon hours data set:', salonJson.data)
         }
       } catch (error) {
         console.error('Failed to fetch data:', error)
@@ -622,24 +589,12 @@ const StaffOverviewView = ({
   const timeSlots = generateTimeSlots()
   
   // Debug: Log the first few time slots
-  console.log(`📅 Time slots generated:`, timeSlots.slice(0, 10))
 
   // Get staff appointments for the current day
   const getStaffAppointments = (staffGhlId: string) => {
     // Filter from the appointments prop (already filtered to current day)
     const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
-    console.log(`📅 Staff Appointments Debug for ${staffGhlId}:`, {
-      staffGhlId,
-      currentDate: currentDate.toDateString(),
-      totalAppointments: appointments.length,
-      filteredAppointments: filtered.length,
-      sampleFiltered: filtered.slice(0, 2).map((a: Appointment) => ({
-        id: a.id,
-        title: a.title,
-        assigned_user_id: a.assigned_user_id,
-        startTime: a.startTime
-      }))
-    })
+ 
     return filtered
   }
 
@@ -691,15 +646,7 @@ const StaffOverviewView = ({
     
     // Debug logging for overlap groups
     if (groups.some(group => group.length > 1)) {
-      console.log(`📅 Overlap groups found:`, groups.map(group => ({
-        size: group.length,
-        appointments: group.map(apt => ({
-          id: apt.id,
-          title: apt.title,
-          startTime: apt.startTime,
-          endTime: apt.endTime
-        }))
-      })))
+      
     }
     
     return groups
@@ -744,13 +691,7 @@ const StaffOverviewView = ({
       
       columnWidths[staffMember.ghl_id] = dynamicWidth
       
-      console.log(`📅 Dynamic column width for ${staffMember.name}:`, {
-        maxConcurrent,
-        dynamicWidth,
-        totalAppointments: staffAppointments.length,
-        overlapGroups: overlapGroups.length,
-        groupsWithOverlaps: overlapGroups.filter(group => group.length > 1).length
-      })
+     
     })
     
     return columnWidths
@@ -762,7 +703,6 @@ const StaffOverviewView = ({
   // Helper function to get appointment position and height with overlap handling (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment, staffGhlId: string) => {
     if (!appointment.startTime || !appointment.endTime) {
-      console.log(`📅 Appointment ${appointment.id} missing time:`, { startTime: appointment.startTime, endTime: appointment.endTime })
       return { display: 'none' }
     }
     
@@ -779,14 +719,7 @@ const StaffOverviewView = ({
     // Only show appointments within 8AM-8PM range
     const dayEndMinutesExclusive = 20 * 60 // 8:00 PM end-of-day
     if (startMinutes < dayStartMinutes || startMinutes >= dayEndMinutesExclusive) {
-      console.log(`📅 Appointment ${appointment.id} outside time range:`, {
-        title: appointment.title,
-        startTime: appointment.startTime,
-        startMinutes,
-        dayStartMinutes,
-        dayEndMinutesExclusive,
-        reason: startMinutes < dayStartMinutes ? 'before 8AM' : 'after 8PM'
-      })
+      
       return { display: 'none' }
     }
     
@@ -826,22 +759,7 @@ const StaffOverviewView = ({
       zIndex = 10 + appointmentIndex
     }
     
-    console.log(`📅 Appointment ${appointment.id} positioned with overlaps:`, {
-      title: appointment.title,
-      startTime: appointment.startTime,
-      endTime: appointment.endTime,
-      startMinutes,
-      endMinutes,
-      topOffset,
-      height,
-      assigned_user_id: appointment.assigned_user_id,
-      groupSize: appointmentGroup.length,
-      appointmentIndex,
-      leftOffset,
-      width,
-      zIndex,
-      columnWidth: dynamicColumnWidths[staffGhlId] || baseColumnWidth
-    })
+
     
     return {
       position: 'absolute' as const,
@@ -928,16 +846,9 @@ const StaffOverviewView = ({
     const currentDayName = currentDate.getDay()
     const dayHours = salonHours.find(hour => hour.day_of_week === currentDayName)
     
-    console.log(`📅 Salon hours debug:`, {
-      currentDate: currentDate,
-      currentDayName: currentDayName,
-      dayHours: dayHours,
-      allSalonHours: salonHours,
-      lookingForDay: currentDayName
-    })
+    
     
     if (!dayHours || !dayHours.is_open || !dayHours.open_time || !dayHours.close_time) {
-      console.log(`📅 Salon is closed for day ${currentDayName}`)
       return null // Salon is closed
     }
 
@@ -946,12 +857,7 @@ const StaffOverviewView = ({
       endMinutes: dayHours.close_time
     }
     
-    console.log(`📅 Salon working hours:`, {
-      openTime: `${Math.floor(dayHours.open_time/60)}:${(dayHours.open_time%60).toString().padStart(2,'0')}`,
-      closeTime: `${Math.floor(dayHours.close_time/60)}:${(dayHours.close_time%60).toString().padStart(2,'0')}`,
-      startMinutes: dayHours.open_time,
-      endMinutes: dayHours.close_time
-    })
+   
     
     return result
   }
@@ -1065,7 +971,7 @@ const StaffOverviewView = ({
 
     // Check if staff member is on leave - grey out entire day
     if (staffMember.ghl_id && isStaffOnLeave(staffMember.ghl_id)) {
-      console.log(`📅 ${staffMember.name} is on leave - greying entire day`)
+      
       return [{
         startMinutes: 8 * 60, // 8AM
         endMinutes: 20 * 60,  // 8PM
@@ -1081,7 +987,6 @@ const StaffOverviewView = ({
     
     // If salon is closed, grey out entire day
     if (!salonHours) {
-      console.log(`📅 Salon is closed - greying entire day for ${staffMember.name}`)
       return [{
         startMinutes: 8 * 60, // 8AM
         endMinutes: 20 * 60,  // 8PM
@@ -1091,7 +996,6 @@ const StaffOverviewView = ({
 
     // If staff has no working hours, grey out entire day
     if (!workingHours) {
-      console.log(`📅 ${staffMember.name} has no working hours - greying entire day`)
       return [{
         startMinutes: 8 * 60, // 8AM
         endMinutes: 20 * 60,  // 8PM
@@ -1099,24 +1003,10 @@ const StaffOverviewView = ({
       }]
     }
 
-    console.log(`📅 ${staffMember.name} working analysis:`, {
-      salon: {
-        hours: `${Math.floor(salonHours.startMinutes/60)}:${(salonHours.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(salonHours.endMinutes/60)}:${(salonHours.endMinutes%60).toString().padStart(2,'0')}`,
-        minutes: `${salonHours.startMinutes} - ${salonHours.endMinutes}`
-      },
-      staff: {
-        hours: `${Math.floor(workingHours.startMinutes/60)}:${(workingHours.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(workingHours.endMinutes/60)}:${(workingHours.endMinutes%60).toString().padStart(2,'0')}`,
-        minutes: `${workingHours.startMinutes} - ${workingHours.endMinutes}`
-      }
-    })
+  
 
     // Salon hours greying (before salon opens and after salon closes)
-    console.log(`📅 Salon hours calculation for ${staffMember.name}:`, {
-      dayStart: `${dayStartMinutes} (${Math.floor(dayStartMinutes/60)}:${(dayStartMinutes%60).toString().padStart(2,'0')})`,
-      dayEnd: `${dayEndMinutes} (${Math.floor(dayEndMinutes/60)}:${(dayEndMinutes%60).toString().padStart(2,'0')})`,
-      salonStart: `${salonHours.startMinutes} (${Math.floor(salonHours.startMinutes/60)}:${(salonHours.startMinutes%60).toString().padStart(2,'0')})`,
-      salonEnd: `${salonHours.endMinutes} (${Math.floor(salonHours.endMinutes/60)}:${(salonHours.endMinutes%60).toString().padStart(2,'0')})`
-    })
+   
     
     if (salonHours.startMinutes > dayStartMinutes) {
       const beforeOpenPeriod = {
@@ -1124,7 +1014,6 @@ const StaffOverviewView = ({
         endMinutes: Math.min(salonHours.startMinutes, dayEndMinutes),
         type: 'salon-closed'
       }
-      console.log(`📅 Adding before-open period:`, beforeOpenPeriod)
       periods.push(beforeOpenPeriod)
     }
     
@@ -1134,11 +1023,7 @@ const StaffOverviewView = ({
         endMinutes: dayEndMinutes,
         type: 'salon-closed'
       }
-      console.log(`📅 Adding after-close period:`, {
-        ...afterClosePeriod,
-        timeRange: `${Math.floor(afterClosePeriod.startMinutes/60)}:${(afterClosePeriod.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(afterClosePeriod.endMinutes/60)}:${(afterClosePeriod.endMinutes%60).toString().padStart(2,'0')}`,
-        shouldCover: "Should gray out entire area after salon closes"
-      })
+     
       periods.push(afterClosePeriod)
     }
 
@@ -1147,14 +1032,6 @@ const StaffOverviewView = ({
     const effectiveWorkStart = Math.max(workingHours.startMinutes, salonHours.startMinutes)
     const effectiveWorkEnd = Math.min(workingHours.endMinutes, salonHours.endMinutes)
     
-    console.log(`📅 Staff hours calculation for ${staffMember.name}:`, {
-      salonOpen: salonHours.startMinutes,
-      salonClose: salonHours.endMinutes,
-      staffStart: workingHours.startMinutes,
-      staffEnd: workingHours.endMinutes,
-      effectiveStart: effectiveWorkStart,
-      effectiveEnd: effectiveWorkEnd
-    })
     
     // Before staff starts (within salon hours only)
     if (effectiveWorkStart > salonHours.startMinutes) {
@@ -1163,7 +1040,6 @@ const StaffOverviewView = ({
         endMinutes: effectiveWorkStart,
         type: 'staff-off'
       }
-      console.log(`📅 Adding before-staff period:`, beforeStaffPeriod)
       periods.push(beforeStaffPeriod)
     }
     
@@ -1174,7 +1050,6 @@ const StaffOverviewView = ({
         endMinutes: salonHours.endMinutes,
         type: 'staff-off'
       }
-      console.log(`📅 Adding after-staff period:`, afterStaffPeriod)
       periods.push(afterStaffPeriod)
     }
 
@@ -1182,7 +1057,6 @@ const StaffOverviewView = ({
     if (staffMember.ghl_id) {
       const breakPeriods = getStaffBreakPeriods(staffMember.ghl_id)
       if (breakPeriods.length > 0) {
-        console.log(`📅 ${staffMember.name} has ${breakPeriods.length} break periods:`, breakPeriods)
       }
       periods.push(...breakPeriods.map(period => ({ startMinutes: period.startMinutes, endMinutes: period.endMinutes, type: 'break', block: period.block })))
     }
@@ -1194,12 +1068,7 @@ const StaffOverviewView = ({
     // Let CSS handle overlapping with z-index and opacity
     const finalPeriods = periods.filter(p => p.startMinutes < p.endMinutes)
     
-    console.log(`📅 ${staffMember.name} non-working periods (final):`, finalPeriods.map(p => ({
-      type: p.type,
-      time: `${Math.floor(p.startMinutes/60)}:${(p.startMinutes%60).toString().padStart(2,'0')} - ${Math.floor(p.endMinutes/60)}:${(p.endMinutes%60).toString().padStart(2,'0')}`,
-      startMinutes: p.startMinutes,
-      endMinutes: p.endMinutes
-    })))
+ 
     
     return finalPeriods
   }
@@ -1576,25 +1445,7 @@ const StaffOverviewView = ({
     const endPosition = GRID_TOP_PADDING + endSlotIndex * HOUR_SLOT_HEIGHT
                     const height = endPosition - startPosition
                     
-                    // Debug logging
-                    console.log(`📅 ${staffMember.name} period ${index}:`, {
-                      type: period.type,
-                      startMinutes: period.startMinutes,
-                      endMinutes: period.endMinutes,
-                      startTime: `${Math.floor(period.startMinutes/60)}:${(period.startMinutes%60).toString().padStart(2,'0')}`,
-                      endTime: `${Math.floor(period.endMinutes/60)}:${(period.endMinutes%60).toString().padStart(2,'0')}`,
-                      startSlotIndex,
-                      endSlotIndex,
-                      startPosition,
-                      endPosition,
-                      height,
-                      GRID_TOP_PADDING,
-                      expectedSlots: `Should cover slots ${startSlotIndex} to ${endSlotIndex} (${endSlotIndex - startSlotIndex} slots)`,
-                      timeSlotMapping: {
-                        slot10: '18:00 (6 PM)',
-                        slot11: '19:00 (7 PM)'
-                      }
-                    })
+                  
                     
                     // Validate positioning
                     if (height <= 0) {
@@ -1748,14 +1599,7 @@ const StaffOverviewView = ({
                           
                           const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
                           
-                          // Debug logging
-                          console.log(`🔍 Date comparison for ${staffMember.name}:`)
-                          console.log(`   Break Date String: "${dateString}"`)
-                          console.log(`   Parsed Break Date: ${breakDateOnly.toDateString()}`)
-                          console.log(`   Calendar Date: ${calendarDate.toDateString()}`)
-                          console.log(`   Break Date Time: ${breakDateOnly.getTime()}`)
-                          console.log(`   Calendar Date Time: ${calendarDate.getTime()}`)
-                          console.log(`   Dates Match: ${breakDateOnly.getTime() === calendarDate.getTime()}`)
+                         
                           
                           if (breakDateOnly.getTime() !== calendarDate.getTime()) {
                             return null // Skip if break is not scheduled for this date
@@ -1784,7 +1628,7 @@ const StaffOverviewView = ({
                     return (
                       <div
                         key={`break-${breakItem["🔒 Row ID"]}`}
-                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-gray-400 bg-gray-100/50 backdrop-blur-sm"
+                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-gray-400 bg-gray-100/50 backdrop-blur-sm hidden"
                         style={style}
                         title={`Break: ${breakItem["Block/Name"]}`}
                       >
@@ -2177,8 +2021,7 @@ export default function CalendarPage() {
       const serviceObj = (serviceData.services || []).find((s: { id: string }) => s.id === bookingToReschedule.calendar_id)
       const teamMembers = serviceObj?.teamMembers || []
 
-      console.log('Service found:', serviceObj?.name)
-      console.log('Team members:', teamMembers)
+
 
       // Start with "Any available staff" option
       const items = [{
@@ -2213,7 +2056,6 @@ export default function CalendarPage() {
 
       const allStaffOptions = [...items, ...assignedStaff]
       
-      console.log('Final staff options:', allStaffOptions)
       
       if (rescheduleOpen) {
         setStaffOptions(allStaffOptions)
@@ -2464,19 +2306,12 @@ export default function CalendarPage() {
 
   // Scope to barber's own appointments if barber
   const scopedAppointments = React.useMemo(() => {
-    console.log(`📅 Scoping appointments:`, {
-      totalAppointments: appointments.length,
-      userRole: user?.role,
-      userGhlId: user?.ghlId,
-      sampleAssignedUserIds: appointments.slice(0, 5).map(a => a.assigned_user_id)
-    })
+   
     
     if (user?.role === 'barber' && user.ghlId) {
       const filtered = appointments.filter(a => (a.assigned_user_id || '') === user.ghlId)
-      console.log(`📅 Barber filter: ${filtered.length} appointments match ghlId ${user.ghlId}`)
       return filtered
     }
-    console.log(`📅 No barber filter applied, returning all ${appointments.length} appointments`)
     return appointments
   }, [appointments, user?.role, user?.ghlId])
 
@@ -2620,37 +2455,16 @@ export default function CalendarPage() {
       return appointmentDate === dateKey
     })
     
-    console.log(`📅 DIRECT filter debug:`, {
-      currentDate: dateKey,
-      totalAppointments: appointments.length,
-      todaysAppointments: todaysAppointments.length,
-      sampleAppointments: appointments.slice(0, 3).map(a => ({
-        id: a.id,
-        startTime: a.startTime,
-        assigned_user_id: a.assigned_user_id
-      }))
-    })
+  
     
     return todaysAppointments
   }, [appointments, currentDate])
   
   // Debug day appointments
-  console.log(`📅 Calendar Day View Debug:`, {
-    currentDate: currentDate.toDateString(),
-    availableDates: Object.keys(appointmentsByDate).slice(0, 10),
-    dayAppointments: dayAppointments.length,
-    totalAppointments: scopedAppointments.length,
-    sampleDayAppointments: dayAppointments.slice(0, 3).map(a => ({
-      id: a.id,
-      title: a.title,
-      startTime: a.startTime,
-      assigned_user_id: a.assigned_user_id
-    }))
-  })
+
   
   // Debug today's appointment assigned_user_ids
   if (dayAppointments.length > 0) {
-    console.log(`📅 Today's appointments staff IDs:`, dayAppointments.map(a => a.assigned_user_id))
   }
 
   // Effect to fetch staff when reschedule dialog opens
