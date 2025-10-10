@@ -27,7 +27,8 @@ import {
   DollarSign,
   CheckCircle,
   X,
-  Eye
+  Eye,
+  Pencil
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
@@ -424,6 +425,10 @@ const StaffOverviewView = ({
     endAbs?: number;
   }>({ open: false, x: 0, y: 0 })
   const [prefillBlock, setPrefillBlock] = React.useState<BreakPrefill | null>(null)
+  // Break edit/delete state for overlay actions
+  const [editingBreak, setEditingBreak] = React.useState<Record<string, unknown> | null>(null)
+  const [deleteBreakOpen, setDeleteBreakOpen] = React.useState(false)
+  const [breakToDelete, setBreakToDelete] = React.useState<Record<string, unknown> | null>(null)
 
   const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
 
@@ -1007,7 +1012,7 @@ const StaffOverviewView = ({
   // Helper function to get break periods for staff member on current day
   const getStaffBreakPeriods = (staffGhlId: string) => {
     const allBreaks = getStaffBreaks(staffGhlId)
-    const periods: { startMinutes: number, endMinutes: number }[] = []
+    const periods: { startMinutes: number, endMinutes: number, block: Record<string, unknown> }[] = []
     
     allBreaks.forEach(breakItem => {
       // Check if this break applies to the current date
@@ -1043,7 +1048,7 @@ const StaffOverviewView = ({
           
           // Only include breaks within our calendar range (8AM-8PM)
           if (startMinutes >= 8 * 60 && endMinutes <= 20 * 60) {
-            periods.push({ startMinutes, endMinutes })
+            periods.push({ startMinutes, endMinutes, block: breakItem as unknown as Record<string, unknown> })
           }
         }
       }
@@ -1054,7 +1059,7 @@ const StaffOverviewView = ({
 
   // Helper function to get non-working time periods for a staff member
   const getNonWorkingPeriods = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, name?: string, ghl_id?: string }) => {
-    const periods: { startMinutes: number, endMinutes: number, type: string }[] = []
+    const periods: { startMinutes: number, endMinutes: number, type: string, block?: Record<string, unknown> }[] = []
     const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
     const dayEndMinutes = 20 * 60  // Gray area extends till 8PM (even though view ends at 7PM)
 
@@ -1179,7 +1184,7 @@ const StaffOverviewView = ({
       if (breakPeriods.length > 0) {
         console.log(`📅 ${staffMember.name} has ${breakPeriods.length} break periods:`, breakPeriods)
       }
-      periods.push(...breakPeriods.map(period => ({ ...period, type: 'break' })))
+      periods.push(...breakPeriods.map(period => ({ startMinutes: period.startMinutes, endMinutes: period.endMinutes, type: 'break', block: period.block })))
     }
     
     // Sort periods by start time 
@@ -1643,6 +1648,32 @@ const StaffOverviewView = ({
                             {Math.floor(period.startMinutes/60)}:{(period.startMinutes%60).toString().padStart(2,'0')} - {Math.floor(period.endMinutes/60)}:{(period.endMinutes%60).toString().padStart(2,'0')}
                           </div>
                         </div>
+                        {period.type === 'break' && (
+                          <div className="absolute right-2 top-1 z-[60] opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1">
+                            <button
+                              className="p-1 rounded bg-white/90 shadow border border-neutral-200 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPrefillBlock(null)
+                                setEditingBreak(period.block as unknown as Record<string, unknown>)
+                                setBreakDialogOpen(true)
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              className="p-1 rounded bg-white/70 shadow border border-neutral-200 cursor-pointer "
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setBreakToDelete(period.block as unknown as Record<string, unknown>)
+                                setDeleteBreakOpen(true)
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </button>
+                          </div>
+                        )}
+
                       </div>
                     )
                   })}
@@ -1838,13 +1869,50 @@ const StaffOverviewView = ({
               open={breakDialogOpen}
               onOpenChange={(open) => {
                 setBreakDialogOpen(open)
-                if (!open) setPrefillBlock(null)
+                if (!open) {
+                  setPrefillBlock(null)
+                  setEditingBreak(null)
+                }
               }}
               staff={staff.map(s => ({ ghl_id: s.ghl_id, "Barber/Name": s.name }))}
-              editingBlock={null}
+              editingBlock={editingBreak}
               prefill={prefillBlock ?? undefined}
-              onSuccess={refreshBreaks}
+              onSuccess={() => { refreshBreaks(); setEditingBreak(null) }}
             />
+
+            {/* Delete Break Confirmation Dialog */}
+            <Dialog open={deleteBreakOpen} onOpenChange={(o) => { setDeleteBreakOpen(o); if (!o) setBreakToDelete(null) }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete break?</DialogTitle>
+                  <DialogDescription>
+                    This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2">
+                  <button className="px-3 py-2 text-sm border rounded" onClick={() => setDeleteBreakOpen(false)}>Cancel</button>
+                  <button
+                    className="px-3 py-2 text-sm rounded bg-red-600 text-white"
+                    onClick={async () => {
+                      if (!breakToDelete) return
+                      try {
+                        const id = String((breakToDelete as Record<string, unknown>)['🔒 Row ID'] as string || '')
+                        if (!id) { setDeleteBreakOpen(false); return }
+                        const res = await fetch(`/api/time-blocks?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+                        const r = await res.json().catch(() => ({ ok: false }))
+                        if (r?.ok) {
+                          setDeleteBreakOpen(false)
+                          setBreakToDelete(null)
+                          await refreshBreaks()
+                        }
+                      } catch {}
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>
@@ -1933,6 +2001,7 @@ export default function CalendarPage() {
   const [rescheduleOpen, setRescheduleOpen] = React.useState(false)
   const [bookingToReschedule, setBookingToReschedule] = React.useState<Appointment | null>(null)
   const [rescheduleLoading, setRescheduleLoading] = React.useState(false)
+  
   
   // Reschedule form data
   const [selectedStaff, setSelectedStaff] = React.useState<string>("")
@@ -2627,11 +2696,11 @@ export default function CalendarPage() {
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" className="h-8 bg-[#601625] hover:bg-[#751a29]" onClick={() => router.push('/walk-in')}>
+                <Button size="lg" className="h-12 bg-[#601625] hover:bg-[#751a29] cursor-pointer" onClick={() => router.push('/walk-in')}>
                   <UserIcon className="h-4 w-4 mr-2" />
                   Walk-in
                 </Button>
-                <Button size="sm" className="h-8" onClick={() => router.push(`/appointments?view=new`)}>
+                <Button size="lg" className="h-12 cursor=pointer" onClick={() => router.push(`/appointments?view=new`)}>
                   <Plus className="h-4 w-4 mr-2" />
                   New Appointment
                 </Button>
