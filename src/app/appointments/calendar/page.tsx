@@ -440,14 +440,16 @@ const StaffOverviewView = ({
 
   const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
 
-  const openPrefilledBreakDialog = (ghlId: string, startMinutesAbs: number, endMinutesAbs: number) => {
-    const blockDateIso = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).toISOString()
+  const openPrefilledBreakDialog = (ghlId: string, startMinutesAbs: number, endMinutesAbs: number, selectedDate?: Date) => {
+    const dateToUse = selectedDate || currentDate
+    // Create date at noon to avoid timezone issues
+    const blockDate = new Date(dateToUse.getFullYear(), dateToUse.getMonth(), dateToUse.getDate(), 12, 0, 0)
     setPrefillBlock({
       ghl_id: ghlId,
       name: 'Break',
       startMinutes: startMinutesAbs,
       endMinutes: endMinutesAbs,
-      date: blockDateIso,
+      date: blockDate.toISOString(),
     })
     setBreakDialogOpen(true)
   }
@@ -1186,7 +1188,7 @@ const StaffOverviewView = ({
                       onClick={() => {
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.staffId && selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined) {
-                          openPrefilledBreakDialog(selectionMenu.staffId, selectionMenu.startAbs, selectionMenu.endAbs)
+                          openPrefilledBreakDialog(selectionMenu.staffId, selectionMenu.startAbs, selectionMenu.endAbs, currentDate)
                         }
                       }}
                     >
