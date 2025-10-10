@@ -1320,7 +1320,7 @@ const StaffOverviewView = ({
       {/* Header - Sticky time column + scrollable staff columns */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center">
         {/* Sticky Time Header */}
-        <div className="w-[80px] p-4 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
+        <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
           
         </div>
         
@@ -1344,7 +1344,7 @@ const StaffOverviewView = ({
                 <div 
                   key={staffMember.ghl_id} 
                   className={cn(
-                    "p-4 border-r last:border-r-0 border-[#601625]/20 flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
+                    "p-2 border-r last:border-r-0 border-[#601625]/20 flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
                     isCollapsed ? "bg-[#601625]/5" : "bg-background"
                   )}
                   style={{ width: `${columnWidth}px` }}
@@ -1354,73 +1354,27 @@ const StaffOverviewView = ({
                   {isCollapsed ? (
                     // Collapsed view - compact vertical layout
                     <div className="flex flex-col items-center justify-center h-full relative">
-                      {/* Staff name with expand hint overlaid at bottom */}
-                      <div className="flex flex-col items-center gap-1.5">
-                        <div 
-                          className="font-medium text-xs text-[#601625] whitespace-nowrap"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)'
-                          }}
-                        >
-                          {staffMember.name}
-                        </div>
-                        {/* Unavailability indicator */}
-                        {isStaffOnLeave(staffMember.ghl_id) && (
-                          <div className="w-5 h-5 rounded-full bg-orange-100 border border-orange-300 flex items-center justify-center" title="On Leave">
-                            <span className="text-[10px]">🏖️</span>
-                          </div>
-                        )}
-                        {!getSalonWorkingHours() && (
-                          <div className="w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center" title="Salon Closed">
-                            <span className="text-[10px]">🔒</span>
-                          </div>
-                        )}
-                        {!getStaffWorkingHours(staffMember) && getSalonWorkingHours() && !isStaffOnLeave(staffMember.ghl_id) && (
-                          <div className="w-5 h-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center" title="Day Off">
-                            <span className="text-[10px] opacity-60 grayscale">💤</span>
-                          </div>
-                        )}
-                      </div>
-                      {/* Compact expand hint at bottom - overlaid */}
-                      <div className="absolute bottom-0.5 animate-pulse">
-                        <div 
-                          className="text-[8px] text-[#601625]/70 font-medium px-0.5"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)'
-                          }}
-                        >
-                          ↕
-                        </div>
+                      {/* Staff name only - no icons */}
+                      <div 
+                        className="font-medium text-xs text-[#601625] whitespace-nowrap"
+                        style={{ 
+                          writingMode: 'vertical-rl',
+                          textOrientation: 'mixed',
+                          transform: 'rotate(180deg)'
+                        }}
+                      >
+                        {staffMember.name}
                       </div>
                     </div>
                   ) : (
-                    // Expanded view with always-visible collapse hint for unavailable staff
+                    // Expanded view - compact
                     <div className="text-center relative">
-                      <div className="font-medium text-sm truncate mb-1 text-[#601625]" title={staffMember.name}>
+                      <div className="font-medium text-sm truncate text-[#601625]" title={staffMember.name}>
                         {staffMember.name}
                       </div>
                       <div className="text-xs text-[#751a29]/70">
-                        {appts.length} appointments
+                        {appts.length} appt{appts.length !== 1 ? 's' : ''}
                       </div>
-                      {/* Show unavailability badge with collapse hint */}
-                      {isUnavailable && (
-                        <>
-                          <div className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                            {isStaffOnLeave(staffMember.ghl_id) ? "On Leave" : 
-                             !getSalonWorkingHours() ? "Salon Closed" : "Day Off"}
-                          </div>
-                          {/* Collapse hint - always visible with subtle animation */}
-                          <div className="mt-1.5">
-                            <div className="text-[9px] text-[#601625] font-semibold px-2 py-0.5 rounded-md bg-gradient-to-br from-white to-[#601625]/5 border border-[#601625]/30 shadow-sm whitespace-nowrap animate-pulse inline-block">
-                              ↕ Collapse
-                            </div>
-                          </div>
-                        </>
-                      )}
                     </div>
                   )}
                 </div>

@@ -48,15 +48,14 @@ function SectionHeading({
   return (
     <div className="px-3 pt-5">
       <div className="flex items-center gap-2">
-        {/* The label + the line that continues from its RIGHT, aligned to center */}
-        <span className="relative inline-flex items-center text-[12px] font-semibold text-black tracking-wide">
-          <span className="relative">
-            {children}
-            {/* extend line from the middle-right of the word */}
-            <span className="absolute left-full top-1/2 ml-2 h-px w-[9999px] -translate-y-1/2 bg-neutral-200" />
-          </span>
+        {/* The label */}
+        <span className="text-[12px] font-semibold text-black tracking-wide whitespace-nowrap">
+          {children}
         </span>
-        {action ? <div className="ml-auto">{action}</div> : null}
+        {/* The line that extends from the label */}
+        <div className="flex-1 h-px bg-neutral-200" />
+        {/* Action button at the end */}
+        {action ? <div className="flex-shrink-0">{action}</div> : null}
       </div>
     </div>
   )
@@ -145,7 +144,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
   const { getTeamPrefix } = useTeam()
   const { user } = useUser()
-  const [manageOpen, setManageOpen] = React.useState(true)
+  const [manageOpen, setManageOpen] = React.useState(false)
 
   /* -------------------------- unchanged auth logic -------------------------- */
   React.useEffect(() => {
@@ -180,7 +179,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     { title: "Payments", url: `${prefix}/payments`, icon: CreditCard },
     { title: "Appointments", url: `${prefix}/appointments`, icon: Clock },
     ...(user?.role !== "barber" ? [{ title: "Customers", url: `${prefix}/customers`, icon: UsersRound }] : []),
-    { title: "Reports", url: `${prefix}/dashboard`, icon: IconDashboard },
   ]
 
   // Manage (same routing logic, now with icons)
@@ -196,6 +194,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           { title: "Breaks", url: `${prefix}/manage/breaks`, icon: Coffee },
         ]
       : [
+          { title: "Reports", url: `${prefix}/dashboard`, icon: IconDashboard },
           { title: "Services", url: `${prefix}/manage/services`, icon: Scissors },
           { title: "Salon Hours", url: `${prefix}/manage/salon-hours`, icon: AlarmClock },
           { title: "Stylists", url: `${prefix}/manage/stylists`, icon: UsersRound },
