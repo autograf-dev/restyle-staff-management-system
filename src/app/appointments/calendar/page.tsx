@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useUser, type User } from "@/contexts/user-context"
 import { toast } from "sonner"
+import { AppointmentNew } from "@/components/appointment-new"
 
 // Types
 type Appointment = {
@@ -1170,19 +1171,15 @@ const StaffOverviewView = ({
                     <button
                       className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
                       onClick={() => {
-                        // Open the existing new appointment dialog with prefilled time via URL params
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.startAbs !== undefined) {
                           const hours = Math.floor(selectionMenu.startAbs / 60)
                           const mins = selectionMenu.startAbs % 60
                           const dateStr = currentDate.toISOString().slice(0,10)
-                          const params = new URLSearchParams({
-                            openBooking: '1',
-                            date: dateStr,
-                            hour: String(hours),
-                            minute: String(mins)
-                          })
-                          window.open(`/appointments?${params.toString()}`, '_blank')
+                          window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr, hours, mins } }))
+                        } else {
+                          const dateStr = currentDate.toISOString().slice(0,10)
+                          window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr } }))
                         }
                       }}
                     >
@@ -1877,6 +1874,342 @@ export default function CalendarPage() {
   const [loadingSlots, setLoadingSlots] = React.useState(false)
   const [workingSlots, setWorkingSlots] = React.useState<Record<string, string[]>>({})
 
+  // New Appointment state (mirror appointments/page.tsx)
+  const [newAppointmentOpen, setNewAppointmentOpen] = React.useState(false)
+  const [newAppCurrentStep, setNewAppCurrentStep] = React.useState(1)
+  const [newAppDepartments, setNewAppDepartments] = React.useState<Array<{ id?: string; name?: string; label?: string; value?: string; description?: string; icon?: string }>>([])
+  const [newAppSelectedDepartment, setNewAppSelectedDepartment] = React.useState<string>("")
+  const [newAppServices, setNewAppServices] = React.useState<Array<{ id?: string; name?: string; duration?: number; price?: number; label?: string; value?: string; description?: string; staffCount?: number }>>([])
+  const [newAppSelectedService, setNewAppSelectedService] = React.useState<string>("")
+  const [newAppStaff, setNewAppStaff] = React.useState<Array<{ id?: string; name?: string; email?: string; label?: string; value?: string; badge?: string; icon?: string }>>([])
+  const [newAppSelectedStaff, setNewAppSelectedStaff] = React.useState<string>("")
+  const [newAppDates, setNewAppDates] = React.useState<Array<{ dateString: string; dayName: string; dateDisplay: string; label: string; date: Date }>>([])
+  const [newAppSelectedDate, setNewAppSelectedDate] = React.useState<string>("")
+  const [newAppSlots, setNewAppSlots] = React.useState<Array<{ time: string; isPast: boolean }>>([])
+  const [newAppSelectedTime, setNewAppSelectedTime] = React.useState<string>("")
+  const [newAppContactForm, setNewAppContactForm] = React.useState({ firstName: '', lastName: '', phone: '', optIn: false })
+  const [newAppLoading, setNewAppLoading] = React.useState(false)
+  const [newAppWorkingSlots, setNewAppWorkingSlots] = React.useState<Record<string, string[]>>({})
+  const [newAppLoadingDepts, setNewAppLoadingDepts] = React.useState(false)
+  const [newAppLoadingServices, setNewAppLoadingServices] = React.useState(false)
+  const [newAppLoadingStaff, setNewAppLoadingStaff] = React.useState(false)
+  const [newAppLoadingSlots, setNewAppLoadingSlots] = React.useState(false)
+  const [newAppLoadingDates, setNewAppLoadingDates] = React.useState(false)
+  const desiredNewAppDateRef = React.useRef<string | null>(null)
+  const desiredNewAppTimeRef = React.useRef<string | null>(null)
+
+  const formatServiceDuration = (durationMinutes?: number) => {
+    if (!durationMinutes || durationMinutes <= 0) return '—'
+    const h = Math.floor(durationMinutes / 60)
+    const m = durationMinutes % 60
+    if (h > 0 && m > 0) return `${h}h ${m}m`
+    if (h > 0) return `${h}h`
+    return `${m}m`
+  }
+
+  const formatSelectedDate = (dateString: string) => {
+    if (!dateString) return ''
+    try {
+      const [year, month, day] = dateString.split('-').map(Number)
+      const d = new Date(year, month - 1, day)
+      const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+      const monthName = d.toLocaleDateString('en-US', { month: 'long' })
+      return `${weekday}, ${monthName} ${d.getDate()}, ${d.getFullYear()}`
+    } catch {
+      return dateString
+    }
+  }
+
+  const resetNewAppointmentForm = () => {
+    setNewAppCurrentStep(1)
+    setNewAppSelectedDepartment("")
+    setNewAppSelectedService("")
+    setNewAppSelectedStaff("")
+    setNewAppSelectedDate("")
+    setNewAppSelectedTime("")
+    setNewAppContactForm({ firstName: '', lastName: '', phone: '', optIn: false })
+    setNewAppDepartments([])
+    setNewAppServices([])
+    setNewAppStaff([])
+    setNewAppDates([])
+    setNewAppSlots([])
+    setNewAppWorkingSlots({})
+    desiredNewAppDateRef.current = null
+    desiredNewAppTimeRef.current = null
+  }
+
+  const goToNextNewAppStep = () => setNewAppCurrentStep(prev => Math.min(prev + 1, 4))
+  const goToPrevNewAppStep = () => setNewAppCurrentStep(prev => Math.max(prev - 1, 1))
+
+  const fetchNewAppDepartments = async () => {
+    setNewAppLoadingDepts(true)
+    try {
+      const res = await fetch('https://restyle-backend.netlify.app/.netlify/functions/supabasegroups')
+      const data = await res.json()
+      const depts = (data?.groups || []).map((g: { id?: string; name?: string }) => ({
+        id: g.id,
+        value: g.id,
+        label: g.name || g.id,
+      }))
+      setNewAppDepartments(depts)
+      if (depts.length > 0) {
+        const firstId = depts[0].value || depts[0].id || ''
+        setNewAppSelectedDepartment(firstId)
+        // Immediately load services for the default-selected department
+        await fetchNewAppServices(firstId)
+      }
+    } catch (e) {
+      console.error('fetchNewAppDepartments', e)
+    } finally {
+      setNewAppLoadingDepts(false)
+    }
+  }
+
+  const handleNewAppDepartmentSelect = (departmentId: string) => {
+    setNewAppSelectedDepartment(departmentId)
+    setNewAppSelectedService("")
+    setNewAppSelectedStaff("")
+    setNewAppServices([])
+    setNewAppStaff([])
+    fetchNewAppServices(departmentId)
+  }
+
+  const fetchNewAppServices = async (departmentId: string) => {
+    if (!departmentId) return
+    setNewAppLoadingServices(true)
+    try {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
+      const data = await res.json()
+      const items = (data?.services || []).map((s: any) => ({
+        id: s.id,
+        value: s.id,
+        label: s.name || s.id,
+        duration: s.duration,
+        price: s.price,
+        staffCount: (s.teamMembers || []).length
+      }))
+      setNewAppServices(items)
+    } catch (e) {
+      console.error('fetchNewAppServices', e)
+    } finally {
+      setNewAppLoadingServices(false)
+    }
+  }
+
+  const handleNewAppServiceSelect = (serviceId: string) => {
+    setNewAppSelectedService(serviceId)
+    setNewAppSelectedStaff("")
+    fetchNewAppStaff(serviceId)
+    setNewAppCurrentStep(2)
+  }
+
+  const fetchNewAppStaff = async (serviceId: string) => {
+    if (!serviceId || !newAppSelectedDepartment) return
+    setNewAppLoadingStaff(true)
+    try {
+      const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
+      const data = await res.json()
+      const serviceObj = (data?.services || []).find((s: any) => s.id === serviceId)
+      const teamMembers = serviceObj?.teamMembers || []
+      const staffItems = [{ label: 'Any available staff', value: 'any', badge: 'Recommended', icon: 'user' }, ...teamMembers.map((m: any) => ({
+        label: m.name || m.userId,
+        value: m.userId,
+        icon: 'user'
+      }))]
+      setNewAppStaff(staffItems)
+    } catch (e) {
+      console.error('fetchNewAppStaff', e)
+    } finally {
+      setNewAppLoadingStaff(false)
+    }
+  }
+
+  const handleNewAppStaffSelect = (staffId: string) => {
+    setNewAppSelectedStaff(staffId)
+    fetchNewAppWorkingSlots()
+  }
+
+  const fetchNewAppWorkingSlots = async () => {
+    if (!newAppSelectedService) return
+    setNewAppLoadingDates(true)
+    const userId = newAppSelectedStaff && newAppSelectedStaff !== 'any' ? newAppSelectedStaff : null
+    try {
+      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${newAppSelectedService}`
+      if (userId) apiUrl += `&userId=${userId}`
+      const response = await fetch(apiUrl)
+      const data = await response.json()
+      if (data.slots) {
+        const workingDates = Object.keys(data.slots).sort()
+        const dates = workingDates.map((dateString) => {
+          const [year, month, day] = dateString.split('-').map(Number)
+          const date = new Date(year, month - 1, day)
+          const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+          const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          return { dateString, dayName, dateDisplay, label: '', date }
+        })
+        setNewAppDates(dates)
+        setNewAppWorkingSlots(data.slots)
+        const desired = desiredNewAppDateRef.current
+        if (desired && dates.some(d => d.dateString === desired)) {
+          setNewAppSelectedDate(desired)
+          fetchNewAppSlotsForDate(desired)
+        } else if (dates.length > 0) {
+          const today = new Date().toISOString().split('T')[0]
+          const firstFutureDate = dates.find(d => d.dateString >= today) || dates[0]
+          setNewAppSelectedDate(firstFutureDate.dateString)
+          fetchNewAppSlotsForDate(firstFutureDate.dateString)
+        }
+      }
+    } catch (e) {
+      console.error('fetchNewAppWorkingSlots', e)
+    } finally {
+      setNewAppLoadingDates(false)
+    }
+  }
+
+  const fetchNewAppSlotsForDate = (dateString: string) => {
+    if (newAppWorkingSlots[dateString]) {
+      const slotsForSelectedDate = newAppWorkingSlots[dateString]
+      const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({ time: slot, isPast: isSlotInPast(slot, dateString) }))
+      const availableSlots = slotsWithStatus.filter((slot) => !slot.isPast)
+      setNewAppSlots(availableSlots)
+      const desiredTime = desiredNewAppTimeRef.current
+      if (desiredTime && availableSlots.some(s => s.time === desiredTime)) {
+        setNewAppSelectedTime(desiredTime)
+        setNewAppCurrentStep(4)
+      }
+    } else {
+      setNewAppSlots([])
+    }
+  }
+
+  const handleNewAppDateSelect = (dateString: string) => {
+    setNewAppSelectedDate(dateString)
+    setNewAppSelectedTime("")
+    fetchNewAppSlotsForDate(dateString)
+  }
+  const handleNewAppTimeSelect = (time: string) => {
+    setNewAppSelectedTime(time)
+    setNewAppCurrentStep(4)
+  }
+
+  const submitNewAppointment = async () => {
+    setNewAppLoading(true)
+    try {
+      // Create contact first
+      const params = new URLSearchParams({
+        firstName: newAppContactForm.firstName,
+        lastName: newAppContactForm.lastName,
+        phone: newAppContactForm.phone,
+        notes: 'From calendar'
+      })
+      const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/CreateContact?${params.toString()}`)
+      const contactData = await contactRes.json()
+      if (!contactData?.contactId) throw new Error('Failed to create contact')
+      const contactId = contactData.contactId
+
+      const [year, month, day] = newAppSelectedDate.split('-').map(Number)
+      const jsDate = new Date(year, month - 1, day)
+      const slotMatch = newAppSelectedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i)
+      let hour = 9, minute = 0
+      if (slotMatch) {
+        hour = parseInt(slotMatch[1])
+        minute = parseInt(slotMatch[2])
+        const period = slotMatch[3].toUpperCase()
+        if (period === 'PM' && hour !== 12) hour += 12
+        if (period === 'AM' && hour === 12) hour = 0
+      }
+      jsDate.setHours(hour, minute, 0, 0)
+      const localStartTime = jsDate
+      const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
+      const duration = selectedServiceObj?.duration || 120
+      const localEndTime = new Date(localStartTime.getTime() + duration * 60 * 1000)
+      const y1 = localStartTime.getFullYear()
+      const m1 = localStartTime.getMonth() + 1
+      const d1 = localStartTime.getDate()
+      const h1 = localStartTime.getHours()
+      const min1 = localStartTime.getMinutes()
+      const startTime = denverWallTimeToUtcIso(y1, m1, d1, h1, min1)
+      const y2 = localEndTime.getFullYear()
+      const m2 = localEndTime.getMonth() + 1
+      const d2 = localEndTime.getDate()
+      const h2 = localEndTime.getHours()
+      const min2 = localEndTime.getMinutes()
+      const endTime = denverWallTimeToUtcIso(y2, m2, d2, h2, min2)
+      let assignedUserId = newAppSelectedStaff
+      if (assignedUserId === 'any' || !assignedUserId) {
+        const realStaff = newAppStaff.filter(item => item.value !== 'any')
+        if (realStaff.length > 0) {
+          assignedUserId = realStaff[Math.floor(Math.random() * realStaff.length)].value || ''
+        }
+      }
+      const serviceName = selectedServiceObj?.label || 'Service'
+      const contactName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
+      const title = `${serviceName} - ${contactName}`
+      let bookUrl = `https://restyle-backend.netlify.app/.netlify/functions/Apointment?contactId=${contactId}&calendarId=${newAppSelectedService}&startTime=${startTime}&endTime=${endTime}&title=${encodeURIComponent(title)}`
+      if (assignedUserId) bookUrl += `&assignedUserId=${assignedUserId}`
+      bookUrl += `&serviceDuration=${duration}`
+      const staffObj = newAppStaff.find(s => s.value === assignedUserId)
+      const staffName = staffObj?.label || 'Any available staff'
+      bookUrl += `&staffName=${encodeURIComponent(staffName)}`
+      bookUrl += `&customerFirstName=${encodeURIComponent(newAppContactForm.firstName)}`
+      bookUrl += `&customerLastName=${encodeURIComponent(newAppContactForm.lastName)}`
+      const res = await fetch(bookUrl)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) throw new Error(data.error || 'Booking failed')
+      toast.success('Appointment booked successfully')
+      setNewAppointmentOpen(false)
+      resetNewAppointmentForm()
+      await refresh()
+    } catch (e) {
+      console.error('submitNewAppointment', e)
+      toast.error(`Booking failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    } finally {
+      setNewAppLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (newAppointmentOpen) {
+      fetchNewAppDepartments()
+    }
+  }, [newAppointmentOpen])
+
+  React.useEffect(() => {
+    if (newAppSelectedStaff && newAppSelectedService) {
+      fetchNewAppWorkingSlots()
+    }
+  }, [newAppSelectedStaff, newAppSelectedService])
+
+  // Global event to open new appointment from various UI spots in this page
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { dateStr?: string; hours?: number; mins?: number }
+      setNewAppointmentOpen(true)
+      setNewAppCurrentStep(1)
+      setNewAppSelectedDepartment("")
+      setNewAppSelectedService("")
+      setNewAppSelectedStaff("")
+      setNewAppSelectedDate("")
+      setNewAppSelectedTime("")
+      if (detail?.dateStr) {
+        desiredNewAppDateRef.current = detail.dateStr
+      }
+      if (typeof detail?.hours === 'number' && typeof detail?.mins === 'number') {
+        const date = new Date()
+        date.setHours(detail.hours, detail.mins, 0, 0)
+        const ampm = date.getHours() >= 12 ? 'PM' : 'AM'
+        const displayHour = ((date.getHours() + 11) % 12 + 1)
+        const mm = String(date.getMinutes()).padStart(2, '0')
+        desiredNewAppTimeRef.current = `${displayHour}:${mm} ${ampm}`
+      } else {
+        desiredNewAppTimeRef.current = null
+      }
+    }
+    window.addEventListener('open-new-appointment', handler as EventListener)
+    return () => window.removeEventListener('open-new-appointment', handler as EventListener)
+  }, [])
+
   // Helper function to check if appointment is within 2 hours
   const isWithinTwoHours = (startTimeString?: string) => {
     if (!startTimeString) return false
@@ -2514,7 +2847,10 @@ export default function CalendarPage() {
                   <UserIcon className="h-4 w-4 mr-2" />
                   Walk-in
                 </Button>
-                <Button size="lg" className="h-12 cursor=pointer" onClick={() => router.push(`/appointments?view=new`)}>
+                <Button size="lg" className="h-12 cursor=pointer" onClick={() => {
+                  const dateStr = currentDate.toISOString().slice(0,10)
+                  window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr } }))
+                }}>
                   <Plus className="h-4 w-4 mr-2" />
                   New Appointment
                 </Button>
@@ -2596,6 +2932,46 @@ export default function CalendarPage() {
             </div>
 
             {/* Calendar Views */}
+          {/* New Appointment Dialog - Calendar scoped */}
+          <AppointmentNew
+            open={newAppointmentOpen}
+            onOpenChange={(open) => {
+              setNewAppointmentOpen(open)
+              if (!open) {
+                resetNewAppointmentForm()
+              }
+            }}
+            currentStep={newAppCurrentStep}
+            goToNextStep={() => setNewAppCurrentStep(prev => Math.min(prev + 1, 4))}
+            goToPrevStep={() => setNewAppCurrentStep(prev => Math.max(prev - 1, 1))}
+            loadingDepts={newAppLoadingDepts}
+            departments={newAppDepartments}
+            selectedDepartment={newAppSelectedDepartment}
+            setSelectedDepartment={setNewAppSelectedDepartment}
+            onDepartmentSelect={handleNewAppDepartmentSelect}
+            loadingServices={newAppLoadingServices}
+            services={newAppServices}
+            selectedService={newAppSelectedService}
+            onServiceSelect={handleNewAppServiceSelect}
+            loadingStaff={newAppLoadingStaff}
+            staff={newAppStaff}
+            selectedStaff={newAppSelectedStaff}
+            onStaffSelect={handleNewAppStaffSelect}
+            loadingDates={newAppLoadingDates}
+            dates={newAppDates}
+            selectedDate={newAppSelectedDate}
+            onDateSelect={handleNewAppDateSelect}
+            loadingSlots={newAppLoadingSlots}
+            slots={newAppSlots}
+            selectedTime={newAppSelectedTime}
+            onTimeSelect={handleNewAppTimeSelect}
+            contactForm={newAppContactForm}
+            setContactForm={setNewAppContactForm}
+            submitting={newAppLoading}
+            onSubmit={submitNewAppointment}
+            formatServiceDuration={formatServiceDuration}
+            formatSelectedDate={formatSelectedDate}
+          />
             {loading ? (
               <div className="flex-1 p-4 min-h-0">
                 <Skeleton className="h-full w-full" />
