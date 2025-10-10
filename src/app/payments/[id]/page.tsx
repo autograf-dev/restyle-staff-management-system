@@ -895,10 +895,10 @@ export default function PaymentDetailPage() {
                     </div>
 
 
-                    {/* Services (price editable only) */}
+                    {/* Services (price and tip editable) */}
                     <div className="space-y-3">
                       <h3 className="text-sm font-semibold text-gray-700">Services in this transaction</h3>
-                      <p className="text-xs text-gray-500">Updating prices will recalculate totals automatically.</p>
+                      <p className="text-xs text-gray-500">Update price and tip for each service. Totals will recalculate automatically.</p>
                       <div className="space-y-3">
                         {(data.items || []).map((item, index) => (
                           <div key={item.id} className="rounded-xl border border-gray-200/70 bg-white p-4 shadow-sm">
@@ -907,9 +907,13 @@ export default function PaymentDetailPage() {
                                 <div className="min-w-0 flex-1">
                                   <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">{item.serviceName || 'Service'}</div>
                                 </div>
-                                <div className="text-right flex items-center gap-3">
-                                  <div className="text-xs text-gray-500">Price</div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <Label htmlFor={`price-${item.id}`} className="text-xs font-medium text-gray-600">Price</Label>
                                   <Input
+                                    id={`price-${item.id}`}
                                     type="number"
                                     step="0.01"
                                     value={item.price ?? ''}
@@ -918,7 +922,32 @@ export default function PaymentDetailPage() {
                                       updated[index] = { ...updated[index], price: Number(e.target.value) }
                                       recomputeTotalsFromItems(updated)
                                     }}
-                                    className="w-28 text-right"
+                                    className="w-full text-right"
+                                    placeholder="0.00"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`tip-${item.id}`} className="text-xs font-medium text-gray-600">Tip</Label>
+                                  <Input
+                                    id={`tip-${item.id}`}
+                                    type="number"
+                                    step="0.01"
+                                    value={item.staffTipCollected ?? ''}
+                                    onChange={(e) => {
+                                      const updated = [...(data.items || [])]
+                                      updated[index] = { ...updated[index], staffTipCollected: Number(e.target.value) }
+                                      // Recalculate totals when tip changes
+                                      const newSubtotal = updated.reduce((sum, i) => sum + (Number(i.price) || 0), 0)
+                                      const newTax = Math.round(newSubtotal * 0.13 * 100) / 100
+                                      const newTip = updated.reduce((sum, i) => sum + (Number(i.staffTipCollected) || 0), 0)
+                                      const newTotal = Math.round((newSubtotal + newTax + newTip) * 100) / 100
+                                      setSubtotal(newSubtotal)
+                                      setTax(newTax)
+                                      setTip(newTip)
+                                      setTotalPaid(newTotal)
+                                      setData((prev) => prev ? { ...prev, items: updated, subtotal: newSubtotal, tax: newTax, tip: newTip, totalPaid: newTotal } : prev)
+                                    }}
+                                    className="w-full text-right"
                                     placeholder="0.00"
                                   />
                                 </div>

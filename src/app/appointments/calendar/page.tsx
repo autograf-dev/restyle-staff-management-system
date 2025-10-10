@@ -1318,15 +1318,15 @@ const StaffOverviewView = ({
                 </div>
               )}
       
-      {/* Header - Fixed at top, does not scroll */}
-      <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-sm">
+      {/* Header - Sticky on global page scroll */}
+      <div className="sticky top-0 z-30 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-md backdrop-blur-sm">
         {/* Time Header */}
-        <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
+        <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-background/80 flex items-center justify-center flex-shrink-0 text-[#601625]">
           
         </div>
         
         {/* Scrollable Staff Headers */}
-        <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
+        <div className="flex-1 overflow-x-auto bg-background/80" ref={headerScrollRef}>
             <div className="flex" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px` }}>
               {staff.map((staffMember) => {
                 const appts = getStaffAppointments(staffMember.ghl_id)
@@ -1386,9 +1386,8 @@ const StaffOverviewView = ({
         </div>
       </div>
 
-      {/* Time grid container - this scrolls while header stays fixed */}
-      <div className="w-full overflow-y-auto overflow-x-hidden" style={{ maxHeight: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }} ref={scrollContainerRef}>
-        <div className="w-full pb-6">
+      {/* Time grid container - expands naturally, page scrolls globally */}
+      <div className="w-full pb-6">
         <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
@@ -1847,7 +1846,6 @@ const StaffOverviewView = ({
             />
           </div>
         </div>
-      </div>
     </div>
     </div>
   )
