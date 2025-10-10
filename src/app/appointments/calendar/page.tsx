@@ -1175,13 +1175,14 @@ const StaffOverviewView = ({
               {/* Selection quick actions */}
               {selectionMenu.open && (
                 <div
-                  className="fixed z-50 bg-white border border-neutral-200 rounded-md shadow-md"
+                  ref={selectionMenuRef}
+                  className="fixed z-[1000] bg-white border border-neutral-200 rounded-md shadow-md"
                   style={{ left: selectionMenu.x + 8, top: selectionMenu.y + 8 }}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
                   <div className="flex flex-col divide-y">
                     <button
-                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left relative z-[1001]"
                       onClick={() => {
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.staffId && selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined) {
@@ -1192,7 +1193,7 @@ const StaffOverviewView = ({
                       + Add Break
                     </button>
                     <button
-                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left"
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left relative z-[1001]"
                       onClick={() => {
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.startAbs !== undefined) {
