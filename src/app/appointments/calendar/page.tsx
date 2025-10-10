@@ -1222,7 +1222,7 @@ const StaffOverviewView = ({
 
   return (
     <div className="space-y-3">
-    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm overflow-hidden w-full">
+    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm w-full relative">
       
       {/* Horizontal scrolling navigation - moved to top of calendar */}
       {(user?.role === 'admin' || user?.role === 'manager') && (
@@ -1317,77 +1317,78 @@ const StaffOverviewView = ({
                   </div>
                 </div>
               )}
-      {/* Header - Sticky time column + scrollable staff columns */}
-      <div className="sticky top-0 z-30 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-sm">
-        {/* Sticky Time Header */}
-        <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
+      
+      {/* Main calendar container with overflow for sticky to work */}
+      <div className="w-full overflow-y-auto overflow-x-hidden" style={{ maxHeight: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING + 100}px` }} ref={scrollContainerRef}>
+        {/* Header - Sticky time column + scrollable staff columns */}
+        <div className="sticky top-0 z-30 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-sm">
+          {/* Sticky Time Header */}
+          <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-transparent flex items-center justify-center flex-shrink-0 text-[#601625]">
+            
+          </div>
           
-        </div>
-        
-        {/* Scrollable Staff Headers */}
-        <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
-          <div className="flex" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px` }}>
-            {staff.map((staffMember) => {
-              const appts = getStaffAppointments(staffMember.ghl_id)
-              const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
-              const isCollapsed = collapsedColumns.has(staffMember.ghl_id)
-              const isUnavailable = isStaffUnavailableAllDay(staffMember)
-              
-              // Build a compact list of time chips for that day
-              const chips = appts
-                .filter((a: Appointment) => a.startTime)
-                .sort((a: Appointment, b: Appointment) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
-                .slice(0,4) // show first 4
-                .map((a: Appointment) => new Date(a.startTime!))
-              
-              return (
-                <div 
-                  key={staffMember.ghl_id} 
-                  className={cn(
-                    "p-2 border-r last:border-r-0 border-[#601625]/20 flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
-                    isCollapsed ? "bg-[#601625]/5" : "bg-background"
-                  )}
-                  style={{ width: `${columnWidth}px` }}
-                  onClick={() => isUnavailable && toggleColumnCollapse(staffMember.ghl_id)}
-                  title={isUnavailable ? (isCollapsed ? "Click to expand" : "Click to collapse") : undefined}
-                >
-                  {isCollapsed ? (
-                    // Collapsed view - compact vertical layout
-                    <div className="flex flex-col items-center justify-center h-full relative">
-                      {/* Staff name only - no icons */}
-                      <div 
-                        className="font-medium text-xs text-[#601625] whitespace-nowrap"
-                        style={{ 
-                          writingMode: 'vertical-rl',
-                          textOrientation: 'mixed',
-                          transform: 'rotate(180deg)'
-                        }}
-                      >
-                        {staffMember.name}
+          {/* Scrollable Staff Headers */}
+          <div className="flex-1 overflow-x-auto" ref={headerScrollRef}>
+            <div className="flex" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px` }}>
+              {staff.map((staffMember) => {
+                const appts = getStaffAppointments(staffMember.ghl_id)
+                const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
+                const isCollapsed = collapsedColumns.has(staffMember.ghl_id)
+                const isUnavailable = isStaffUnavailableAllDay(staffMember)
+                
+                // Build a compact list of time chips for that day
+                const chips = appts
+                  .filter((a: Appointment) => a.startTime)
+                  .sort((a: Appointment, b: Appointment) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime())
+                  .slice(0,4) // show first 4
+                  .map((a: Appointment) => new Date(a.startTime!))
+                
+                return (
+                  <div 
+                    key={staffMember.ghl_id} 
+                    className={cn(
+                      "p-2 border-r last:border-r-0 border-[#601625]/20 flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
+                      isCollapsed ? "bg-[#601625]/5" : "bg-background"
+                    )}
+                    style={{ width: `${columnWidth}px` }}
+                    onClick={() => isUnavailable && toggleColumnCollapse(staffMember.ghl_id)}
+                    title={isUnavailable ? (isCollapsed ? "Click to expand" : "Click to collapse") : undefined}
+                  >
+                    {isCollapsed ? (
+                      // Collapsed view - compact vertical layout
+                      <div className="flex flex-col items-center justify-center h-full relative">
+                        {/* Staff name only - no icons */}
+                        <div 
+                          className="font-medium text-xs text-[#601625] whitespace-nowrap"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)'
+                          }}
+                        >
+                          {staffMember.name}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    // Expanded view - compact
-                    <div className="text-center relative">
-                      <div className="font-medium text-sm truncate text-[#601625]" title={staffMember.name}>
-                        {staffMember.name}
+                    ) : (
+                      // Expanded view - compact
+                      <div className="text-center relative">
+                        <div className="font-medium text-sm truncate text-[#601625]" title={staffMember.name}>
+                          {staffMember.name}
+                        </div>
+                        <div className="text-xs text-[#751a29]/70">
+                          {appts.length} appt{appts.length !== 1 ? 's' : ''}
+                        </div>
                       </div>
-                      <div className="text-xs text-[#751a29]/70">
-                        {appts.length} appt{appts.length !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
-      
-      </div>
-
-      {/* Scrollable Time grid container - with vertical scroll */}
-      <div className="w-full pb-6 overflow-y-auto" style={{ maxHeight: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING + 24}px` }} ref={scrollContainerRef}>
+        {/* Time grid container */}
+        <div className="w-full pb-6">
         <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
@@ -1845,6 +1846,7 @@ const StaffOverviewView = ({
               onSuccess={refreshBreaks}
             />
           </div>
+        </div>
         </div>
       </div>
     </div>
