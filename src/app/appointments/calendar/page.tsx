@@ -1389,16 +1389,9 @@ const StaffOverviewView = ({
                       }
                       return false
                     }
-                    // If overlapping, try nudging the proposed window forward up to 3 times
-                    let proposedStart = startAbs
-                    let proposedEnd = endAbs
-                    let attempts = 0
-                    while (attempts < 4 && overlaps(proposedStart, proposedEnd)) {
-                      proposedStart += 15
-                      proposedEnd += 15
-                      attempts++
-                    }
-                    if (overlaps(proposedStart, proposedEnd)) return
+                    // Always show the quick action menu; actions will validate conflicts
+                    const proposedStart = startAbs
+                    const proposedEnd = endAbs
                     // Show quick action menu at a clamped on-screen position
                     const menuX = Math.min(window.innerWidth - 200, Math.max(8, e.clientX))
                     const menuY = Math.min(window.innerHeight - 100, Math.max(8, e.clientY))
