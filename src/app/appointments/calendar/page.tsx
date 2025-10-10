@@ -409,15 +409,22 @@ const StaffOverviewView = ({
     startAbs?: number;
     endAbs?: number;
   }>({ open: false, x: 0, y: 0 })
+  const selectionMenuRef = React.useRef<HTMLDivElement | null>(null)
 
   // Close the quick action menu on outside click or right click
   React.useEffect(() => {
-    const closeMenu = () => setSelectionMenu(m => m.open ? { ...m, open: false } : m)
-    document.addEventListener('mousedown', closeMenu)
-    document.addEventListener('contextmenu', closeMenu)
+    const closeMenuIfOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (selectionMenuRef.current && selectionMenuRef.current.contains(target)) {
+        return
+      }
+      setSelectionMenu(m => (m.open ? { ...m, open: false } : m))
+    }
+    document.addEventListener('mousedown', closeMenuIfOutside)
+    document.addEventListener('contextmenu', closeMenuIfOutside)
     return () => {
-      document.removeEventListener('mousedown', closeMenu)
-      document.removeEventListener('contextmenu', closeMenu)
+      document.removeEventListener('mousedown', closeMenuIfOutside)
+      document.removeEventListener('contextmenu', closeMenuIfOutside)
     }
   }, [])
 
@@ -1352,8 +1359,8 @@ const StaffOverviewView = ({
                     setIsSelecting(false)
                     const startY = Math.min(selectStartY ?? 0, selectEndY ?? 0)
                     const endY = Math.max(selectStartY ?? 0, selectEndY ?? 0)
-                    // Require a minimum drag height (>1px) to trigger the menu; avoid click-to-open
-                    if (Math.abs(endY - startY) <= 1) return
+                    // Require a minimal drag height to trigger the menu (>= 4px)
+                    if (Math.abs(endY - startY) < 4) return
                     // Convert Y positions into minutes from 8:00
                     // Snap to 15-minute grid: start floors, end ceils to match user drag end
                     const toFloor15 = (val: number) => Math.floor(val / 15) * 15
@@ -1363,7 +1370,7 @@ const StaffOverviewView = ({
                     const minutesFrom8Start = toFloor15(rawStart)
                     const minutesFrom8End = toCeil15(rawEnd)
                     const startAbs = (8 * 60) + minutesFrom8Start
-                    let endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
+                    const endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
                     // If selection duration < 15 minutes, ignore (user didn't select enough)
                     if (endAbs - startAbs < 15) return
                     // Ensure selection does not overlap with existing appointments or breaks
@@ -1671,7 +1678,7 @@ const StaffOverviewView = ({
                         title={`${appointment.contactName || 'Unknown Client'} - ${appointment.serviceName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
                       >
                         {/* Client name at top - always show */}
-                        <div className={`font-medium truncate leading-tight ${
+                        <div className={`uppercase font-medium truncate leading-tight ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-500 line-through' 
                             : 'text-[#601625]'
@@ -1987,7 +1994,7 @@ export default function CalendarPage() {
     try {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${departmentId}`)
       const data = await res.json()
-      const services = (data.calendars || []).map((service: any) => {
+      const services = (data.calendars || []).map((service: Record<string, unknown> & { id: string; name?: string; description?: string; slotDuration?: number; duration?: number; durationMinutes?: number; timeSlotDuration?: number; length?: number; serviceDuration?: number; durationInMinutes?: number; timeDuration?: number; appointmentDuration?: number; bookingDuration?: number; sessionDuration?: number; teamMembers?: Array<unknown> }) => {
         const possibleDurations = [
           service.slotDuration,
           service.duration,
@@ -2000,7 +2007,7 @@ export default function CalendarPage() {
           service.appointmentDuration,
           service.bookingDuration,
           service.sessionDuration
-        ].filter((d: number) => d !== null && d !== undefined && d > 0)
+        ].filter((d) => typeof d === 'number' && d > 0) as number[]
         const rawDuration = possibleDurations[0] || 0
         let durationInMins = 0
         if (rawDuration > 0) {
@@ -2020,7 +2027,7 @@ export default function CalendarPage() {
         }
         let price = 0
         if (service.description) {
-          const pm = service.description.match(/CA\$(\d+\.?\d*)/i)
+        const pm = service.description.match(/CA\$(\d+\.?\d*)/i)
           if (pm) price = parseFloat(pm[1])
         }
         return {
@@ -2053,7 +2060,7 @@ export default function CalendarPage() {
     try {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/Services?id=${newAppSelectedDepartment}`)
       const data = await res.json()
-      const serviceObj = (data.calendars || []).find((s: any) => s.id === serviceId)
+      const serviceObj = (data.calendars || []).find((s: { id: string }) => s.id === serviceId)
       const teamMembers = serviceObj?.teamMembers || []
       const baseItems = [{ label: 'Any available staff', value: 'any', badge: 'Recommended', icon: 'user' }]
       const staffPromises = teamMembers.map(async (member: { userId: string; name?: string }) => {
