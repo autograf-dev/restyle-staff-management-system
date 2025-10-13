@@ -193,3 +193,23 @@
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background-color: #9ca3af;
 }
+
+/* Mobile-only: hide inner scrollbars to avoid double scroll in calendar */
+@media (max-width: 767px) {
+  .mobile-hide-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;    /* Firefox */
+  }
+  .mobile-hide-scrollbar::-webkit-scrollbar {
+    display: none;            /* Chrome, Safari, Opera */
+  }
+}
+
+/* Always hide scrollbars for specific containers (used by calendar scrollers) */
+.hide-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;    /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;            /* Chrome, Safari, Opera */
+}

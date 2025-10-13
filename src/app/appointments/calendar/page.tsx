@@ -27,13 +27,16 @@ import {
   CheckCircle,
   X,
   Eye,
-  Pencil
+  Pencil,
+  MoreVertical
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TimeBlockDialog } from "@/components/time-block-dialog"
 import { useUser, type User } from "@/contexts/user-context"
 import { toast } from "sonner"
 import { AppointmentNew } from "@/components/appointment-new"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 // Types
 type Appointment = {
@@ -380,17 +383,49 @@ const StaffOverviewView = ({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const headerScrollRef = React.useRef<HTMLDivElement>(null)
   const columnsScrollRef = React.useRef<HTMLDivElement>(null)
-  const baseColumnWidth = 220
-  const minColumnWidth = 180
-  const maxColumnWidth = 400
-  const collapsedColumnWidth = 48 // Width when collapsed
+  const isMobile = useIsMobile()
+  const TIME_COL_WIDTH = isMobile ? 56 : 80
+  const baseColumnWidth = isMobile ? 160 : 220
+  const minColumnWidth = isMobile ? 140 : 180
+  const maxColumnWidth = isMobile ? 280 : 400
+  const collapsedColumnWidth = isMobile ? 40 : 48 // Width when collapsed
   const [currentTime, setCurrentTime] = React.useState(new Date())
   const [collapsedColumns, setCollapsedColumns] = React.useState<Set<string>>(new Set())
-  // Minimal padding for the time grid
-  const GRID_TOP_PADDING = 8
-  const GRID_BOTTOM_PADDING = 16
-  // Increased hour slot height to prevent appointment overlap (12 hours * 120px = 1440px + padding)
-  const HOUR_SLOT_HEIGHT = 120
+  const [canScrollLeft, setCanScrollLeft] = React.useState(true)
+  const [canScrollRight, setCanScrollRight] = React.useState(true)
+  const [navActiveSegment, setNavActiveSegment] = React.useState(0)
+  const [navProgress, setNavProgress] = React.useState(0)
+  // Minimal padding for the time grid (set to 0 to remove header-gap)
+  const GRID_TOP_PADDING = 0
+  const GRID_BOTTOM_PADDING = isMobile ? 12 : 16
+  // Mobile: dynamically fit 12 hours into available viewport height
+  const dayViewRootRef = React.useRef<HTMLDivElement>(null)
+  const [mobileHourSlotHeight, setMobileHourSlotHeight] = React.useState<number>(72)
+  React.useEffect(() => {
+    if (!isMobile) return
+    const recalc = () => {
+      const root = dayViewRootRef.current
+      const winH = window.innerHeight
+      if (!root) return
+      const rect = root.getBoundingClientRect()
+      // Space from top of day view content to bottom of viewport
+      const available = Math.max(320, Math.floor(winH - rect.top - 12))
+      // Fit 12 hours within available height
+      const fitted = Math.floor((available - GRID_TOP_PADDING - GRID_BOTTOM_PADDING) / 12)
+      // Clamp to sensible range for readability
+      const clamped = Math.max(48, Math.min(120, fitted))
+      setMobileHourSlotHeight(clamped)
+    }
+    recalc()
+    window.addEventListener('resize', recalc)
+    window.addEventListener('orientationchange', recalc)
+    return () => {
+      window.removeEventListener('resize', recalc)
+      window.removeEventListener('orientationchange', recalc)
+    }
+  }, [isMobile, GRID_TOP_PADDING, GRID_BOTTOM_PADDING])
+  // Slot height adjusts based on device
+  const HOUR_SLOT_HEIGHT = isMobile ? mobileHourSlotHeight : 120
 
   // Drag-to-select state for creating a break
   const [isSelecting, setIsSelecting] = React.useState(false)
@@ -437,7 +472,9 @@ const StaffOverviewView = ({
   const [deleteBreakOpen, setDeleteBreakOpen] = React.useState(false)
   const [breakToDelete, setBreakToDelete] = React.useState<Record<string, unknown> | null>(null)
 
-  const totalGridHeight = React.useMemo(() => (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING, [])
+  const totalGridHeight = React.useMemo(() => {
+    return (12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING
+  }, [HOUR_SLOT_HEIGHT, GRID_TOP_PADDING, GRID_BOTTOM_PADDING])
 
   const openPrefilledBreakDialog = (ghlId: string, startMinutesAbs: number, endMinutesAbs: number, selectedDate?: Date) => {
     const dateToUse = selectedDate || currentDate
@@ -591,13 +628,25 @@ const StaffOverviewView = ({
     const headerEl = headerScrollRef.current
     const bodyEl = columnsScrollRef.current
     if (!headerEl || !bodyEl) return
+    const updateButtons = () => {
+      const maxScroll = Math.max(0, headerEl.scrollWidth - headerEl.clientWidth)
+      setCanScrollLeft(headerEl.scrollLeft > 4)
+      setCanScrollRight(headerEl.scrollLeft < maxScroll - 4)
+    }
     const onHeader = () => { if (bodyEl.scrollLeft !== headerEl.scrollLeft) bodyEl.scrollLeft = headerEl.scrollLeft }
     const onBody = () => { if (headerEl.scrollLeft !== bodyEl.scrollLeft) headerEl.scrollLeft = bodyEl.scrollLeft }
+    const onAnyScroll = () => updateButtons()
     headerEl.addEventListener('scroll', onHeader)
+    headerEl.addEventListener('scroll', onAnyScroll)
     bodyEl.addEventListener('scroll', onBody)
+    window.addEventListener('resize', onAnyScroll)
+    // initial update
+    updateButtons()
     return () => {
       headerEl.removeEventListener('scroll', onHeader)
+      headerEl.removeEventListener('scroll', onAnyScroll)
       bodyEl.removeEventListener('scroll', onBody)
+      window.removeEventListener('resize', onAnyScroll)
     }
   }, [headerScrollRef.current, columnsScrollRef.current])
 
@@ -724,6 +773,9 @@ const StaffOverviewView = ({
 
   // Calculate dynamic column widths - now depends on collapsedColumns state
   const dynamicColumnWidths = React.useMemo(() => calculateDynamicColumnWidths(), [staff, appointments, collapsedColumns])
+  const columnsTotalWidth = React.useMemo(() => {
+    return Object.values(dynamicColumnWidths).reduce((sum, width) => sum + Math.round(width), 0)
+  }, [dynamicColumnWidths])
 
   // Helper function to get appointment position and height with overlap handling (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment, staffGhlId: string) => {
@@ -1120,51 +1172,70 @@ const StaffOverviewView = ({
   }
 
   return (
-    <div className="space-y-3">
-    <div className="bg-background rounded-xl border border-[#601625]/20 shadow-sm w-full relative">
+   <div className="space-y-0" ref={dayViewRootRef}>
+<div className="bg-background rounded-t-xl rounded-b-none border border-b-0 border-[#601625]/20 shadow-sm w-full relative overflow-hidden">
       
       {/* Horizontal scrolling navigation - moved to top of calendar */}
       {(user?.role === 'admin' || user?.role === 'manager') && (
-        <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 p-2 flex items-center gap-3">
+        <div className="bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 p-2 md:p-2 flex items-center gap-2 md:gap-3 rounded-t-lg rounded-b-none shadow-sm overflow-hidden">
           <button
-            className="h-6 w-6 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0"
+            className={cn("h-7 w-7 md:h-6 md:w-6 rounded-full flex items-center justify-center transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0", canScrollLeft ? "hover:bg-[#601625]/10 opacity-100" : "opacity-50 cursor-not-allowed")}
             onClick={() => {
+              if (!canScrollLeft) return
               const delta = -baseColumnWidth*3
               const h = headerScrollRef.current
               const b = columnsScrollRef.current
               if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
               if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
+              // schedule button state update
+              requestAnimationFrame(() => {
+                const el = headerScrollRef.current
+                if (!el) return
+                const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
+                setCanScrollLeft(el.scrollLeft > 4)
+                setCanScrollRight(el.scrollLeft < maxScroll - 4)
+              })
             }}
             aria-label="Scroll left"
           >
             <ArrowLeft className="h-3 w-3" />
           </button>
           
-          <div className="flex-1 flex items-center gap-1 px-1">
-            {staff.slice(0, 8).map((_, index) => (
-              <div 
-                key={index}
-                className="h-1.5 bg-gradient-to-r from-[#601625]/20 to-[#751a29]/20 rounded-full flex-1 cursor-pointer hover:from-[#601625]/40 hover:to-[#751a29]/40 transition-all duration-200 border border-[#601625]/10"
-                onClick={() => {
-                  const totalWidth = Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)
-                  const scrollPosition = (index * totalWidth) / 8
-                  const h = headerScrollRef.current
-                  const b = columnsScrollRef.current
-                  if (h) h.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-                  if (b) b.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-                }}
-              />
-            ))}
+          <div
+            className="flex-1 h-2 md:h-2 bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 rounded-full border border-[#601625]/10 relative cursor-pointer"
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+              const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+              const totalWidth = Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)
+              const h = headerScrollRef.current
+              const b = columnsScrollRef.current
+              const target = ratio * totalWidth
+              if (h) h.scrollTo({ left: target, behavior: 'smooth' })
+              if (b) b.scrollTo({ left: target, behavior: 'smooth' })
+            }}
+          >
+            <div
+              className="absolute left-0 top-0 bottom-0 rounded-full bg-gradient-to-r from-[#601625]/40 to-[#751a29]/40 border border-[#601625]/20"
+              style={{ width: `${Math.max(2, navProgress * 100)}%` }}
+            />
           </div>
           
           <button
-            className="h-6 w-6 rounded-lg flex items-center justify-center hover:bg-[#601625]/10 transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0"
+            className={cn("h-7 w-7 md:h-6 md:w-6 rounded-full flex items-center justify-center transition-all duration-200 border border-[#601625]/20 text-[#601625] flex-shrink-0", canScrollRight ? "hover:bg-[#601625]/10 opacity-100" : "opacity-50 cursor-not-allowed")}
             onClick={() => {
+              if (!canScrollRight) return
               const delta = baseColumnWidth*3
               const h = headerScrollRef.current
               const b = columnsScrollRef.current
               if (h) h.scrollBy({ left: delta, behavior: 'smooth' })
               if (b) b.scrollBy({ left: delta, behavior: 'smooth' })
+              requestAnimationFrame(() => {
+                const el = headerScrollRef.current
+                if (!el) return
+                const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
+                setCanScrollLeft(el.scrollLeft > 4)
+                setCanScrollRight(el.scrollLeft < maxScroll - 4)
+              })
             }}
             aria-label="Scroll right"
           >
@@ -1215,15 +1286,23 @@ const StaffOverviewView = ({
               )}
       
       {/* Header - Sticky on global page scroll */}
-      <div className="sticky top-0 z-30 bg-gradient-to-r from-[#601625]/5 to-[#751a29]/5 border-b border-[#601625]/20 flex w-full items-center shadow-md backdrop-blur-sm">
+      <div className="sticky top-0 z-30 bg-background flex w-full items-center rounded-t-xl rounded-b-none">
         {/* Time Header */}
-        <div className="w-[80px] p-2 border-r border-[#601625]/20 font-semibold text-sm bg-background/80 flex items-center justify-center flex-shrink-0 text-[#601625]">
-          
+        <div className="w-[80px] bg-[#601625]/5 p-1 md:p-2 border-r border-border font-semibold text-sm bg-background flex items-center justify-center flex-shrink-0 text-[#601625]" style={{ width: `${TIME_COL_WIDTH}px` }}>
         </div>
         
         {/* Scrollable Staff Headers */}
-        <div className="flex-1 overflow-x-auto bg-background/80" ref={headerScrollRef}>
-            <div className="flex" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px` }}>
+          <div className="flex-1 overflow-x-auto overflow-y-hidden bg-background hide-scrollbar select-none" ref={headerScrollRef} onScroll={(e) => {
+            const el = e.currentTarget as HTMLDivElement
+            const totalWidth = Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)
+            const segments = isMobile ? 5 : 8
+            const segmentWidth = totalWidth / segments
+            const active = Math.min(segments - 1, Math.max(0, Math.floor(el.scrollLeft / segmentWidth + 0.1)))
+            if (active !== navActiveSegment) setNavActiveSegment(active)
+            const maxScroll = Math.max(1, el.scrollWidth - el.clientWidth)
+            setNavProgress(Math.min(1, el.scrollLeft / maxScroll))
+          }}>
+            <div className="flex" style={{ minWidth: `${columnsTotalWidth}px` }}>
               {staff.map((staffMember) => {
                 const appts = getStaffAppointments(staffMember.ghl_id)
                 const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
@@ -1241,7 +1320,7 @@ const StaffOverviewView = ({
                   <div 
                     key={staffMember.ghl_id} 
                     className={cn(
-                      "p-2 border-r last:border-r-0 border-[#601625]/20 flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
+                      "p-1 md:p-2 border-r first:border-l last:border-r-0 border-border flex-shrink-0 cursor-pointer hover:bg-[#601625]/5 transition-all duration-300",
                       isCollapsed ? "bg-[#601625]/5" : "bg-background"
                     )}
                     style={{ width: `${columnWidth}px` }}
@@ -1283,21 +1362,24 @@ const StaffOverviewView = ({
       </div>
 
       {/* Time grid container - expands naturally, page scrolls globally */}
-      <div className="w-full pb-6">
+      <div className="w-full pb-0 border-b border-l border-r border-[#601625]/20 rounded-b-xl">
         <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
-          <div className="w-[80px] border-r bg-muted/30 flex-shrink-0 relative">
+          <div className="w-[80px] border-r bg-[#601625]/5 flex-shrink-0 relative" style={{ width: `${TIME_COL_WIDTH}px` }}>
             {timeSlots.map((time, index) => {
               return (
                 <div
                   key={time}
-                  className={"absolute left-0 right-0 px-2 flex items-center justify-end border-b border-border"}
+                  className={cn(
+                    "absolute left-0 right-0 px-2 flex items-center justify-end",
+                    index === timeSlots.length - 1 ? "border-0" : "border-b border-border"
+                  )}
                   style={{ 
                     top: `${GRID_TOP_PADDING + index * HOUR_SLOT_HEIGHT}px`, 
                     height: `${HOUR_SLOT_HEIGHT}px`
                   }}
                 >
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className={cn("font-medium text-muted-foreground", isMobile ? "text-[10px]" : "text-xs") }>
                     {(() => {
                       const hour = parseInt(time)
                       if (hour === 12) return '12 PM'
@@ -1311,14 +1393,18 @@ const StaffOverviewView = ({
           </div>
 
           {/* Scrollable Staff columns container */}
-          <div className="flex-1 overflow-x-auto" ref={columnsScrollRef} onScroll={(e) => {
+          <div className="flex-1 overflow-x-auto overflow-y-hidden hide-scrollbar" ref={columnsScrollRef} onScroll={(e) => {
             const h = headerScrollRef.current
             const sl = (e.currentTarget as HTMLDivElement).scrollLeft
             if (h && Math.abs(h.scrollLeft - sl) > 1) {
               h.scrollLeft = sl
             }
+            // update progress from body scroll too
+            const el = e.currentTarget as HTMLDivElement
+            const maxScroll = Math.max(1, el.scrollWidth - el.clientWidth)
+            setNavProgress(Math.min(1, sl / maxScroll))
           }}>
-            <div className="flex relative" style={{ minWidth: `${Object.values(dynamicColumnWidths).reduce((sum, width) => sum + width, 0)}px`, height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+            <div className="flex relative" style={{ minWidth: `${columnsTotalWidth}px`, height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => {
                 const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
@@ -1329,7 +1415,7 @@ const StaffOverviewView = ({
                 <div
                   key={staffMember.ghl_id}
                   className={cn(
-                    "border-r last:border-r-0 flex-shrink-0 relative transition-all duration-300",
+                    "border-r first:border-l last:border-r-0 flex-shrink-0 relative transition-all duration-300",
                     isCollapsed ? "bg-[#601625]/5" : "bg-background select-none"
                   )}
                   style={{ width: `${columnWidth}px` }}
@@ -1435,7 +1521,10 @@ const StaffOverviewView = ({
                     return (
                       <div
                         key={time}
-                        className={`absolute left-0 right-0 border-b border-border`}
+                        className={cn(
+                          "absolute left-0 right-0",
+                          index === timeSlots.length - 1 ? "border-0" : "border-b border-border"
+                        )}
                         style={{ 
                           top: `${GRID_TOP_PADDING + index * HOUR_SLOT_HEIGHT}px`, 
                           height: `${HOUR_SLOT_HEIGHT}px`
@@ -2905,7 +2994,46 @@ export default function CalendarPage() {
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center justify-between gap-2 px-4 w-full">
+            {/* Mobile header (<= md) */}
+            <div className="flex md:hidden items-center justify-between gap-2 px-4 w-full">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h1 className="text-base font-semibold">Calendar</h1>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  title="Refresh"
+                  onClick={() => refresh()}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="default" size="icon" className="h-9 w-9">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => router.push('/walk-in')}>
+                      <UserIcon className="h-4 w-4 mr-2" /> Walk-in
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      const dateStr = currentDate.toISOString().slice(0,10)
+                      window.dispatchEvent(new CustomEvent('open-new-appointment', { detail: { dateStr } }))
+                    }}>
+                      <Plus className="h-4 w-4 mr-2" /> New Appointment
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {/* Desktop header (>= md) - unchanged */}
+            <div className="hidden md:flex items-center justify-between gap-2 px-4 w-full">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
@@ -2933,7 +3061,59 @@ export default function CalendarPage() {
 
           <div className="flex flex-col min-h-0 flex-1">
             {/* Calendar Controls */}
-            <div className="flex items-center justify-between p-4 bg-background border-b flex-shrink-0">
+            {/* Mobile controls */}
+            <div className="md:hidden p-3 bg-background border-b flex-shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={navigatePrevious}
+                    className="h-8 w-8"
+                    aria-label="Previous"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={navigateNext}
+                    className="h-8 w-8"
+                    aria-label="Next"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToToday}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Today
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <h2 className="text-lg font-bold leading-tight">{getCurrentPeriodLabel()}</h2>
+                <div className="min-w-[120px]">
+                  <Select value={view} onValueChange={(v) => setView(v as CalendarView)}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="day">Day</SelectItem>
+                      <SelectItem value="month">Month</SelectItem>
+                      <SelectItem value="year">Year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop controls (unchanged) */}
+            <div className="hidden md:flex items-center justify-between p-4 bg-background border-b flex-shrink-0">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Button
