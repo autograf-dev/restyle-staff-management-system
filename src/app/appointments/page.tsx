@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -23,7 +24,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Search, Calendar, Clock, User, Users, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2, ArrowLeft, CheckCircle2, AlertCircle, Scissors, Crown, Sparkles, Heart, Zap, Flame, Gem, Star as StarIcon } from "lucide-react"
+import { ArrowUpDown, Search, Calendar, Clock, User, Users, MapPin, ChevronLeft, ChevronRight, RefreshCcw, CheckCircle, XCircle, Loader2, ArrowLeft, CheckCircle2, AlertCircle, Scissors, Crown, Sparkles, Heart, Zap, Flame, Gem, Star as StarIcon, MoreVertical } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -1746,13 +1747,27 @@ function BookingsPageInner() {
                 >
                   <RefreshCcw className="h-4 w-4" />
                 </Button>
+                {/* Desktop add button */}
                 <Button 
                   onClick={() => setNewAppointmentOpen(true)} 
-                  className="bg-[#601625] text-white hover:bg-[#4a1119]"
+                  className="hidden sm:inline-flex bg-[#601625] text-white hover:bg-[#4a1119]"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   Add Appointment
                 </Button>
+                {/* Mobile three-dot menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild className="sm:hidden">
+                    <Button variant="outline" size="icon" className="h-10 w-10">
+                      <MoreVertical className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setNewAppointmentOpen(true)}>
+                      <Calendar className="h-4 w-4 mr-2" /> Add Appointment
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </header>
@@ -1787,78 +1802,78 @@ function BookingsPageInner() {
             </Card>
 
             {/* Status Tabs - Upcoming / Past / Confirmed / Cancelled */}
-            <div className="flex gap-2 border-b border-neutral-200">
+            <div className="flex gap-2 flex-nowrap overflow-x-auto py-1">
               <button
                 onClick={() => handleTabChange('upcoming')}
-                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:px-6 lg:py-3 lg:text-sm rounded-full border transition-colors shrink-0 ${
                   statusFilter === 'upcoming'
-                    ? 'border-[#601625] text-[#601625] bg-[#601625]/5'
-                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                    ? 'bg-[#601625]/10 text-[#601625] border-[#601625]/30'
+                    : 'bg-white text-neutral-700 border-gray-200 hover:bg-neutral-50'
                 }`}
               >
-                <Calendar className="h-4 w-4" />
-                Upcoming Appointments
+                <Calendar className="hidden lg:inline-block h-4 w-4" />
+                Upcoming
                 {paginationState.upcoming?.total > 0 && (
-                  <Badge variant="secondary" className="ml-2 bg-[#601625]/10 text-[#601625] border-[#601625]/20">
+                  <Badge variant="secondary" className="hidden lg:inline-flex ml-2 bg-[#601625]/10 text-[#601625] border-[#601625]/20 text-[10px] px-2 py-0.5">
                     {paginationState.upcoming.total}
                   </Badge>
                 )}
               </button>
               <button
                 onClick={() => handleTabChange('past')}
-                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:px-6 lg:py-3 lg:text-sm rounded-full border transition-colors shrink-0 ${
                   statusFilter === 'past'
-                    ? 'border-gray-600 text-gray-600 bg-gray-50'
-                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                    ? 'bg-gray-50 text-gray-700 border-gray-300'
+                    : 'bg-white text-neutral-700 border-gray-200 hover:bg-neutral-50'
                 }`}
               >
-                <Clock className="h-4 w-4" />
-                Past Appointments
+                <Clock className="hidden lg:inline-block h-4 w-4" />
+                Past
                 {paginationState.past?.total > 0 && (
-                  <Badge variant="secondary" className="ml-2 bg-gray-100 text-gray-600 border-gray-200">
+                  <Badge variant="secondary" className="hidden lg:inline-flex ml-2 bg-gray-100 text-gray-600 border-gray-200 text-[10px] px-2 py-0.5">
                     {paginationState.past.total}
                   </Badge>
                 )}
               </button>
               <button
                 onClick={() => handleTabChange('confirmed')}
-                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:px-6 lg:py-3 lg:text-sm rounded-full border transition-colors shrink-0 ${
                   statusFilter === 'confirmed'
-                    ? 'border-green-600 text-green-600 bg-green-50'
-                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                    ? 'bg-green-50 text-green-700 border-green-200'
+                    : 'bg-white text-neutral-700 border-gray-200 hover:bg-neutral-50'
                 }`}
               >
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircle className="hidden lg:inline-block h-4 w-4" />
                 Confirmed
                 {paginationState.confirmed?.total > 0 && (
-                  <Badge variant="secondary" className="ml-2 bg-green-100 text-green-600 border-green-200">
+                  <Badge variant="secondary" className="hidden lg:inline-flex ml-2 bg-green-100 text-green-600 border-green-200 text-[10px] px-2 py-0.5">
                     {paginationState.confirmed.total}
                   </Badge>
                 )}
               </button>
               <button
                 onClick={() => handleTabChange('cancelled')}
-                className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs lg:px-6 lg:py-3 lg:text-sm rounded-full border transition-colors shrink-0 ${
                   statusFilter === 'cancelled'
-                    ? 'border-red-600 text-red-600 bg-red-50'
-                    : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : 'bg-white text-neutral-700 border-gray-200 hover:bg-neutral-50'
                 }`}
               >
-                <XCircle className="h-4 w-4" />
+                <XCircle className="hidden lg:inline-block h-4 w-4" />
                 Cancelled
                 {paginationState.cancelled?.total > 0 && (
-                  <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600 border-red-200">
+                  <Badge variant="secondary" className="hidden lg:inline-flex ml-2 bg-red-100 text-red-600 border-red-200 text-[10px] px-2 py-0.5">
                     {paginationState.cancelled.total}
                   </Badge>
                 )}
               </button>
             </div>
 
-            {/* Appointments Table */}
-            <Card className="border-neutral-200 shadow-sm">
-              <CardHeader className="bg-white border-b border-neutral-200 py-3">
+            {/* Appointments Table / Mobile Cards */}
+            <Card className="border-neutral-200 shadow-sm p-1 bg-[#601625]/5 ">
+              <CardHeader className="border-b border-neutral-200 p-2 bg-[#601625]/5 ">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-neutral-900">
+                  <div className="hidden lg:block text-sm font-medium text-neutral-900">
                     Appointments List
                   </div>
                   
@@ -1871,7 +1886,7 @@ function BookingsPageInner() {
                     if (tabTotalPages <= 1) return null
                     
                     return (
-                    <div className="flex items-center gap-2">
+                    <div className="hidden lg:flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -1942,6 +1957,55 @@ function BookingsPageInner() {
                     )
                   })()}
                 </div>
+
+                {/* Mobile pager with primary styling */}
+                {(() => {
+                  const currentTabState = paginationState[statusFilter]
+                  const tabTotalPages = currentTabState?.totalPages || 1
+                  const tabCurrentPage = currentTabState?.page || 1
+                  if (tabTotalPages <= 1) return null
+                  return (
+                    <div className="lg:hidden">
+                    
+                      <div className="flex items-center justify-between px-0 py-1.5">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            const newPage = Math.max(1, tabCurrentPage - 1)
+                            setPaginationState(prev => ({
+                              ...prev,
+                              [statusFilter]: { ...prev[statusFilter], page: newPage }
+                            }))
+                          }}
+                          disabled={tabCurrentPage === 1}
+                          className="h-8 w-8 border-[#601625]/30 text-[#601625] hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <div className="flex flex-col items-center">
+                          <div className="text-xs uppercase tracking-wide text-[#601625] font-semibold">Page</div>
+                          <div className="text-sm text-neutral-900 -mt-0.5"><span className="font-semibold">{tabCurrentPage}</span> / {tabTotalPages}</div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            const newPage = Math.min(tabTotalPages, tabCurrentPage + 1)
+                            setPaginationState(prev => ({
+                              ...prev,
+                              [statusFilter]: { ...prev[statusFilter], page: newPage }
+                            }))
+                          }}
+                          disabled={tabCurrentPage === tabTotalPages}
+                          className="h-8 w-8 border-[#601625]/30 text-[#601625] hover:bg-[#601625] hover:text-white hover:border-[#601625]"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })()}
               </CardHeader>
               <CardContent className="p-0">
                 {loading ? (
@@ -1952,7 +2016,8 @@ function BookingsPageInner() {
                   </div>
                 ) : (
                   <>
-                    <div className="rounded-md border-0">
+                    {/* Desktop table */}
+                    <div className="rounded-md border-0 hidden lg:block">
                     <Table>
                       <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
@@ -2000,6 +2065,84 @@ function BookingsPageInner() {
                     </Table>
                     </div>
 
+                    {/* Mobile cards */}
+                    <div className="lg:hidden p-3 space-y-3">
+                      {data.map((row) => (
+                        <div key={row.id} className="bg-white rounded-2xl ring-1 ring-neutral-200 p-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-2 h-2 bg-[#601625] rounded-full" />
+                              <div>
+                                <div className="text-[15px] font-semibold text-gray-900 leading-tight">{row.serviceName || row.title || 'Untitled Service'}</div>
+                                <div className="text-[11px] text-gray-500 mt-1">{formatDateTime(row.startTime)}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              {row.price ? (
+                                <div className="text-[20px] font-bold text-gray-900">${Number(row.price).toFixed(2)}</div>
+                              ) : null}
+                              <div className="flex items-center justify-end gap-2 mt-1">
+                                <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium border ${getStatusBadgeClasses(getBookingStatus(row))}`}
+                                >
+                                  {getBookingStatus(row).charAt(0).toUpperCase() + getBookingStatus(row).slice(1)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="text-[13px] text-gray-900">
+                              <span className="text-[12px] font-semibold text-gray-800 mr-1">Staff :</span>
+                              {`${row.assignedStaffFirstName || ''} ${row.assignedStaffLastName || ''}`.trim() || 'Any available staff'}
+                            </div>
+                            <div>
+                              <div className="text-[13px] font-semibold text-gray-900 break-words">
+                                <span className="font-semibold text-gray-800">Customer -</span> {row.contactName || 'Unknown'}
+                              </div>
+                              {row.contactPhone && (
+                                <div className="text-[12px] text-neutral-600 mt-0.5 break-words">({row.contactPhone})</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-start gap-2 pt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-lg px-2 text-[12px] font-medium"
+                              onClick={() => {
+                                setSelected(row)
+                                setDetailsOpen(true)
+                                fetchGHLBookingDetails(row.id)
+                              }}
+                            >
+                              View
+                            </Button>
+                            {getBookingStatus(row) !== 'cancelled' && getBookingStatus(row) !== 'past' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 rounded-lg px-2 text-[12px] font-medium"
+                                  onClick={() => handleRescheduleBooking(row)}
+                                >
+                                  Reschedule
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 rounded-lg px-2 text-[12px] font-medium text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400"
+                                  onClick={() => handleCancelBooking(row)}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* Bottom Pagination with Info */}
                     {(() => {
                       const currentTabState = paginationState[statusFilter]
@@ -2010,7 +2153,7 @@ function BookingsPageInner() {
                       if (tabTotalPages <= 1) return null
                       
                       return (
-                      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+                      <div className="hidden lg:flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
                         <div className="flex items-center gap-2 text-sm text-neutral-600">
                             <span>Showing {((tabCurrentPage - 1) * 20) + 1}-{Math.min(tabCurrentPage * 20, tabTotal)} of {tabTotal}</span>
                         </div>

@@ -328,9 +328,23 @@ export default function PaymentsPage() {
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-[#601625]" />
+                  <CreditCard className="hidden md:inline-block h-5 w-5 text-[#601625]" />
                   <h1 className="text-xl font-semibold">Payments</h1>
                 </div>
+              </div>
+              {/* Mobile refresh next to title */}
+              <div className="md:hidden">
+                <Button
+                  onClick={resetAndReload}
+                  disabled={loading}
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label="Refresh"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                </Button>
               </div>
               {/* Desktop actions */}
               <div className="hidden md:flex items-center gap-3">
@@ -356,7 +370,7 @@ export default function PaymentsPage() {
               </div>
             </div>
             {/* Mobile actions */}
-            <div className="md:hidden flex items-center gap-2 w-full">
+            <div className="md:hidden flex items-center gap-2 w-full mt-2">
               <div className="relative flex-1">
                 <input
                   className="h-9 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
@@ -366,19 +380,8 @@ export default function PaymentsPage() {
                 />
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
               </div>
-              <Button
-                onClick={resetAndReload}
-                disabled={loading}
-                variant="outline"
-                size="icon"
-                className="h-9 w-9"
-                aria-label="Refresh"
-                title="Refresh"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
             </div>
-            <p className="text-sm text-muted-foreground md:ml-[4.5rem] ml-0">
+            <p className="text-sm text-muted-foreground md:ml-[4.5rem] ml-0 hidden md:block">
               View and manage all customer payments and transactions
             </p>
           </header>
@@ -389,19 +392,19 @@ export default function PaymentsPage() {
           >
             {/* ===== Overview (single clean card with 2 horizontal panels) ===== */}
             <Card className="border-neutral-200 shadow-none">
-              <CardHeader className="py-1.5 px-4">
+              <CardHeader className="md:py-1.5 px-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-[#601625] rounded-full" />
-                  <h3 className="text-sm font-semibold text-gray-900">Today&apos;s Overview</h3>
+                  <h3 className="text-base md:text-sm font-semibold text-gray-900 sm:text-[25px]">Today&apos;s Overview</h3>
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-2">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* KPIs */}
-                  <section className="rounded-xl border border-neutral-200 bg-white p-3 lg:p-4">
+                  <section className="rounded-2xl ring-1 ring-neutral-200 bg-white p-4 md:rounded-xl md:border md:border-neutral-200 md:ring-0 md:p-4">
                     <header className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-900">Key Performance Indicators </h4>
+                        <h4 className="text-base md:text-sm font-semibold text-gray-900 tracking-tight sm:text-[20px]">Key Performance Indicators </h4>
                       </div>
                       <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
                         <TrendingUp className="h-4 w-4 text-[#601625]" />
@@ -409,35 +412,35 @@ export default function PaymentsPage() {
                     </header>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-                      <div className="rounded-lg border border-neutral-200 p-3">
+                      <div className="rounded-xl ring-1 ring-neutral-200 p-4 md:rounded-lg md:border md:border-neutral-200 md:ring-0 md:p-3 bg-white">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Revenue</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse" /> : formatCurrency(kpiData.totalRevenue)}
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-neutral-200 p-3">
+                      <div className="rounded-xl ring-1 ring-neutral-200 p-4 md:rounded-lg md:border md:border-neutral-200 md:ring-0 md:p-3 bg-white">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Tips</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" /> : formatCurrency(kpiData.totalTips)}
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-neutral-200 p-3">
+                      <div className="rounded-xl ring-1 ring-neutral-200 p-4 md:rounded-lg md:border md:border-neutral-200 md:ring-0 md:p-3 bg-white">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Transactions</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-12 bg-gray-200 rounded animate-pulse" /> : kpiData.transactionsCount}
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-neutral-200 p-3">
+                      <div className="rounded-xl ring-1 ring-neutral-200 p-4 md:rounded-lg md:border md:border-neutral-200 md:ring-0 md:p-3 bg-white">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Active Staff</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-10 bg-gray-200 rounded animate-pulse" /> : kpiData.activeStaff}
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-neutral-200 p-3">
+                      <div className="rounded-xl ring-1 ring-neutral-200 p-4 md:rounded-lg md:border md:border-neutral-200 md:ring-0 md:p-3 bg-white">
                         <div className="text-[11px] text-neutral-500 font-medium uppercase">Tax</div>
                         <div className="mt-1 text-[20px] font-bold text-neutral-900">
                           {loadingKpis ? <div className="h-5 w-20 bg-gray-200 rounded animate-pulse" /> : formatCurrency(kpiData.totalTax)}
@@ -447,10 +450,10 @@ export default function PaymentsPage() {
                   </section>
 
                   {/* Revenue by method */}
-                  <section className="rounded-xl border border-neutral-200 bg-white p-3 lg:p-4">
+                  <section className="rounded-2xl ring-1 ring-neutral-200 bg-white p-4 md:rounded-xl md:border md:border-neutral-200 md:ring-0 md:p-4">
                     <header className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-900">Revenue by Payment Method</h4>
+                        <h4 className="text-base md:text-sm font-semibold text-gray-900 tracking-tight">Revenue by Payment Method</h4>
                       </div>
                       <div className="h-8 w-8 rounded-lg bg-[#601625]/10 flex items-center justify-center">
                         <CreditCard className="h-4 w-4 text-[#601625]" />
@@ -498,8 +501,8 @@ export default function PaymentsPage() {
             {/* ===== End Overview ===== */}
 
             {/* ===== Payments list (separate card below) ===== */}
-            <Card className="border-neutral-200 shadow-none">
-              <CardContent className="pt-4">
+            <Card className="border-neutral-200 shadow-none p-0">
+              <CardContent className="p-0">
                 {loading ? (
                   <div className="space-y-2">
                     {Array.from({ length: 8 }).map((_, i) => (
@@ -507,37 +510,70 @@ export default function PaymentsPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-xl border border-gray-200 shadow-lg bg-white">
+                  <div className="overflow-hidden rounded-2xl bg-white shadow-md">
+                    {/* Transactions heading + pagination (mobile, flex in one row) */}
+                    <div className="md:hidden px-4 pt-4 pb-2">
+                      <div className="flex items-center justify-between">
+                        <Button
+                          onClick={() => goToPage(currentPage - 1)}
+                          disabled={currentPage === 1}
+                          size="icon"
+                          className="h-9 w-9 bg-[#601625]/30 hover:bg-[#601625]/40 text-white disabled:opacity-50"
+                          aria-label="Previous"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <div className="flex flex-col items-center">
+                          <h3 className="text-base md:text-sm font-semibold text-gray-900 sm:text-[25px]">Transactions</h3>
+                          {totalPages > 1 && !loading && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              Page <span className="font-semibold text-gray-900">{currentPage}</span> / {totalPages}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          onClick={() => goToPage(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                          size="icon"
+                          className="h-9 w-9 bg-[#601625] hover:bg-[#751a29] text-white disabled:opacity-50"
+                          aria-label="Next"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                     {/* Header */}
-                    <div className="hidden lg:grid grid-cols-12 bg-white border-b-2 border-gray-100 px-6 py-4">
+                    <div className="hidden lg:grid grid-cols-12 px-6 py-4 bg-gray-100/70 border-b border-gray-200 rounded-t-2xl sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-gray-100/60">
                       <div className="col-span-3">
                         <div className="flex items-center gap-3">
                           <div className="w-2 h-2 bg-[#601625] rounded-full" />
-                          <span className="text-sm font-semibold text-gray-700 tracking-wide">SERVICE</span>
+                          <span className="text-[13px] font-semibold text-neutral-700 uppercase tracking-wider">SERVICE</span>
                         </div>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">STAFF</span>
+                        <span className="text-[13px] font-semibold text-neutral-700 uppercase tracking-wider">STAFF</span>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">CUSTOMER</span>
+                        <span className="text-[13px] font-semibold text-neutral-700 uppercase tracking-wider">CUSTOMER</span>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">TIPS</span>
+                        <span className="text-[13px] font-semibold text-neutral-700 uppercase tracking-wider">TIPS</span>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">PAYMENT</span>
+                        <span className="text-[13px] font-semibold text-neutral-700 uppercase tracking-wider">PAYMENT</span>
                       </div>
                       <div className="col-span-1 text-right">
-                        <span className="text-sm font-semibold text-gray-700 tracking-wide">ACTIONS</span>
+                        <span className="text-[13px] font-semibold text-neutral-700 uppercase tracking-wider">ACTIONS</span>
                       </div>
                     </div>
 
-                    <div className="divide-y divide-gray-100">
+                    {/* Mobile pagination moved into header above */}
+
+                    <div className="md:divide-y md:divide-gray-100">
                       {filtered.map((r, index) => (
                         <div
                           key={r.id}
-                          className={`hidden lg:grid grid-cols-12 items-center px-6 py-6 hover:bg-gray-50/50 transition-all duration-200 group ${
+                          className={`hidden lg:grid grid-cols-12 items-center px-6 py-5 first:pt-0 hover:bg-gray-50/50 transition-all duration-200 group ${
                             index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
                           }`}
                         >
@@ -599,7 +635,7 @@ export default function PaymentsPage() {
                           {/* Payment */}
                           <div className="col-span-2">
                             <div className="flex flex-col gap-1">
-                              <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                              <div className="text-2xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
                               <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
                                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5" />
@@ -632,79 +668,71 @@ export default function PaymentsPage() {
 
                       {/* Mobile cards */}
                       {filtered.map((r) => (
-                        <div key={`mobile-${r.id}`} className="lg:hidden p-4 border-b border-gray-100 last:border-b-0">
-                          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4 shadow-sm">
+                        <div key={`mobile-${r.id}`} className="lg:hidden p-3">
+                          <div className="bg-white rounded-2xl ring-1 ring-neutral-200 p-4 space-y-4 shadow-xs">
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-3">
                                 <div className="w-2 h-2 bg-[#601625] rounded-full" />
                                 <div>
-                                  <div className="text-base font-semibold text-gray-900">{getServiceName(r)}</div>
-                                  <div className="text-xs text-gray-500 mt-1">Transaction #{r.id.slice(-8)}</div>
+                                  <div className="text-[15px] font-semibold text-gray-900 leading-tight">{getServiceName(r)}</div>
+                                  <div className="text-[11px] text-gray-500 mt-1">Transaction #{r.id.slice(-8)}</div>
+                                  <div className="text-[11px] text-gray-500 mt-0.5 font-mono">{formatDate(r.paymentDate)}</div>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-xl font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
-                                <div className="flex items-center gap-2 mt-1">
+                                <div className="text-[24px] font-bold text-gray-900">{formatCurrency(r.totalPaid)}</div>
+                                <div className="flex items-center justify-end gap-2 mt-1">
                                   <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
                                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5" />
                                     {r.method || "Unknown"}
                                   </span>
-                                  <span className="text-xs text-gray-500 font-mono">{formatDate(r.paymentDate)}</span>
                                 </div>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Staff</div>
-                                {r.items && r.items.length > 0 ? (
-                                  <div className="space-y-2">
-                                    {r.items.map((item, idx) => (
-                                      <div key={idx} className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 w-fit">
-                                        <span className="truncate">{item.staffName || "Staff Not Assigned"}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 w-fit">
-                                    <span className="truncate">{getStaffName(r)}</span>
-                                  </div>
-                                )}
+                                {(() => {
+                                  const staffDisplay = r.items && r.items.length > 0
+                                    ? r.items.map((item) => item.staffName || "Staff Not Assigned").join(", ")
+                                    : getStaffName(r)
+                                  return (
+                                    <div className="text-[13px] text-gray-900">
+                                      <span className="text-[12px] font-semibold text-gray-800 mr-1">Staff :</span>
+                                      {staffDisplay}
+                                    </div>
+                                  )
+                                })()}
                               </div>
 
                               <div>
-                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Customer</div>
-                                <div className="text-sm font-semibold text-gray-900 truncate">
+                                <div className="text-[13px] font-semibold text-gray-900 break-words">
+                                  <span className="font-semibold text-gray-800">Customer -</span>{" "}
                                   {getCustomerName(r)}
                                   {loadingCustomers && getCustomerName(r) === "Loading..." && (
-                                    <span className="ml-2 text-xs text-gray-500">⏳</span>
+                                    <span className="ml-1 text-[11px] text-gray-500">⏳</span>
                                   )}
                                 </div>
-                                <div className="mt-2">
-                                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20">
-                                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mr-1.5" />
-                                    {getCustomerPhone(r)}
-                                  </span>
-                                </div>
+                                <div className="text-[12px] text-neutral-600 mt-0.5 break-words">({getCustomerPhone(r)})</div>
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                            <div className="flex items-center justify-between pt-2">
                               <div>
-                                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Tips</div>
-                                <div className="text-lg font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
+                                <div className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1">Tips</div>
+                                <div className="text-[17px] font-bold text-[#751a29]">{formatCurrency(r.tip)}</div>
                               </div>
                               <div className="flex gap-2">
                                 <Link
                                   href={`/payments/${encodeURIComponent(r.id)}`}
-                                  className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
+                                  className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-[13px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm"
                                 >
                                   <Eye className="h-4 w-4 mr-1.5" /> View
                                 </Link>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="h-9 rounded-lg px-3 text-sm font-medium text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 transition-all duration-200 shadow-sm"
+                                  className="h-9 rounded-lg px-3 text-[13px] font-medium text-red-700 border-red-300 hover:bg-red-50 hover:border-red-400 transition-all duration-200 shadow-sm"
                                   onClick={() => handleDeleteClick(r)}
                                 >
                                   <Trash2 className="h-4 w-4 mr-1.5" /> Delete
