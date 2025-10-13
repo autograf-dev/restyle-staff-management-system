@@ -332,7 +332,8 @@ export default function PaymentsPage() {
                   <h1 className="text-xl font-semibold">Payments</h1>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              {/* Desktop actions */}
+              <div className="hidden md:flex items-center gap-3">
                 <div className="relative">
                   <input
                     className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
@@ -354,7 +355,30 @@ export default function PaymentsPage() {
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground ml-[4.5rem]">
+            {/* Mobile actions */}
+            <div className="md:hidden flex items-center gap-2 w-full">
+              <div className="relative flex-1">
+                <input
+                  className="h-9 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
+                  placeholder="Search payments"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              </div>
+              <Button
+                onClick={resetAndReload}
+                disabled={loading}
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Refresh"
+                title="Refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground md:ml-[4.5rem] ml-0">
               View and manage all customer payments and transactions
             </p>
           </header>
