@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, RefreshCw, X } from "lucide-react"
+import { Search, RefreshCw, X, MoreVertical } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -21,7 +22,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, Pencil, Trash2, Plus, Trash } from "lucide-react"
+import { ArrowUpDown, Pencil, Trash2, Plus, Trash, Eye } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet"
@@ -163,6 +164,8 @@ export default function Page() {
   const [bookingCancelOpen, setBookingCancelOpen] = React.useState(false)
   const [bookingToCancel, setBookingToCancel] = React.useState<ContactBooking | null>(null)
   const [bookingCancelLoading, setBookingCancelLoading] = React.useState(false)
+  // Mobile search toggle
+  const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false)
   
   // Search state
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -723,9 +726,26 @@ export default function Page() {
               <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
               <h1 className="text-xl font-semibold">Customers</h1>
             </div>
-            <Button onClick={() => openEdit()} className="h-9">
-              <Plus className="mr-2 h-4 w-4" /> Add customer
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => openEdit()} className="h-9 hidden sm:inline-flex">
+                <Plus className="mr-2 h-4 w-4" /> Add customer
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild className="sm:hidden">
+                  <Button variant="outline" size="icon" className="h-10 w-10">
+                    <MoreVertical className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setMobileSearchOpen(true)}>
+                    <Search className="h-4 w-4 mr-2" /> Search
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openEdit()}>
+                    <Plus className="h-4 w-4 mr-2" /> Add customer
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
           <p className="text-sm text-muted-foreground ml-12">Create, update, and edit your customers from here</p>
         </header>
@@ -744,8 +764,31 @@ export default function Page() {
           )}
 
           <div className="w-full space-y-3">
+            {/* Mobile inline search */}
+            {mobileSearchOpen && (
+              <div className="sm:hidden px-0">
+                <div className="relative bg-white rounded-xl border border-neutral-200 shadow-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    autoFocus
+                    placeholder="Search by name or phone (server)"
+                    value={apiQuery}
+                    onChange={(e) => setApiQuery(e.target.value)}
+                    className="pl-10 pr-10 h-11 border-0 focus-visible:ring-0"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Close search"
+                    onClick={() => { setApiQuery(""); setMobileSearchOpen(false) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path fill-rule="evenodd" d="M12 10.586 6.707 5.293a1 1 0 0 0-1.414 1.414L10.586 12l-5.293 5.293a1 1 0 1 0 1.414 1.414L12 13.414l5.293 5.293a1 1 0 0 0 1.414-1.414L13.414 12l5.293-5.293a1 1 0 0 0-1.414-1.414L12 10.586Z" clip-rule="evenodd"/></svg>
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 hidden sm:flex">
                 <Input
                   placeholder="Search by name or phone (server)"
                   value={apiQuery}
@@ -814,7 +857,7 @@ export default function Page() {
                   <X className="h-4 w-4 mr-1" /> Reset
                 </Button>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2 hidden sm:flex">
                 <Input
                   placeholder="Filter current page…"
                   value={globalFilter ?? ""}
@@ -824,7 +867,8 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="rounded-md border overflow-hidden">
+            {/* Desktop table */}
+            <div className="rounded-md border overflow-hidden hidden sm:block">
               <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -876,8 +920,54 @@ export default function Page() {
               </Table>
             </div>
 
-            {/* Simplified Pagination Controls - Show all entries on current page with prev/next only */}
-            <div className="flex items-center justify-between py-4">
+            {/* Mobile top pager and count */}
+            {totalPages > 1 && (
+              <div className="sm:hidden mb-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[12px] text-neutral-600">Showing {data.length} of {total} customers</div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>
+                      ‹
+                    </Button>
+                    <span className="text-[12px] text-neutral-600">{currentPage} / {totalPages}</span>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>
+                      ›
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile cards */}
+            <div className="sm:hidden space-y-2">
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                ))
+              ) : (
+                data.map((c) => (
+                  <div key={c.id} className="bg-white rounded-2xl ring-1 ring-neutral-200 p-4">
+                    {/* Row 1: Name (left) | Date (right) */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-[15px] font-semibold text-gray-900 capitalize truncate pr-3">{c.contactName.toLowerCase()}</div>
+                      <div className="text-[11px] text-neutral-500 whitespace-nowrap">{new Date(c.dateAdded).toLocaleDateString()}</div>
+                    </div>
+                    {/* Row 2: Phone (left) | Buttons (right) */}
+                    <div className="mt-1 flex items-center justify-between">
+                      <div className="text-[12px] text-neutral-600">{c.phone || "-"}</div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openDetails(c)}><Eye className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8 text-red-700 border-red-300 hover:bg-red-50" onClick={() => confirmDelete(c.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="hidden sm:flex items-center justify-between py-4">
               <div className="text-muted-foreground text-sm">
                 Page {currentPage} of {totalPages} - Showing all {data.length} entries on this page ({total} total)
                 {globalFilter && " (search applied to current page only)"}
@@ -909,6 +999,26 @@ export default function Page() {
                 </Button>
               </div>
             </div>
+
+            {/* Mobile pager */}
+            {totalPages > 1 && (
+              <div className="sm:hidden">
+                <div className="flex items-center justify-between rounded-xl border border-[#601625]/20 bg-[#601625]/5 px-2 py-1.5">
+                  <Button variant="outline" size="icon" className="h-8 w-8 border-[#601625]/30 text-[#601625] hover:bg-[#601625] hover:text-white hover:border-[#601625]" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>
+                    <span className="sr-only">Previous</span>
+                    ‹
+                  </Button>
+                  <div className="text-center">
+                    <div className="text-[11px] uppercase tracking-wide text-[#601625] font-semibold">Page</div>
+                    <div className="text-sm text-neutral-900 -mt-0.5"><span className="font-semibold">{currentPage}</span> / {totalPages}</div>
+                  </div>
+                  <Button variant="outline" size="icon" className="h-8 w-8 border-[#601625]/30 text-[#601625] hover:bg-[#601625] hover:text-white hover:border-[#601625]" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>
+                    <span className="sr-only">Next</span>
+                    ›
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

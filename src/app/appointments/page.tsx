@@ -371,6 +371,8 @@ function BookingsPageInner() {
   const [rescheduleOpen, setRescheduleOpen] = React.useState(false)
   const [bookingToReschedule, setBookingToReschedule] = React.useState<Booking | null>(null)
   const [rescheduleLoading, setRescheduleLoading] = React.useState(false)
+  // Mobile search toggle
+  const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false)
   
   // Reschedule form data
   const [selectedStaff, setSelectedStaff] = React.useState<string>("")
@@ -1763,6 +1765,9 @@ function BookingsPageInner() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setMobileSearchOpen(true)}>
+                      <Search className="h-4 w-4 mr-2" /> Search
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setNewAppointmentOpen(true)}>
                       <Calendar className="h-4 w-4 mr-2" /> Add Appointment
                     </DropdownMenuItem>
@@ -1774,10 +1779,28 @@ function BookingsPageInner() {
           
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
             {/* Search Bar and Status Tabs */}
-            <Card className="border-neutral-200 shadow-sm">
+            <Card className="border-neutral-200 shadow-sm hidden sm:block">
               <CardContent className="p-4">
+                {/* Mobile search toggle */}
+                {mobileSearchOpen && (
+                  <div className="sm:hidden mb-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        autoFocus
+                        placeholder="Search by customer, staff, service, or phone..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 h-11 border-gray-300 focus:border-primary focus:ring-primary"
+                      />
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <Button variant="ghost" size="sm" onClick={() => setMobileSearchOpen(false)} className="text-xs">Close</Button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 hidden sm:block">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       placeholder="Search by customer, staff, service, or phone..."
@@ -1800,6 +1823,30 @@ function BookingsPageInner() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Mobile inline search (hidden by default, opens from menu) */}
+            {mobileSearchOpen && (
+              <div className="sm:hidden px-0">
+                <div className="relative bg-white rounded-xl border border-neutral-200 shadow-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    autoFocus
+                    placeholder="Search by customer, staff, service, or phone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-10 h-11 border-0 focus-visible:ring-0"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Close search"
+                    onClick={() => { setSearchTerm(""); setMobileSearchOpen(false) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M12 10.586 6.707 5.293a1 1 0 0 0-1.414 1.414L10.586 12l-5.293 5.293a1 1 0 1 0 1.414 1.414L12 13.414l5.293 5.293a1 1 0 0 0 1.414-1.414L13.414 12l5.293-5.293a1 1 0 0 0-1.414-1.414L12 10.586Z" clipRule="evenodd"/></svg>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Status Tabs - Upcoming / Past / Confirmed / Cancelled */}
             <div className="flex gap-2 flex-nowrap overflow-x-auto py-1">
@@ -1870,8 +1917,8 @@ function BookingsPageInner() {
             </div>
 
             {/* Appointments Table / Mobile Cards */}
-            <Card className="border-neutral-200 shadow-sm p-1 bg-[#601625]/5 ">
-              <CardHeader className="border-b border-neutral-200 p-2 bg-[#601625]/5 ">
+            <Card className="border-unset shadow-sm p-1 ">
+              <CardHeader className="border-b border-neutral-200 p-2 ">
                 <div className="flex items-center justify-between">
                   <div className="hidden lg:block text-sm font-medium text-neutral-900">
                     Appointments List
@@ -1967,7 +2014,7 @@ function BookingsPageInner() {
                   return (
                     <div className="lg:hidden">
                     
-                      <div className="flex items-center justify-between px-0 py-1.5">
+                       <div className="flex items-center justify-between rounded-xl border border-[#601625]/20 bg-[#601625]/5 px-2 py-1.5">
                         <Button
                           variant="outline"
                           size="icon"

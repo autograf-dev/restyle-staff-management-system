@@ -39,11 +39,13 @@ import {
   Gem,
   Wand2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  MoreVertical
 } from "lucide-react"
 import React, { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface Service {
   id: string
@@ -528,29 +530,54 @@ export default function ServicesPage() {
         <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 sticky top-0 z-30 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b">
             <div className="flex items-center justify-between w-full px-4">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
+                  <Sparkles className="hidden md:inline-block h-5 w-5 text-primary" />
                   <h1 className="text-xl font-semibold">Services Management</h1>
                 </div>
               </div>
-              <Button onClick={() => setCreateDialogOpen(true)} className="bg-primary text-primary-foreground">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Service
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title="Refresh"
+                  onClick={() => { fetchGroups(); fetchServices(); fetchAvailableStaff(); }}
+                  className="h-9 w-9"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                {/* Desktop create button */}
+                <Button onClick={() => setCreateDialogOpen(true)} className="hidden md:inline-flex bg-primary text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Service
+                </Button>
+                {/* Mobile menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild className="md:hidden">
+                    <Button variant="outline" size="icon" className="h-9 w-9">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => setCreateDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" /> Create Service
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { fetchGroups(); fetchServices(); fetchAvailableStaff(); }}>
+                      <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            {/* Test Banner */}
-            <div className="bg-green-100 border border-green-500 rounded-lg p-4 text-center">
-              <h3 className="text-lg font-semibold text-green-800">✅ Group Filtering System Added!</h3>
-              <p className="text-green-700">Look for the blue &quot;Service Categories&quot; card below</p>
-            </div>
+            {/* Intro text: hidden on mobile */}
+            <p className="hidden sm:block text-sm text-muted-foreground ml-12">Manage your salon services and their configurations</p>
             
             {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-4">
