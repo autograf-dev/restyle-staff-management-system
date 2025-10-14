@@ -650,11 +650,11 @@ const StaffOverviewView = ({
     }
   }, [headerScrollRef.current, columnsScrollRef.current])
 
-  // Generate time slots from 8:00 AM to 7:00 PM inclusive (hourly)
+  // Generate time slots from 9:00 AM to 7:00 PM inclusive (hourly)
   const generateTimeSlots = () => {
     const slots: string[] = []
-    // 8:00 AM → 7:00 PM (12 hours total)
-    for (let hour = 8; hour <= 19; hour++) {
+    // 9:00 AM → 7:00 PM
+    for (let hour = 9; hour <= 19; hour++) {
       slots.push(`${hour.toString().padStart(2,'0')}:00`)
     }
     return slots
