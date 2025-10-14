@@ -385,9 +385,9 @@ const StaffOverviewView = ({
   const columnsScrollRef = React.useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
   const TIME_COL_WIDTH = isMobile ? 56 : 80
-  const baseColumnWidth = isMobile ? 160 : 220
-  const minColumnWidth = isMobile ? 140 : 180
-  const maxColumnWidth = isMobile ? 280 : 400
+  const baseColumnWidth = isMobile ? 130 : 180
+  const minColumnWidth = isMobile ? 110 : 150
+  const maxColumnWidth = isMobile ? 220 : 320
   const collapsedColumnWidth = isMobile ? 40 : 48 // Width when collapsed
   const [currentTime, setCurrentTime] = React.useState(new Date())
   const [collapsedColumns, setCollapsedColumns] = React.useState<Set<string>>(new Set())
@@ -514,7 +514,7 @@ const StaffOverviewView = ({
     if (hour < 8 || hour >= 19) return null
     
     const currentMinutes = hour * 60 + minute
-    const dayStartMinutes = 8 * 60 // 8 AM
+    const dayStartMinutes = 9 * 60 // 9 AM
     const position = GRID_TOP_PADDING + ((currentMinutes - dayStartMinutes) / 60) * HOUR_SLOT_HEIGHT // Use reduced slot height
     
     return position
@@ -685,7 +685,7 @@ const StaffOverviewView = ({
       const { hour: startHour, minute: startMinute } = getHourMinuteInTimeZone(start, 'America/Denver')
       const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
       
-      const dayStartMinutes = 8 * 60
+      const dayStartMinutes = 9 * 60
       const startMinutes = startHour * 60 + startMinute
       const endMinutes = endHour * 60 + endMinute
       
@@ -777,6 +777,9 @@ const StaffOverviewView = ({
     return Object.values(dynamicColumnWidths).reduce((sum, width) => sum + Math.round(width), 0)
   }, [dynamicColumnWidths])
 
+  // Minimum height to comfortably show two lines (name + service)
+  const MIN_APPOINTMENT_HEIGHT = 56
+
   // Helper function to get appointment position and height with overlap handling (8AM to 8PM range)
   const getAppointmentStyleImproved = (appointment: Appointment, staffGhlId: string) => {
     if (!appointment.startTime || !appointment.endTime) {
@@ -789,7 +792,7 @@ const StaffOverviewView = ({
     const { hour: endHour, minute: endMinute } = getHourMinuteInTimeZone(end, 'America/Denver')
     
     // Calculate position from 8AM (480 minutes from midnight)
-    const dayStartMinutes = 8 * 60 // 8 AM start
+    const dayStartMinutes = 9 * 60 // 9 AM start
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
@@ -841,7 +844,7 @@ const StaffOverviewView = ({
     return {
       position: 'absolute' as const,
       top: `${Math.max(0, topOffset)}px`,
-      height: `${Math.max(30, height - 4)}px`,
+      height: `${Math.max(MIN_APPOINTMENT_HEIGHT, height - 4)}px`,
       left: `${leftOffset}px`,
       width: width,
       zIndex: zIndex
@@ -870,7 +873,7 @@ const StaffOverviewView = ({
     const endMinute = end.getMinutes()
     
     // Calculate position from 8AM (480 minutes from midnight)
-    const dayStartMinutes = 8 * 60 // Start from 8AM (480 minutes)
+    const dayStartMinutes = 9 * 60 // Start from 9AM (540 minutes)
     const startMinutes = startHour * 60 + startMinute
     const endMinutes = endHour * 60 + endMinute
     
@@ -1030,7 +1033,7 @@ const StaffOverviewView = ({
           const endMinutes = parseInt(endTime)
           
           // Only include breaks within our calendar range (8AM-8PM)
-          if (startMinutes >= 8 * 60 && endMinutes <= 20 * 60) {
+          if (startMinutes >= 9 * 60 && endMinutes <= 20 * 60) {
             periods.push({ startMinutes, endMinutes, block: breakItem as unknown as Record<string, unknown> })
           }
         }
@@ -1043,14 +1046,14 @@ const StaffOverviewView = ({
   // Helper function to get non-working time periods for a staff member
   const getNonWorkingPeriods = (staffMember: { workingHours?: Record<string, { start: string | number | null, end: string | number | null }>, name?: string, ghl_id?: string }) => {
     const periods: { startMinutes: number, endMinutes: number, type: string, block?: Record<string, unknown> }[] = []
-    const dayStartMinutes = 8 * 60 // Calendar starts at 8AM
+    const dayStartMinutes = 9 * 60 // Calendar starts at 9AM
     const dayEndMinutes = 20 * 60  // Gray area extends till 8PM (even though view ends at 7PM)
 
     // Check if staff member is on leave - grey out entire day
     if (staffMember.ghl_id && isStaffOnLeave(staffMember.ghl_id)) {
       
       return [{
-        startMinutes: 8 * 60, // 8AM
+        startMinutes: 9 * 60, // 9AM
         endMinutes: 20 * 60,  // 8PM
         type: 'leave'
       }]
@@ -1065,7 +1068,7 @@ const StaffOverviewView = ({
     // If salon is closed, grey out entire day
     if (!salonHours) {
       return [{
-        startMinutes: 8 * 60, // 8AM
+        startMinutes: 9 * 60, // 9AM
         endMinutes: 20 * 60,  // 8PM
         type: 'salon-closed'
       }]
@@ -1074,7 +1077,7 @@ const StaffOverviewView = ({
     // If staff has no working hours, grey out entire day
     if (!workingHours) {
       return [{
-        startMinutes: 8 * 60, // 8AM
+        startMinutes: 9 * 60, // 9AM
         endMinutes: 20 * 60,  // 8PM
         type: 'staff-off'
       }]
@@ -1363,7 +1366,7 @@ const StaffOverviewView = ({
 
       {/* Time grid container - expands naturally, page scrolls globally */}
       <div className="w-full pb-0 border-b border-l border-r border-[#601625]/20 rounded-b-xl">
-        <div className="flex w-full" style={{ height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+        <div className="flex w-full" style={{ height: `${(timeSlots.length * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
           {/* Sticky Time column */}
           <div className="w-[80px] border-r bg-[#601625]/5 flex-shrink-0 relative" style={{ width: `${TIME_COL_WIDTH}px` }}>
             {timeSlots.map((time, index) => {
@@ -1404,7 +1407,7 @@ const StaffOverviewView = ({
             const maxScroll = Math.max(1, el.scrollWidth - el.clientWidth)
             setNavProgress(Math.min(1, sl / maxScroll))
           }}>
-            <div className="flex relative" style={{ minWidth: `${columnsTotalWidth}px`, height: `${(12 * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
+            <div className="flex relative" style={{ minWidth: `${columnsTotalWidth}px`, height: `${(timeSlots.length * HOUR_SLOT_HEIGHT) + GRID_TOP_PADDING + GRID_BOTTOM_PADDING}px` }}>
               {/* Staff columns */}
               {staff.map((staffMember) => {
                 const columnWidth = dynamicColumnWidths[staffMember.ghl_id] || baseColumnWidth
@@ -1454,10 +1457,10 @@ const StaffOverviewView = ({
                     const toCeil15 = (val: number) => Math.ceil(val / 15) * 15
                     const rawStart = Math.max(0, ((startY - GRID_TOP_PADDING) / HOUR_SLOT_HEIGHT) * 60)
                     const rawEnd = Math.max(0, ((endY - GRID_TOP_PADDING) / HOUR_SLOT_HEIGHT) * 60)
-                    const minutesFrom8Start = toFloor15(rawStart)
-                    const minutesFrom8End = toCeil15(rawEnd)
-                    const startAbs = (8 * 60) + minutesFrom8Start
-                    const endAbs = (8 * 60) + Math.max(minutesFrom8Start, minutesFrom8End)
+                    const minutesFromStart = toFloor15(rawStart)
+                    const minutesFromEnd = toCeil15(rawEnd)
+                    const startAbs = (9 * 60) + minutesFromStart
+                    const endAbs = (9 * 60) + Math.max(minutesFromStart, minutesFromEnd)
                     // If selection duration < 15 minutes, ignore (user didn't select enough)
                     if (endAbs - startAbs < 15) return
                     // Ensure selection does not overlap with existing appointments or breaks
@@ -1537,8 +1540,8 @@ const StaffOverviewView = ({
                   {!isCollapsed && getNonWorkingPeriods(staffMember).map((period, index) => {
                     // Calculate slot index based on time
     // Each slot is 60 minutes, starting from 8:00 AM (slot 0)
-    const startSlotIndex = (period.startMinutes - (8 * 60)) / 60
-    const endSlotIndex = (period.endMinutes - (8 * 60)) / 60
+    const startSlotIndex = (period.startMinutes - (9 * 60)) / 60
+    const endSlotIndex = (period.endMinutes - (9 * 60)) / 60
     
     // Position based on slot index (each slot is now HOUR_SLOT_HEIGHT high)
     // Use the exact same positioning as the time slot lines
@@ -1752,9 +1755,6 @@ const StaffOverviewView = ({
                       ? (new Date(appointment.endTime).getTime() - new Date(appointment.startTime).getTime()) / (1000 * 60)
                       : 30
                     
-                    // Determine if this is a short appointment (30 mins or less)
-                    const isShortAppointment = duration <= 30
-                    
                     return (
                       <div
                         key={appointment.id}
@@ -1762,26 +1762,26 @@ const StaffOverviewView = ({
                           appointment.appointment_status === 'cancelled'
                             ? 'border-l-gray-300 bg-gray-100/60 hover:bg-gray-200/80 opacity-60 cursor-default'
                             : 'border-l-[#601625] bg-gradient-to-r from-[#601625]/10 to-[#751a29]/10 hover:from-[#601625]/20 hover:to-[#751a29]/20'
-                        } ${isShortAppointment ? 'px-2 py-1' : 'px-3 py-2'}`}
+                        } px-3 py-2`}
                         style={style}
                         onClick={() => appointment.appointment_status !== 'cancelled' && onAppointmentClick(appointment)}
                         title={`${appointment.contactName || 'Unknown Client'} - ${appointment.serviceName}\n${appointment.startTime && formatTime(appointment.startTime)}${appointment.endTime && ` - ${formatTime(appointment.endTime)}`}${appointment.appointment_status === 'cancelled' ? '\n(Cancelled)' : ''}\nClick for details`}
                       >
                         {/* Client name at top - always show */}
-                        <div className={`uppercase font-medium truncate leading-tight ${
+                        <div className={`uppercase font-medium leading-tight ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-500 line-through' 
                             : 'text-[#601625]'
-                        } ${isShortAppointment ? 'text-[10px]' : 'text-xs'}`}>
+                        } text-[11px]`}>
                           {appointment.contactName || 'Unknown Client'}
                         </div>
                         
                         {/* Service name at bottom - always show */}
-                        <div className={`truncate leading-tight ${
+                        <div className={`leading-tight whitespace-normal break-words ${
                           appointment.appointment_status === 'cancelled' 
                             ? 'text-gray-400 line-through' 
                             : 'text-[#751a29]/70'
-                        } ${isShortAppointment ? 'text-[9px] mt-0.5' : 'text-[10px] mt-0.5'}`}>
+                        } text-[11px] mt-1`}>
                           {appointment.serviceName}
                         </div>
                         
