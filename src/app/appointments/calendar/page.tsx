@@ -1732,14 +1732,14 @@ const StaffOverviewView = ({
                     return (
                       <div
                         key={`break-${breakItem["🔒 Row ID"]}`}
-                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-gray-400 bg-gray-100/50 backdrop-blur-sm hidden"
+                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-blue-400 bg-blue-100/50 backdrop-blur-sm"
                         style={style}
                         title={`Break: ${breakItem["Block/Name"]}`}
                       >
-                        <div className="text-sm font-medium text-gray-600 truncate">
+                        <div className="text-sm font-medium text-blue-700 truncate">
                           Break
                         </div>
-                        <div className="text-xs text-gray-500 truncate mt-1">
+                        <div className="text-xs text-blue-600 truncate mt-1">
                           {breakItem["Block/Name"]}
                         </div>
                       </div>
