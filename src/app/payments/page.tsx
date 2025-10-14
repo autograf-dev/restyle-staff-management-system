@@ -7,10 +7,11 @@ import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar, RefreshCw, ChevronLeft, ChevronRight, CreditCard } from "lucide-react"
+import { Trash2, Search, Eye, DollarSign, TrendingUp, Users, Calendar, RefreshCw, ChevronLeft, ChevronRight, CreditCard, Filter, X } from "lucide-react"
 import Link from "next/link"
 
 interface TxRow {
@@ -46,7 +47,7 @@ interface TxRow {
 export default function PaymentsPage() {
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<TxRow[]>([])
-  const [query, setQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<TxRow | null>(null)
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
@@ -69,21 +70,28 @@ export default function PaymentsPage() {
     transactionCount: number
   }>>([])
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [isSearchMode, setIsSearchMode] = useState(false)
+  const [staffOptions, setStaffOptions] = useState<string[]>([])
+  const [selectedStaff, setSelectedStaff] = useState<string>("")
+  const PAYMENT_METHODS = [
+    { id: "visa", name: "Visa" },
+    { id: "mastercard", name: "Mastercard" },
+    { id: "amex", name: "Amex" },
+    { id: "debit", name: "Debit" },
+    { id: "cash", name: "Cash" },
+  ] as const
+  const [selectedMethod, setSelectedMethod] = useState<string>("")
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   // ✅ single declaration only
   const itemsPerPage = 50
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter(r =>
-      (r.services || "").toLowerCase().includes(q) ||
-      (r.staff || "").toLowerCase().includes(q) ||
-      (r.customerPhone || "").toLowerCase().includes(q) ||
-      (r.customerLookup || "").toLowerCase().includes(q) ||
-      (r.id || "").toLowerCase().includes(q)
-    )
-  }, [rows, query])
+    // Always return all rows - no client-side filtering
+    // Search only works via the Search button
+    return rows
+  }, [rows])
 
   const formatCurrency = (n?: number | null) =>
     new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(Number(n || 0))
@@ -99,6 +107,26 @@ export default function PaymentsPage() {
   }
 
   // ---------- existing logic (unchanged) ----------
+  // Load staff list for dropdown
+  useEffect(() => {
+    const loadStaff = async () => {
+      try {
+        const res = await fetch('/api/barber-hours')
+        const json = await res.json()
+        if (!res.ok || !json.ok) return
+        const namesSet = new Set<string>(
+          (json.data as Array<Record<string, unknown>> | undefined || [])
+            .map((row) => String(row['Barber/Name'] || '').trim())
+            .filter((n) => n.length > 0)
+        )
+        const names: string[] = Array.from(namesSet).sort((a, b) => a.localeCompare(b))
+        setStaffOptions(names)
+      } catch {
+        // silent fail
+      }
+    }
+    loadStaff()
+  }, [])
   const fetchCustomerFromAPI = async (customerId: string): Promise<string | null> => {
     try {
       const res = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/getContact?id=${encodeURIComponent(customerId)}`)
@@ -277,6 +305,65 @@ export default function PaymentsPage() {
     }
   }
 
+  const searchTransactions = async (searchQuery: string, staffFilter: string = "", methodFilter: string = "") => {
+    if (!searchQuery.trim() && !staffFilter.trim() && !methodFilter.trim()) {
+      toast.error("Please use at least one filter")
+      return
+    }
+
+    setSearchLoading(true)
+    try {
+      const params = new URLSearchParams({
+        limit: itemsPerPage.toString(),
+        offset: "0"
+      })
+      
+      if (searchQuery.trim()) {
+        params.append("q", searchQuery.trim())
+      }
+      
+      if (staffFilter.trim()) {
+        params.append("staff", staffFilter.trim())
+      }
+      if (methodFilter.trim()) {
+        params.append("method", methodFilter.trim())
+      }
+
+      const res = await fetch(`/api/transactions/search?${params.toString()}`)
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || "Search failed")
+
+      const transactions = json.data || []
+      const total = json.total || transactions.length
+
+      setRows(transactions)
+      setTotalCount(total)
+      setTotalPages(Math.ceil(total / itemsPerPage))
+      setCurrentPage(1)
+      setIsSearchMode(true)
+
+      await fetchCustomerNames(transactions)
+      
+      // Scroll to the table
+      const tableElement = document.getElementById('transactions-table')
+      if (tableElement) {
+        tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+
+      const parts: string[] = []
+      if (searchQuery.trim()) parts.push(`service "${searchQuery}"`)
+      if (staffFilter.trim()) parts.push(`staff "${staffFilter}"`)
+      if (methodFilter.trim()) parts.push(`method "${methodFilter}"`)
+      const searchType = parts.join(" + ")
+      toast.success(`Found ${total} transaction${total !== 1 ? 's' : ''} for ${searchType}`)
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+      toast.error("Search failed: " + errorMessage)
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadTransactions(1)
     loadKpiData()
@@ -289,9 +376,50 @@ export default function PaymentsPage() {
 
   const resetAndReload = () => {
     setCurrentPage(1)
-    setQuery("")
+    setSearchQuery("")
+    setSelectedStaff("")
+    setSelectedMethod("")
+    setIsSearchMode(false)
     loadTransactions(1)
   }
+
+  const handleSearch = () => {
+    searchTransactions(searchQuery, selectedStaff, selectedMethod)
+  }
+
+  const handleStaffFilter = (staff: string) => {
+    setSelectedStaff(staff)
+    if (staff.trim()) {
+      // If staff is selected, filter immediately
+      searchTransactions("", staff, selectedMethod)
+    } else {
+      // If "All staff" is selected, reset to show all transactions
+      setIsSearchMode(false)
+      loadTransactions(1)
+    }
+  }
+
+  const handleMethodFilter = (method: string) => {
+    setSelectedMethod(method)
+    if (method.trim()) {
+      searchTransactions("", selectedStaff, method)
+    } else {
+      setIsSearchMode(false)
+      loadTransactions(1)
+    }
+  }
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchQuery(value)
+    
+    // If input is cleared, automatically reset to show all transactions
+    if (value.trim() === "") {
+      setIsSearchMode(false)
+      loadTransactions(1)
+    }
+  }
+
 
   const handleDeleteClick = (transaction: TxRow) => {
     setSelectedTransaction(transaction)
@@ -332,53 +460,21 @@ export default function PaymentsPage() {
                   <h1 className="text-xl font-semibold">Payments</h1>
                 </div>
               </div>
-              {/* Mobile refresh next to title */}
+              {/* Mobile filter toggle */}
               <div className="md:hidden">
                 <Button
-                  onClick={resetAndReload}
-                  disabled={loading}
                   variant="outline"
                   size="icon"
+                  aria-label={mobileFiltersOpen ? "Close filters" : "Open filters"}
                   className="h-9 w-9"
-                  aria-label="Refresh"
-                  title="Refresh"
+                  onClick={() => setMobileFiltersOpen((v) => !v)}
                 >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  {mobileFiltersOpen ? (
+                    <X className="h-4 w-4" />
+                  ) : (
+                    <Filter className="h-4 w-4" />
+                  )}
                 </Button>
-              </div>
-              {/* Desktop actions */}
-              <div className="hidden md:flex items-center gap-3">
-                <div className="relative">
-                  <input
-                    className="h-9 w-64 rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
-                    placeholder="Search services, staff, phone, ID"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                </div>
-                <Button
-                  onClick={resetAndReload}
-                  disabled={loading}
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3 text-sm font-medium hover:bg-[#601625]/5 hover:border-[#601625]/30 hover:text-[#601625] transition-all duration-200"
-                >
-                  <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                  Refresh
-                </Button>
-              </div>
-            </div>
-            {/* Mobile actions */}
-            <div className="md:hidden flex items-center gap-2 w-full mt-2">
-              <div className="relative flex-1">
-                <input
-                  className="h-9 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#601625]/20"
-                  placeholder="Search payments"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
               </div>
             </div>
             <p className="text-sm text-muted-foreground md:ml-[4.5rem] ml-0 hidden md:block">
@@ -391,6 +487,7 @@ export default function PaymentsPage() {
             style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
           >
             {/* ===== Overview (single clean card with 2 horizontal panels) ===== */}
+            {/* COMMENTED OUT - Matrix/KPI Overview Section
             <Card className="border-neutral-200 shadow-none">
               <CardHeader className="md:py-1.5 px-4">
                 <div className="flex items-center gap-2">
@@ -401,7 +498,7 @@ export default function PaymentsPage() {
               <CardContent className="px-4 pb-2">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* KPIs */}
-                  <section className="rounded-2xl ring-1 ring-neutral-200 bg-white p-4 md:rounded-xl md:border md:border-neutral-200 md:ring-0 md:p-4">
+                  {/* <section className="rounded-2xl ring-1 ring-neutral-200 bg-white p-4 md:rounded-xl md:border md:border-neutral-200 md:ring-0 md:p-4">
                     <header className="flex items-center justify-between mb-3">
                       <div>
                         <h4 className="text-base md:text-sm font-semibold text-gray-900 tracking-tight sm:text-[20px]">Key Performance Indicators </h4>
@@ -447,10 +544,10 @@ export default function PaymentsPage() {
                         </div>
                       </div>
                     </div>
-                  </section>
+                  </section> */}
 
                   {/* Revenue by method */}
-                  <section className="rounded-2xl ring-1 ring-neutral-200 bg-white p-4 md:rounded-xl md:border md:border-neutral-200 md:ring-0 md:p-4">
+                  {/* <section className="rounded-2xl ring-1 ring-neutral-200 bg-white p-4 md:rounded-xl md:border md:border-neutral-200 md:ring-0 md:p-4">
                     <header className="flex items-center justify-between mb-3">
                       <div>
                         <h4 className="text-base md:text-sm font-semibold text-gray-900 tracking-tight">Revenue by Payment Method</h4>
@@ -494,14 +591,95 @@ export default function PaymentsPage() {
                     ) : (
                       <div className="text-sm text-gray-500">No payment data for today</div>
                     )}
-                  </section>
+                  </section> */}
+                {/* </div>
+              </CardContent>
+            </Card> */}
+            {/* ===== End Overview ===== */}
+
+            {/* ===== Filters Card ===== */}
+            <Card className={`border-neutral-200 shadow-sm bg-white p-0 gap-0 ${mobileFiltersOpen ? '' : 'hidden md:block'}`}>
+              <CardHeader className="pb-2 px-6 pt-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-[#601625] hidden md:inline-block" />
+                  <h3 className="text-lg font-semibold text-gray-900 hidden md:inline-block">Filter By Staff/Service and Payment Type</h3>
+                  <h3 className="text-base font-semibold text-gray-900 md:hidden">Filters</h3>
+                </div>
+              </CardHeader>
+              <CardContent className="px-6 pb-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  {/* Search Bar */}
+               
+                  {/* Staff Dropdown (first) */}
+                  <div className="min-w-[400px]">
+                    <Select value={selectedStaff === "" ? "__all__" : selectedStaff} onValueChange={(v) => handleStaffFilter(v === "__all__" ? "" : v)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="All staff" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All staff</SelectItem>
+                        {staffOptions.map((name) => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Payment Method Dropdown (second) */}
+                  <div className="min-w-[400px]">
+                    <Select value={selectedMethod === "" ? "__all__" : selectedMethod} onValueChange={(v) => handleMethodFilter(v === "__all__" ? "" : v)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="All methods" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All methods</SelectItem>
+                        {PAYMENT_METHODS.map((m) => (
+                          <SelectItem key={m.id} value={m.name.toLowerCase()}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="relative flex-1 min-w-[220px]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <input
+                        className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#601625]/20 focus:border-[#601625]/30 transition-all duration-200"
+                        placeholder="Search service names..."
+                        value={searchQuery}
+                        onChange={handleSearchInputChange}
+                      />
+                    </div>
+                  </div>
+                  {/* Filter Actions */}
+                  <div className="flex items-center gap-2 flex-shrink-0 md:ml-auto">
+                    <Button
+                      onClick={handleSearch}
+                      disabled={searchLoading || (!searchQuery.trim() && !selectedStaff.trim() && !selectedMethod.trim())}
+                      size="sm"
+                      className="h-10 px-4 text-sm font-medium bg-[#601625] text-white hover:bg-[#751a29] focus:outline-none focus:ring-2 focus:ring-[#601625]/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Search className={`h-4 w-4 mr-2 ${searchLoading ? "animate-pulse" : ""}`} />
+                      {searchLoading ? "Searching..." : "Search"}
+                    </Button>
+                    <Button
+                      onClick={resetAndReload}
+                      disabled={loading}
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 text-sm font-medium border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-[#601625]/20 focus:border-[#601625]/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Reset filters"
+                      title="Reset filters"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-            {/* ===== End Overview ===== */}
+            {/* ===== End Filters Card ===== */}
 
             {/* ===== Payments list (separate card below) ===== */}
-            <Card className="border-neutral-200 shadow-none p-0">
+            <Card id="transactions-table" className="border-neutral-200 shadow-none p-0">
               <CardContent className="p-0">
                 {loading ? (
                   <div className="space-y-2">
@@ -524,10 +702,17 @@ export default function PaymentsPage() {
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <div className="flex flex-col items-center">
-                          <h3 className="text-base md:text-sm font-semibold text-gray-900 sm:text-[25px]">Transactions</h3>
+                          <h3 className="text-base md:text-sm font-semibold text-gray-900 sm:text-[25px]">
+                            {isSearchMode ? "Search Results" : "Transactions"}
+                          </h3>
                           {totalPages > 1 && !loading && (
                             <div className="text-xs text-gray-600 mt-1">
                               Page <span className="font-semibold text-gray-900">{currentPage}</span> / {totalPages}
+                            </div>
+                          )}
+                          {isSearchMode && (
+                            <div className="text-xs text-[#601625] mt-1 font-medium">
+                              {totalCount} result{totalCount !== 1 ? 's' : ''} found
                             </div>
                           )}
                         </div>
