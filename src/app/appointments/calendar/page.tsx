@@ -1579,7 +1579,7 @@ const StaffOverviewView = ({
                         zIndex = 2
                         break
                       case 'break':
-                        bgClass = "bg-blue-200/50"
+                        bgClass = "bg-[#601625]/10"
                         titleText = `${staffMember.name} is on break`
                         zIndex = 4
                         break
@@ -1596,6 +1596,15 @@ const StaffOverviewView = ({
                         }}
                         title={titleText}
                       >
+                        {/* Break name displayed on the block */}
+                        {period.type === 'break' && period.block && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="text-xs font-semibold text-[#601625] bg-white/80 px-2 py-1 rounded border border-[#601625]/20">
+                              Break: {String((period.block as Record<string, unknown>)['Block/Name'] || 'Break')}
+                            </div>
+                          </div>
+                        )}
+                        
                         {/* Tooltip */}
                         <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 text-white text-xs rounded px-2 py-1 pointer-events-none z-50 whitespace-nowrap left-2 top-1">
                           {titleText}
@@ -1676,71 +1685,6 @@ const StaffOverviewView = ({
                         </div>
                         <div className="text-xs text-orange-600 truncate mt-1">
                           {leave["Event/Name"]}
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {/* Breaks for this staff member */}
-                  {!isCollapsed && getStaffBreaks(staffMember.ghl_id).map((breakItem) => {
-                    // For recurring breaks, check if it applies to the selected calendar date's day of week
-                    const selectedDay = currentDate.getDay() // 0 = Sunday, 1 = Monday, etc.
-                    const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
-                    
-                    if (breakItem["Block/Recurring"] === "true") {
-                      // Skip if it's a recurring break and doesn't apply to the selected date's day of week
-                      if (!recurringDays.includes(selectedDay.toString())) {
-                        return null
-                      }
-                      } else {
-                        // For non-recurring breaks, check if the break date matches the selected calendar date
-                        if (breakItem["Block/Date"]) {
-                          // Parse the date string more carefully
-                          const dateString = breakItem["Block/Date"]
-                          const datePart = dateString.split(',')[0].trim() // "10/9/2025"
-                          const [month, day, year] = datePart.split('/').map(num => parseInt(num))
-                          const breakDateOnly = new Date(year, month - 1, day) // month is 0-indexed
-                          
-                          const calendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
-                          
-                         
-                          
-                          if (breakDateOnly.getTime() !== calendarDate.getTime()) {
-                            return null // Skip if break is not scheduled for this date
-                          }
-                        } else {
-                          return null
-                        }
-                      }
-
-                    // Create start and end times for the break
-                    const startMinutes = parseInt(breakItem["Block/Start"]) || 0
-                    const endMinutes = parseInt(breakItem["Block/End"]) || 0
-                    
-                    // Convert minutes to time strings
-                    const startHour = Math.floor(startMinutes / 60)
-                    const startMin = startMinutes % 60
-                    const endHour = Math.floor(endMinutes / 60)
-                    const endMin = endMinutes % 60
-                    
-                    const startTime = `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}:00`
-                    const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}:00`
-                    
-                    const style = getLeaveBreakStyle(startTime, endTime)
-                    if (style.display === 'none') return null
-
-                    return (
-                      <div
-                        key={`break-${breakItem["🔒 Row ID"]}`}
-                        className="absolute rounded-md px-3 py-2 border-l-4 border-l-blue-400 bg-blue-100/50 backdrop-blur-sm"
-                        style={style}
-                        title={`Break: ${breakItem["Block/Name"]}`}
-                      >
-                        <div className="text-sm font-medium text-blue-700 truncate">
-                          Break
-                        </div>
-                        <div className="text-xs text-blue-600 truncate mt-1">
-                          {breakItem["Block/Name"]}
                         </div>
                       </div>
                     )
@@ -3091,7 +3035,7 @@ export default function CalendarPage() {
                     onClick={goToToday}
                     className="h-8 px-3 text-xs"
                   >
-                    Today
+                    Go to Today
                   </Button>
                 </div>
               </div>
@@ -3141,7 +3085,7 @@ export default function CalendarPage() {
                     onClick={goToToday}
                     className="text-xs"
                   >
-                    Today
+                    Go to Today
                   </Button>
                 </div>
               </div>
