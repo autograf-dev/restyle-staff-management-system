@@ -598,7 +598,9 @@ const StaffOverviewView = ({
         const breaksRes = await fetch('/api/time-blocks')
         const breaksJson = await breaksRes.json()
         if (breaksJson.ok) {
-          setBreaks(breaksJson.data || [])
+          const breaksData = breaksJson.data || []
+          console.log('📅 Fetched breaks data:', breaksData)
+          setBreaks(breaksData)
         }
 
         // Fetch salon hours data
@@ -1003,13 +1005,28 @@ const StaffOverviewView = ({
     allBreaks.forEach(breakItem => {
       // Check if this break applies to the current date
       const selectedDay = currentDate.getDay() // 0 = Sunday, 1 = Monday, etc.
-      const recurringDays = breakItem["Block/Recurring Day"]?.split(',') || []
+      const recurringDayString = breakItem["Block/Recurring Day"] || ""
+      const recurringDays = recurringDayString.split(',').map(d => d.trim()).filter(d => d !== '')
       
       let shouldIncludeBreak = false
       
-      if (breakItem["Block/Recurring"] === "true") {
+      if (breakItem["Block/Recurring"] === "true" || String(breakItem["Block/Recurring"]) === "true") {
         // For recurring breaks, check if it applies to the selected calendar date's day of week
-        shouldIncludeBreak = recurringDays.includes(selectedDay.toString())
+        // Try matching with number string (0-6) or the day number itself
+        shouldIncludeBreak = recurringDays.includes(selectedDay.toString()) || 
+                            recurringDays.includes(String(selectedDay)) ||
+                            recurringDays.some(d => parseInt(d) === selectedDay)
+        
+        // Debug log for recurring breaks
+        if (recurringDays.length > 0) {
+          console.log(`🔄 Recurring break check: "${breakItem["Block/Name"]}"`, {
+            selectedDay,
+            recurringDayString,
+            recurringDays,
+            shouldInclude: shouldIncludeBreak,
+            breakData: breakItem
+          })
+        }
       } else {
         // For non-recurring breaks, check if the break date matches the selected calendar date
         if (breakItem["Block/Date"]) {
@@ -1600,7 +1617,7 @@ const StaffOverviewView = ({
                         {period.type === 'break' && period.block && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="text-xs font-semibold text-[#601625] bg-white/80 px-2 py-1 rounded border border-[#601625]/20">
-                              Break: {String((period.block as Record<string, unknown>)['Block/Name'] || 'Break')}
+                              {String((period.block as Record<string, unknown>)['Block/Name'] || 'Break')}
                             </div>
                           </div>
                         )}
