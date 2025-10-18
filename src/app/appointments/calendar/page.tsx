@@ -2230,10 +2230,12 @@ export default function CalendarPage() {
       const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/customer?${params.toString()}`)
       const contactData = await contactRes.json()
       let contactId: string | null = null
+      let isDuplicateContact = false
       
       // Handle duplicate contact (error response contains contactId)
       if (contactData?.error && contactData?.details?.meta?.contactId) {
         contactId = contactData.details.meta.contactId
+        isDuplicateContact = true
         console.log('Using existing contact ID from duplicate:', contactId)
       } 
       // Handle successful new contact creation
@@ -2244,12 +2246,35 @@ export default function CalendarPage() {
       // Fallback: check for old format
       else if (contactData?.details?.message === 'This location does not allow duplicated contacts.' && contactData?.details?.meta?.contactId) {
         contactId = contactData.details.meta.contactId
+        isDuplicateContact = true
         console.log('Using existing contact ID (old format):', contactId)
       }
       
       if (!contactId) {
         console.error('Failed to get contact ID. Response:', contactData)
         throw new Error('Contact creation failed: ' + (contactData?.error || contactData?.details?.message || 'Unknown error'))
+      }
+
+      // If duplicate contact, upgrade customer details to ensure latest name is saved
+      if (isDuplicateContact) {
+        try {
+          console.log('🔄 Upgrading customer details for existing contact:', contactId)
+          const upgradeParams = new URLSearchParams({
+            id: contactId,
+            firstName: newAppContactForm.firstName,
+            lastName: newAppContactForm.lastName
+          })
+          const upgradeRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/upgradecustomer?${upgradeParams.toString()}`)
+          const upgradeData = await upgradeRes.json()
+          if (upgradeData.success) {
+            console.log('✅ Customer details upgraded successfully')
+          } else {
+            console.warn('⚠️ Customer upgrade failed, continuing with booking:', upgradeData)
+          }
+        } catch (upgradeError) {
+          console.warn('⚠️ Customer upgrade error (non-critical):', upgradeError)
+          // Don't throw - this is non-critical, we can still book
+        }
       }
 
       const [year, month, day] = newAppSelectedDate.split('-').map(Number)
@@ -2288,19 +2313,48 @@ export default function CalendarPage() {
         }
       }
       const serviceName = selectedServiceObj?.label || 'Service'
+      const servicePrice = selectedServiceObj?.price || 0
       const contactName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
       const title = `${serviceName} - ${contactName}`
+      
+      // Build booking URL with ALL required parameters for Supabase
       let bookUrl = `https://restyle-backend.netlify.app/.netlify/functions/Apointment?contactId=${contactId}&calendarId=${newAppSelectedService}&startTime=${startTime}&endTime=${endTime}&title=${encodeURIComponent(title)}`
       if (assignedUserId) bookUrl += `&assignedUserId=${assignedUserId}`
       bookUrl += `&serviceDuration=${duration}`
+      bookUrl += `&serviceName=${encodeURIComponent(serviceName)}`
+      bookUrl += `&servicePrice=${servicePrice}`
       const staffObj = newAppStaff.find(s => s.value === assignedUserId)
       const staffName = staffObj?.label || 'Any available staff'
       bookUrl += `&staffName=${encodeURIComponent(staffName)}`
       bookUrl += `&customerFirstName=${encodeURIComponent(newAppContactForm.firstName)}`
       bookUrl += `&customerLastName=${encodeURIComponent(newAppContactForm.lastName)}`
+      
+      console.log('🚀 Booking appointment with params:', {
+        contactId,
+        calendarId: newAppSelectedService,
+        startTime,
+        endTime,
+        title,
+        assignedUserId,
+        serviceDuration: duration,
+        serviceName,
+        servicePrice,
+        staffName,
+        customerFirstName: newAppContactForm.firstName,
+        customerLastName: newAppContactForm.lastName
+      })
+      
       const res = await fetch(bookUrl)
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || data.error) throw new Error(data.error || 'Booking failed')
+      
+      console.log('📥 Booking response:', data)
+      
+      if (!res.ok || data.error) {
+        console.error('❌ Booking failed:', data)
+        throw new Error(data.error || 'Booking failed')
+      }
+      
+      console.log('✅ Appointment booked successfully:', data)
       toast.success('Appointment booked successfully')
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
