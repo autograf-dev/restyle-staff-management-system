@@ -330,7 +330,7 @@ export default function TodayDashboardPage() {
                     <Lock className="h-8 w-8 text-white" />
                   </div>
                   <DialogTitle className="text-center text-2xl font-bold text-white">
-                    Today's Overview Access
+                    Today&apos;s Overview Access
                   </DialogTitle>
                   <DialogDescription className="text-center text-white/80 text-base">
                     Please enter your PIN to continue.
