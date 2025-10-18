@@ -2152,8 +2152,14 @@ export default function CalendarPage() {
     setNewAppLoadingDates(true)
     const userId = newAppSelectedStaff && newAppSelectedStaff !== 'any' ? newAppSelectedStaff : null
     try {
-      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${newAppSelectedService}`
+      // Get service duration from selected service
+      const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
+      const serviceDuration = selectedServiceObj?.duration || 120
+      
+      let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/staffSlotss?calendarId=${newAppSelectedService}`
       if (userId) apiUrl += `&userId=${userId}`
+      apiUrl += `&serviceDuration=${serviceDuration}`
+      
       const response = await fetch(apiUrl)
       const data = await response.json()
       if (data.slots) {
@@ -2541,10 +2547,19 @@ export default function CalendarPage() {
     
     try {
       const userId = selectedStaff && selectedStaff !== 'any' ? selectedStaff : null
-      let apiUrl = `https://restyle-api.netlify.app/.netlify/functions/staffSlots?calendarId=${bookingToReschedule.calendar_id}`
+      // Calculate service duration from booking start/end times
+      let serviceDuration = 120 // default
+      if (bookingToReschedule.startTime && bookingToReschedule.endTime) {
+        const start = new Date(bookingToReschedule.startTime)
+        const end = new Date(bookingToReschedule.endTime)
+        serviceDuration = Math.round((end.getTime() - start.getTime()) / (60 * 1000))
+      }
+      
+      let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/staffSlotss?calendarId=${bookingToReschedule.calendar_id}`
       if (userId) {
         apiUrl += `&userId=${userId}`
       }
+      apiUrl += `&serviceDuration=${serviceDuration}`
       
       const response = await fetch(apiUrl, { signal: controller.signal })
       const data = await response.json()
