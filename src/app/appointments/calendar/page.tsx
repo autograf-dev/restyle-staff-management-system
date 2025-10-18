@@ -2365,7 +2365,7 @@ export default function CalendarPage() {
         try {
           const customerName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
           
-          console.log('🔧 Updating Supabase record with complete data:', {
+          const updatePayload = {
             id: bookingId,
             start_time: startTime,
             end_time: endTime,
@@ -2373,28 +2373,40 @@ export default function CalendarPage() {
             service_name: serviceName,
             booking_price: servicePrice,
             customer_name_: customerName,
-            assigned_barber_name: staffName
+            assigned_barber_name: staffName,
+            payment_status: 'pending'
+          }
+          
+          console.log('🔧 Calling API to update Supabase record with complete data:', updatePayload)
+          console.log('📡 API URL: /api/bookings/update-details')
+          console.log('📦 Payload:', JSON.stringify(updatePayload, null, 2))
+          
+          // Use API endpoint with service role key instead of client-side Supabase (bypasses RLS)
+          const updateRes = await fetch('/api/bookings/update-details', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(updatePayload)
           })
           
-          const { error: updateError } = await supabase
-            .from('restyle_bookings')
-            .update({
-              start_time: startTime,
-              end_time: endTime,
-              booking_duration: duration,
-              service_name: serviceName,
-              booking_price: servicePrice,
-              customer_name_: customerName,
-              assigned_barber_name: staffName,
-              payment_status: 'pending'
-            })
-            .eq('id', bookingId)
+          console.log('📡 API Response Status:', updateRes.status, updateRes.statusText)
           
-          if (updateError) {
-            console.error('⚠️ Failed to update Supabase record:', updateError)
-            toast.error('Appointment created but some details may be missing')
+          const updateResult = await updateRes.json().catch(err => {
+            console.error('❌ Failed to parse API response:', err)
+            return { error: 'Failed to parse response' }
+          })
+          
+          console.log('📥 API Response Body:', updateResult)
+          
+          if (!updateRes.ok || !updateResult.success) {
+            console.error('❌ Failed to update Supabase record:', updateResult)
+            console.error('❌ Status:', updateRes.status)
+            console.error('❌ Error details:', updateResult.error || updateResult)
+            toast.error(`Update failed: ${updateResult.error || 'Unknown error'}`)
           } else {
-            console.log('✅ Supabase record updated successfully with complete data')
+            console.log('✅ Supabase record updated successfully via API:', updateResult)
+            toast.success('Appointment details saved successfully')
           }
         } catch (supabaseError) {
           console.error('⚠️ Supabase update error:', supabaseError)
@@ -2406,39 +2418,40 @@ export default function CalendarPage() {
         try {
           const customerName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
           
-          // Find the most recently created booking for this contact and calendar
-          const { data: recentBookings, error: queryError } = await supabase
-            .from('restyle_bookings')
-            .select('id, created_at')
-            .eq('contact_id', contactId)
-            .eq('calendar_id', newAppSelectedService)
-            .order('created_at', { ascending: false })
-            .limit(1)
+          // Query the database to find the most recently created booking
+          const queryRes = await fetch(`/api/bookings?contact_id=${contactId}&calendar_id=${newAppSelectedService}&pageSize=1&page=1`)
+          const queryData = await queryRes.json()
           
-          if (queryError) {
-            console.error('⚠️ Failed to query recent bookings:', queryError)
-          } else if (recentBookings && recentBookings.length > 0) {
-            const recentBookingId = recentBookings[0].id
+          if (queryData.bookings && queryData.bookings.length > 0) {
+            const recentBookingId = queryData.bookings[0].id
             console.log('🔍 Found recent booking ID:', recentBookingId)
             
-            const { error: updateError } = await supabase
-              .from('restyle_bookings')
-              .update({
-                start_time: startTime,
-                end_time: endTime,
-                booking_duration: duration,
-                service_name: serviceName,
-                booking_price: servicePrice,
-                customer_name_: customerName,
-                assigned_barber_name: staffName,
-                payment_status: 'pending'
-              })
-              .eq('id', recentBookingId)
+            const updatePayload = {
+              id: recentBookingId,
+              start_time: startTime,
+              end_time: endTime,
+              booking_duration: duration,
+              service_name: serviceName,
+              booking_price: servicePrice,
+              customer_name_: customerName,
+              assigned_barber_name: staffName,
+              payment_status: 'pending'
+            }
             
-            if (updateError) {
-              console.error('⚠️ Failed to update recent booking:', updateError)
-            } else {
+            const updateRes = await fetch('/api/bookings/update-details', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(updatePayload)
+            })
+            
+            const updateResult = await updateRes.json()
+            
+            if (updateResult.success) {
               console.log('✅ Successfully updated recent booking with complete data')
+            } else {
+              console.error('⚠️ Failed to update recent booking:', updateResult)
             }
           }
         } catch (fallbackError) {
@@ -2447,10 +2460,31 @@ export default function CalendarPage() {
       }
       
       console.log('✅ Appointment booked successfully:', data)
+      
+      // Navigate calendar to the booked date and refresh
+      const bookedDateInDenver = new Date(startTime)
+      // Convert UTC to Denver time for display
+      const denverDateStr = bookedDateInDenver.toLocaleString('en-US', { 
+        timeZone: 'America/Denver',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+      const [monthStr, dayStr, yearStr] = denverDateStr.split(/[\/,\s]+/)
+      const denverDate = new Date(parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr))
+      
+      console.log('🗓️ Navigating calendar to booked date:', denverDate.toDateString())
+      setCurrentDate(denverDate) // Navigate to the booked date
+      setView('day') // Switch to day view to see the appointment
+      
       toast.success('Appointment booked successfully')
       setNewAppointmentOpen(false)
       resetNewAppointmentForm()
-      await refresh()
+      
+      // Wait a moment for state to update, then refresh
+      setTimeout(async () => {
+        await refresh()
+      }, 100)
     } catch (e) {
       console.error('submitNewAppointment', e)
       toast.error(`Booking failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
