@@ -2349,6 +2349,7 @@ export default function CalendarPage() {
       const data = await res.json().catch(() => ({}))
       
       console.log('📥 Booking response:', data)
+      console.log('📥 Full response structure:', JSON.stringify(data, null, 2))
       
       if (!res.ok || data.error) {
         console.error('❌ Booking failed:', data)
@@ -2357,12 +2358,15 @@ export default function CalendarPage() {
       
       // CRITICAL FIX: The Apointment endpoint creates the record but doesn't populate all fields
       // So we need to update it directly in Supabase with the complete data
-      if (data.response?.id) {
+      // Extract booking ID from various possible response structures
+      const bookingId = data.response?.id || data.id || data.booking?.id || data.appointment?.id
+      
+      if (bookingId) {
         try {
           const customerName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
           
           console.log('🔧 Updating Supabase record with complete data:', {
-            id: data.response.id,
+            id: bookingId,
             start_time: startTime,
             end_time: endTime,
             booking_duration: duration,
@@ -2384,7 +2388,7 @@ export default function CalendarPage() {
               assigned_barber_name: staffName,
               payment_status: 'pending'
             })
-            .eq('id', data.response.id)
+            .eq('id', bookingId)
           
           if (updateError) {
             console.error('⚠️ Failed to update Supabase record:', updateError)
@@ -2395,6 +2399,50 @@ export default function CalendarPage() {
         } catch (supabaseError) {
           console.error('⚠️ Supabase update error:', supabaseError)
           // Don't throw - appointment was created, just missing some fields
+        }
+      } else {
+        // Fallback: If we can't find booking ID in response, try to find and update the most recent booking
+        console.warn('⚠️ No booking ID found in response, attempting to find most recent booking')
+        try {
+          const customerName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
+          
+          // Find the most recently created booking for this contact and calendar
+          const { data: recentBookings, error: queryError } = await supabase
+            .from('restyle_bookings')
+            .select('id, created_at')
+            .eq('contact_id', contactId)
+            .eq('calendar_id', newAppSelectedService)
+            .order('created_at', { ascending: false })
+            .limit(1)
+          
+          if (queryError) {
+            console.error('⚠️ Failed to query recent bookings:', queryError)
+          } else if (recentBookings && recentBookings.length > 0) {
+            const recentBookingId = recentBookings[0].id
+            console.log('🔍 Found recent booking ID:', recentBookingId)
+            
+            const { error: updateError } = await supabase
+              .from('restyle_bookings')
+              .update({
+                start_time: startTime,
+                end_time: endTime,
+                booking_duration: duration,
+                service_name: serviceName,
+                booking_price: servicePrice,
+                customer_name_: customerName,
+                assigned_barber_name: staffName,
+                payment_status: 'pending'
+              })
+              .eq('id', recentBookingId)
+            
+            if (updateError) {
+              console.error('⚠️ Failed to update recent booking:', updateError)
+            } else {
+              console.log('✅ Successfully updated recent booking with complete data')
+            }
+          }
+        } catch (fallbackError) {
+          console.error('⚠️ Fallback update failed:', fallbackError)
         }
       }
       
