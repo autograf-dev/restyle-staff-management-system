@@ -330,10 +330,9 @@ export default function TodayDashboardPage() {
                     <Lock className="h-8 w-8 text-white" />
                   </div>
                   <DialogTitle className="text-center text-2xl font-bold text-white">
-                    Dashboard Access
+                    Today's Overview Access
                   </DialogTitle>
                   <DialogDescription className="text-center text-white/80 text-base">
-                    This dashboard contains sensitive business information.
                     Please enter your PIN to continue.
                   </DialogDescription>
                 </DialogHeader>
@@ -401,7 +400,6 @@ export default function TodayDashboardPage() {
 
                 <div className="pt-2 border-t border-white/10">
                   <p className="text-xs text-center text-white/60">
-                    For security purposes, access is restricted to authorized personnel only.
                   </p>
                 </div>
               </DialogContent>
