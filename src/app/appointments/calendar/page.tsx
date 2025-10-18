@@ -5,6 +5,7 @@ import { RoleGuard } from "@/components/role-guard"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { supabase } from "@/lib/supabase"
 
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -2352,6 +2353,49 @@ export default function CalendarPage() {
       if (!res.ok || data.error) {
         console.error('❌ Booking failed:', data)
         throw new Error(data.error || 'Booking failed')
+      }
+      
+      // CRITICAL FIX: The Apointment endpoint creates the record but doesn't populate all fields
+      // So we need to update it directly in Supabase with the complete data
+      if (data.response?.id) {
+        try {
+          const customerName = `${newAppContactForm.firstName} ${newAppContactForm.lastName}`.trim()
+          
+          console.log('🔧 Updating Supabase record with complete data:', {
+            id: data.response.id,
+            start_time: startTime,
+            end_time: endTime,
+            booking_duration: duration,
+            service_name: serviceName,
+            booking_price: servicePrice,
+            customer_name_: customerName,
+            assigned_barber_name: staffName
+          })
+          
+          const { error: updateError } = await supabase
+            .from('restyle_bookings')
+            .update({
+              start_time: startTime,
+              end_time: endTime,
+              booking_duration: duration,
+              service_name: serviceName,
+              booking_price: servicePrice,
+              customer_name_: customerName,
+              assigned_barber_name: staffName,
+              payment_status: 'pending'
+            })
+            .eq('id', data.response.id)
+          
+          if (updateError) {
+            console.error('⚠️ Failed to update Supabase record:', updateError)
+            toast.error('Appointment created but some details may be missing')
+          } else {
+            console.log('✅ Supabase record updated successfully with complete data')
+          }
+        } catch (supabaseError) {
+          console.error('⚠️ Supabase update error:', supabaseError)
+          // Don't throw - appointment was created, just missing some fields
+        }
       }
       
       console.log('✅ Appointment booked successfully:', data)
