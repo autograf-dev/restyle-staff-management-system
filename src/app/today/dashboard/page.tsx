@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { 
   Users, 
   RefreshCw, 
@@ -17,7 +19,11 @@ import {
   TrendingUp,
   Calendar,
   CreditCard,
-  Percent
+  Percent,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowLeft
 } from "lucide-react"
 import React, { useState, useEffect, useMemo } from "react"
 import { toast } from "sonner"
@@ -59,6 +65,18 @@ type StaffMember = {
 export default function TodayDashboardPage() {
   const router = useRouter()
   const isMobile = useIsMobile()
+  
+  // PIN Protection State
+  const [isPinVerified, setIsPinVerified] = useState(false)
+  const [pinInput, setPinInput] = useState("")
+  const [showPin, setShowPin] = useState(false)
+  const [pinError, setPinError] = useState("")
+  const [attempts, setAttempts] = useState(0)
+  
+  // Dashboard PIN - same as Reports tab
+  const DASHBOARD_PIN = "57216"
+  const MAX_ATTEMPTS = 10
+  
   const [loading, setLoading] = useState(true)
   const [transactions, setTransactions] = useState<TxRow[]>([])
   const [staffList, setStaffList] = useState<StaffMember[]>([])
@@ -262,9 +280,137 @@ export default function TodayDashboardPage() {
     }
   }
 
+  // PIN handlers
+  const handlePinSubmit = () => {
+    if (pinInput === DASHBOARD_PIN) {
+      setIsPinVerified(true)
+      setPinError("")
+      setPinInput("")
+      setAttempts(0)
+    } else {
+      const newAttempts = attempts + 1
+      setAttempts(newAttempts)
+      setPinError(`Incorrect PIN. ${MAX_ATTEMPTS - newAttempts} attempts remaining.`)
+      setPinInput("")
+      if (newAttempts >= MAX_ATTEMPTS) {
+        setPinError("Too many failed attempts. Please contact administrator.")
+      }
+    }
+  }
+
+  const handlePinKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && pinInput.length >= 4 && attempts < MAX_ATTEMPTS) {
+      handlePinSubmit()
+    }
+  }
+
+  const handleGoBack = () => {
+    router.push('/calendar')
+  }
+
   useEffect(() => {
     loadData()
   }, [])
+
+  // PIN protection dialog
+  if (!isPinVerified) {
+    return (
+      <RoleGuard requiredRole="manager">
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <Dialog open={true}>
+              <DialogContent 
+                className="sm:max-w-md bg-gradient-to-br from-[#601625] to-[#751a29] border-none text-white"
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+              >
+                <DialogHeader className="space-y-3">
+                  <div className="mx-auto rounded-full bg-white/10 p-3 w-fit">
+                    <Lock className="h-8 w-8 text-white" />
+                  </div>
+                  <DialogTitle className="text-center text-2xl font-bold text-white">
+                    Dashboard Access
+                  </DialogTitle>
+                  <DialogDescription className="text-center text-white/80 text-base">
+                    This dashboard contains sensitive business information.
+                    Please enter your PIN to continue.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-white/90">
+                      Enter PIN
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type={showPin ? "text" : "password"}
+                        value={pinInput}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (/^\d*$/.test(value) && value.length <= 6) {
+                            setPinInput(value)
+                            if (pinError) setPinError("")
+                          }
+                        }}
+                        onKeyPress={handlePinKeyPress}
+                        placeholder="Enter 4-6 digit PIN"
+                        className="pr-10 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-white/40"
+                        maxLength={6}
+                        disabled={attempts >= MAX_ATTEMPTS}
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-white/70 hover:text-white"
+                        onClick={() => setShowPin(!showPin)}
+                      >
+                        {showPin ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {pinError && (
+                      <p className="text-sm text-red-200 font-medium">{pinError}</p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button
+                      onClick={handlePinSubmit}
+                      disabled={pinInput.length < 4 || attempts >= MAX_ATTEMPTS}
+                      className="w-full bg-white text-[#601625] hover:bg-white/90 font-semibold"
+                    >
+                      Verify PIN
+                    </Button>
+                    <Button
+                      onClick={handleGoBack}
+                      variant="ghost"
+                      className="w-full text-white hover:bg-white/10"
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Go Back
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/10">
+                  <p className="text-xs text-center text-white/60">
+                    For security purposes, access is restricted to authorized personnel only.
+                  </p>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </SidebarInset>
+        </SidebarProvider>
+      </RoleGuard>
+    )
+  }
 
   if (loading) {
     return (
