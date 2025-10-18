@@ -2230,12 +2230,27 @@ export default function CalendarPage() {
       const contactRes = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/customer?${params.toString()}`)
       const contactData = await contactRes.json()
       let contactId: string | null = null
-      if (contactData?.details?.message === 'This location does not allow duplicated contacts.' && contactData?.details?.meta?.contactId) {
+      
+      // Handle duplicate contact (error response contains contactId)
+      if (contactData?.error && contactData?.details?.meta?.contactId) {
         contactId = contactData.details.meta.contactId
-      } else if (contactData.success && contactData.contact?.contact?.id) {
+        console.log('Using existing contact ID from duplicate:', contactId)
+      } 
+      // Handle successful new contact creation
+      else if (contactData.success && contactData.contact?.contact?.id) {
         contactId = contactData.contact.contact.id
+        console.log('Created new contact with ID:', contactId)
       }
-      if (!contactId) throw new Error('Contact creation failed')
+      // Fallback: check for old format
+      else if (contactData?.details?.message === 'This location does not allow duplicated contacts.' && contactData?.details?.meta?.contactId) {
+        contactId = contactData.details.meta.contactId
+        console.log('Using existing contact ID (old format):', contactId)
+      }
+      
+      if (!contactId) {
+        console.error('Failed to get contact ID. Response:', contactData)
+        throw new Error('Contact creation failed: ' + (contactData?.error || contactData?.details?.message || 'Unknown error'))
+      }
 
       const [year, month, day] = newAppSelectedDate.split('-').map(Number)
       const jsDate = new Date(year, month - 1, day)
