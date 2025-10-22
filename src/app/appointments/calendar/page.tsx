@@ -1279,6 +1279,24 @@ const StaffOverviewView = ({
                       onClick={() => {
                         setSelectionMenu((m) => ({ ...m, open: false }))
                         if (selectionMenu.staffId && selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined) {
+                          const staffMember = staff.find(s => s.ghl_id === selectionMenu.staffId)
+                          const staffName = staffMember?.name || selectionMenu.staffId
+                          const dateStr = currentDate.toISOString().slice(0,10)
+                          window.location.href = `/walk-in?prefill=calendar&date=${encodeURIComponent(dateStr)}&startMinutes=${selectionMenu.startAbs}&endMinutes=${selectionMenu.endAbs}&staffId=${encodeURIComponent(selectionMenu.staffId)}&staffName=${encodeURIComponent(staffName)}`
+                        } else {
+                          // If selection incomplete, still open walk-in for the selected date
+                          const dateStr = currentDate.toISOString().slice(0,10)
+                          window.location.href = `/walk-in?prefill=calendar&date=${encodeURIComponent(dateStr)}`
+                        }
+                      }}
+                    >
+                      + Walk-in here
+                    </button>
+                    <button
+                      className="px-3 py-2 text-sm hover:bg-neutral-50 text-left relative z-[1001]"
+                      onClick={() => {
+                        setSelectionMenu((m) => ({ ...m, open: false }))
+                        if (selectionMenu.staffId && selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined) {
                           openPrefilledBreakDialog(selectionMenu.staffId, selectionMenu.startAbs, selectionMenu.endAbs, currentDate)
                         }
                       }}

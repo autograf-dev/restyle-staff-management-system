@@ -196,6 +196,14 @@ export default function WalkInPage() {
   const [editingService, setEditingService] = useState<{ type: 'appointment' | 'additional', index: number } | null>(null)
   const [editPrice, setEditPrice] = useState<string>('')
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  // Calendar prefill state (when launched from Calendar selection quick action)
+  const [calendarPrefill, setCalendarPrefill] = useState<{
+    date: string
+    startMinutes?: number
+    endMinutes?: number
+    staffId?: string
+    staffName?: string
+  } | null>(null)
   
   // New customer dialog state
   const [newCustomerDialogOpen, setNewCustomerDialogOpen] = useState(false)
@@ -1132,6 +1140,79 @@ export default function WalkInPage() {
         sessionStorage.setItem(`tx:${transactionId}`, JSON.stringify(payload))
       } catch {}
 
+      // If this walk-in was launched from the Calendar with a selected time/staff, also create a booking row
+      try {
+        if (calendarPrefill?.date && calendarPrefill.startMinutes !== undefined && calendarPrefill.endMinutes !== undefined) {
+          // Helpers to convert Denver wall time to UTC ISO (copy of calendar logic)
+          const getTimeZoneOffsetInMs = (timeZone: string, date: Date) => {
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone,
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+            }).formatToParts(date)
+            const map = Object.fromEntries(parts.map(p => [p.type, p.value])) as Record<string, string>
+            const tzDate = new Date(`${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}Z`)
+            return tzDate.getTime() - date.getTime()
+          }
+          const denverWallTimeToUtcIso = (year: number, month: number, day: number, hour: number, minute: number) => {
+            const baseUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+            const offset = getTimeZoneOffsetInMs('America/Denver', baseUtc)
+            return new Date(baseUtc.getTime() - offset).toISOString()
+          }
+
+          const [y, m, d] = calendarPrefill.date.split('-').map(n => parseInt(n, 10))
+          const sh = Math.floor(calendarPrefill.startMinutes / 60)
+          const sm = calendarPrefill.startMinutes % 60
+          const eh = Math.floor(calendarPrefill.endMinutes / 60)
+          const em = calendarPrefill.endMinutes % 60
+          const start_time = denverWallTimeToUtcIso(y, m, d, sh, sm)
+          const end_time = denverWallTimeToUtcIso(y, m, d, eh, em)
+          const booking_duration = Math.max(0, calendarPrefill.endMinutes - calendarPrefill.startMinutes)
+
+          // Build descriptive fields from the walk-in payload
+          const allServiceNames = [
+            ...selectedServices.map(s => s.service.name),
+            ...additionalServices.map(s => s.name),
+          ].filter(Boolean)
+          const service_name = allServiceNames.length > 0 ? allServiceNames.join(', ') : 'Walk-in'
+          const assigned_barber_name = calendarPrefill.staffName || (calendarPrefill.staffId ? getStaffName(calendarPrefill.staffId) : '')
+          const booking_price = subtotal
+          const customer_name_ = (selectedCustomer?.fullName || (effectiveIsGuestCheckout ? effectiveCustomer.fullName : '')) || 'Walk-in Customer'
+
+          const payment_method = isSplitPayment ? 'split_payment' : (isServiceSplit ? 'service_split' : selectedPaymentMethod)
+          const payment_date = new Date().toISOString()
+
+          // Optional identifiers
+          const assigned_user_id = calendarPrefill.staffId || undefined
+          const contact_id = effectiveIsGuestCheckout ? undefined : (selectedCustomer?.id || undefined)
+
+          await fetch('/api/bookings/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              start_time,
+              end_time,
+              booking_duration,
+              service_name,
+              booking_price,
+              customer_name_,
+              assigned_barber_name,
+              payment_status: 'paid',
+              appointment_status: 'confirmed',
+              payment_method,
+              payment_date,
+              total_paid: totalPaid,
+              assigned_user_id,
+              contact_id,
+            }),
+          }).catch((e) => {
+            console.warn('Failed to create walk-in booking record:', e)
+          })
+        }
+      } catch (e) {
+        console.warn('Walk-in calendar booking creation skipped/failed:', e)
+      }
+
       // Redirect to success page (same as checkout page)
       window.location.href = `/checkout/success?id=${transactionId}`
       
@@ -1151,6 +1232,30 @@ export default function WalkInPage() {
   useEffect(() => {
     fetchGroups()
     fetchStaffData()
+  }, [])
+
+  // Parse calendar prefill from query string if present
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const prefill = params.get('prefill')
+      if (prefill === 'calendar') {
+        const date = params.get('date') || ''
+        const startMinutes = params.get('startMinutes')
+        const endMinutes = params.get('endMinutes')
+        const staffId = params.get('staffId') || undefined
+        const staffName = params.get('staffName') || undefined
+        if (date) {
+          setCalendarPrefill({
+            date,
+            startMinutes: startMinutes ? Number(startMinutes) : undefined,
+            endMinutes: endMinutes ? Number(endMinutes) : undefined,
+            staffId,
+            staffName,
+          })
+        }
+      }
+    } catch {}
   }, [])
 
   useEffect(() => { // fetch services when groups are loaded
