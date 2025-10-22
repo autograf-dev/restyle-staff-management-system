@@ -363,29 +363,45 @@ export default function WalkInPage() {
     
     try {
       setLoadingCustomers(true)
-      const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/searchContacts?s=${encodeURIComponent(searchTerm)}&page=1&limit=20`)
-      
-      if (!response.ok) throw new Error('Failed to search contacts')
-      
-      const json = await response.json()
-      const formattedCustomers: Customer[] = (json.results?.map((contact: ContactResponse) => ({
-        id: contact.id.toString(),
-        firstName: contact.firstName || '',
-        lastName: contact.lastName || '',
-        email: contact.email || '',
-        phone: contact.phone || '',
-        fullName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.contactName || 'Unknown'
-      })) || []) as Customer[]
-      
-      // If user enters exactly 4 digits, treat it as "last 4 of phone" search
       const onlyDigits = searchTerm.replace(/\D/g, '')
       const isLast4Search = /^\d{4}$/.test(onlyDigits)
 
       if (isLast4Search) {
-        const last4 = onlyDigits
-        const last4Matches = formattedCustomers.filter(c => getPhoneLast4(c.phone) === last4)
-        setCustomers(last4Matches)
+        // Use internal API to reliably find matches by last 4 digits
+        const apiRes = await fetch(`/api/customers/search-last4?digits=${onlyDigits}`)
+        if (!apiRes.ok) throw new Error('Failed to search by last 4 digits')
+        const apiJson = await apiRes.json().catch(() => ({ ok: false, results: [] as unknown[] }))
+        const results = Array.isArray(apiJson.results) ? apiJson.results as Array<{
+          id?: string | number
+          contactName?: string
+          firstName?: string
+          lastName?: string
+          phone?: string | null
+          dateAdded?: string
+        }> : []
+        const mapped: Customer[] = results.map((c) => ({
+          id: String(c.id || ''),
+          firstName: c.firstName || '',
+          lastName: c.lastName || '',
+          email: '',
+          phone: c.phone || '',
+          fullName: c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown',
+          dateAdded: c.dateAdded || new Date().toISOString(),
+        }))
+        setCustomers(mapped)
       } else {
+        // Default path: use existing backend search
+        const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/searchContacts?s=${encodeURIComponent(searchTerm)}&page=1&limit=20`)
+        if (!response.ok) throw new Error('Failed to search contacts')
+        const json = await response.json()
+        const formattedCustomers: Customer[] = (json.results?.map((contact: ContactResponse) => ({
+          id: contact.id.toString(),
+          firstName: contact.firstName || '',
+          lastName: contact.lastName || '',
+          email: contact.email || '',
+          phone: contact.phone || '',
+          fullName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.contactName || 'Unknown'
+        })) || []) as Customer[]
         setCustomers(formattedCustomers)
       }
     } catch (error) {
