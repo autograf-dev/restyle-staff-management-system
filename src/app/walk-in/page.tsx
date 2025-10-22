@@ -1142,7 +1142,7 @@ export default function WalkInPage() {
 
       // If this walk-in was launched from the Calendar with a selected time/staff, also create a booking row
       try {
-        if (calendarPrefill?.date && calendarPrefill.startMinutes !== undefined && calendarPrefill.endMinutes !== undefined) {
+  if (calendarPrefill?.date && calendarPrefill.startMinutes !== undefined) {
           // Helpers to convert Denver wall time to UTC ISO (copy of calendar logic)
           const getTimeZoneOffsetInMs = (timeZone: string, date: Date) => {
             const parts = new Intl.DateTimeFormat('en-US', {
@@ -1163,11 +1163,21 @@ export default function WalkInPage() {
           const [y, m, d] = calendarPrefill.date.split('-').map(n => parseInt(n, 10))
           const sh = Math.floor(calendarPrefill.startMinutes / 60)
           const sm = calendarPrefill.startMinutes % 60
-          const eh = Math.floor(calendarPrefill.endMinutes / 60)
-          const em = calendarPrefill.endMinutes % 60
           const start_time = denverWallTimeToUtcIso(y, m, d, sh, sm)
+
+          // Calculate duration from selected services (fallback to selected slot length if none)
+          const serviceDurationTotal =
+            selectedServices.reduce((sum, item) => sum + (item.service.duration || 0), 0) +
+            additionalServices.reduce((sum, s) => sum + (s.duration || 0), 0)
+
+          const fallbackDuration = Math.max(0, (calendarPrefill.endMinutes ?? calendarPrefill.startMinutes) - calendarPrefill.startMinutes)
+          const booking_duration = Math.max(0, serviceDurationTotal || fallbackDuration || 30) // minutes
+
+          // Compute end time by adding duration minutes to start wall-time
+          const endTotalMinutes = calendarPrefill.startMinutes + booking_duration
+          const eh = Math.floor(endTotalMinutes / 60)
+          const em = endTotalMinutes % 60
           const end_time = denverWallTimeToUtcIso(y, m, d, eh, em)
-          const booking_duration = Math.max(0, calendarPrefill.endMinutes - calendarPrefill.startMinutes)
 
           // Build descriptive fields from the walk-in payload
           const allServiceNames = [

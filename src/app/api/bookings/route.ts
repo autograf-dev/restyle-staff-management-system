@@ -165,8 +165,8 @@ export async function PATCH(req: NextRequest) {
       }, { status: 500 })
     }
 
-    const body = await req.json()
-    const { id, status, payment_status, booking_price, tax_amount, tip_amount, total_paid, payment_method, payment_date } = body
+  const body = await req.json()
+  const { id, status, appointment_status, payment_status, booking_price, tax_amount, tip_amount, total_paid, payment_method, payment_date } = body
 
     if (!id) {
       return NextResponse.json({ error: "Booking ID is required" }, { status: 400 })
@@ -178,7 +178,8 @@ export async function PATCH(req: NextRequest) {
     const updateData: Record<string, unknown> = {}
     
     if (status !== undefined) updateData.status = status
-    if (payment_status !== undefined) updateData.payment_status = payment_status
+  if (payment_status !== undefined) updateData.payment_status = payment_status
+  if (appointment_status !== undefined) updateData.appointment_status = appointment_status
     if (booking_price !== undefined) updateData.booking_price = booking_price
     if (tax_amount !== undefined) updateData.tax_amount = tax_amount
     if (tip_amount !== undefined) updateData.tip_amount = tip_amount
