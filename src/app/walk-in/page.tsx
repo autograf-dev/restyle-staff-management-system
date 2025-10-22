@@ -348,6 +348,12 @@ export default function WalkInPage() {
     }
   }
 
+  // Helper to get last 4 digits of a phone number safely
+  const getPhoneLast4 = (phone?: string) => {
+    const digits = (phone || '').replace(/\D/g, '')
+    return digits.slice(-4)
+  }
+
   // Customer search function
   const searchCustomers = async (searchTerm: string) => {
     if (!searchTerm.trim()) {
@@ -362,16 +368,26 @@ export default function WalkInPage() {
       if (!response.ok) throw new Error('Failed to search contacts')
       
       const json = await response.json()
-      const formattedCustomers = json.results?.map((contact: ContactResponse) => ({
+      const formattedCustomers: Customer[] = (json.results?.map((contact: ContactResponse) => ({
         id: contact.id.toString(),
         firstName: contact.firstName || '',
         lastName: contact.lastName || '',
         email: contact.email || '',
         phone: contact.phone || '',
         fullName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.contactName || 'Unknown'
-      })) || []
+      })) || []) as Customer[]
       
-      setCustomers(formattedCustomers)
+      // If user enters exactly 4 digits, treat it as "last 4 of phone" search
+      const onlyDigits = searchTerm.replace(/\D/g, '')
+      const isLast4Search = /^\d{4}$/.test(onlyDigits)
+
+      if (isLast4Search) {
+        const last4 = onlyDigits
+        const last4Matches = formattedCustomers.filter(c => getPhoneLast4(c.phone) === last4)
+        setCustomers(last4Matches)
+      } else {
+        setCustomers(formattedCustomers)
+      }
     } catch (error) {
       console.error('Error searching customers:', error)
       toast.error('Failed to search customers')
@@ -1149,7 +1165,7 @@ export default function WalkInPage() {
                   <div>
                       <div className="text-[14px] font-semibold uppercase tracking-wide">Customer Search</div>
                       <div className="mt-0.5 text-[12px] text-neutral-600">
-                        Search by name, email, or phone number
+                        Search by name, email, phone number, or the last 4 digits of a phone
                       </div>
                     </div>
                   </div>
