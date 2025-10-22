@@ -368,26 +368,58 @@ export default function WalkInPage() {
 
       if (isLast4Search) {
         // Use internal API to reliably find matches by last 4 digits
-        const apiRes = await fetch(`/api/customers/search-last4?digits=${onlyDigits}`)
-        if (!apiRes.ok) throw new Error('Failed to search by last 4 digits')
-        const apiJson = await apiRes.json().catch(() => ({ ok: false, results: [] as unknown[] }))
-        const results = Array.isArray(apiJson.results) ? apiJson.results as Array<{
-          id?: string | number
-          contactName?: string
-          firstName?: string
-          lastName?: string
-          phone?: string | null
-          dateAdded?: string
-        }> : []
-        const mapped: Customer[] = results.map((c) => ({
-          id: String(c.id || ''),
-          firstName: c.firstName || '',
-          lastName: c.lastName || '',
-          email: '',
-          phone: c.phone || '',
-          fullName: c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown',
-          dateAdded: c.dateAdded || new Date().toISOString(),
-        }))
+        const url = `/api/customers/search-last4?digits=${onlyDigits}&t=${Date.now()}`
+        const tryFetch = async () => {
+          const res = await fetch(url)
+          if (!res.ok) throw new Error('Failed to search by last 4 digits')
+          const apiJson = await res.json().catch(() => ({ ok: false, results: [] as unknown[] }))
+          const results = Array.isArray(apiJson.results) ? apiJson.results as Array<{
+            id?: string | number
+            contactName?: string
+            firstName?: string
+            lastName?: string
+            phone?: string | null
+            dateAdded?: string
+          }> : []
+          const mapped: Customer[] = results.map((c) => ({
+            id: String(c.id || ''),
+            firstName: c.firstName || '',
+            lastName: c.lastName || '',
+            email: '',
+            phone: c.phone || '',
+            fullName: c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown',
+            dateAdded: c.dateAdded || new Date().toISOString(),
+          }))
+          return mapped
+        }
+
+        let mapped: Customer[] = []
+        try {
+          mapped = await tryFetch()
+        } catch (e) {
+          // One quick retry to handle transient network errors
+          try {
+            mapped = await tryFetch()
+          } catch (e2) {
+            // Fallback to external search (may return empty for pure 4-digit input)
+            console.warn('Last-4 internal API failed twice, falling back to external searchContacts:', e2)
+            const response = await fetch(`https://restyle-backend.netlify.app/.netlify/functions/searchContacts?s=${encodeURIComponent(searchTerm)}&page=1&limit=20`)
+            if (response.ok) {
+              const json = await response.json()
+              const fallback: Customer[] = (json.results?.map((contact: ContactResponse) => ({
+                id: contact.id.toString(),
+                firstName: contact.firstName || '',
+                lastName: contact.lastName || '',
+                email: contact.email || '',
+                phone: contact.phone || '',
+                fullName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.contactName || 'Unknown'
+              })) || []) as Customer[]
+              // Client-side last-4 filter as a final fallback
+              const last4 = onlyDigits
+              mapped = fallback.filter(c => (c.phone || '').replace(/\D/g, '').slice(-4) === last4)
+            }
+          }
+        }
         setCustomers(mapped)
       } else {
         // Default path: use existing backend search
