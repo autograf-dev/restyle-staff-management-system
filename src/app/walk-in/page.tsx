@@ -1232,8 +1232,10 @@ export default function WalkInPage() {
           const payment_method = isSplitPayment ? 'split_payment' : (isServiceSplit ? 'service_split' : selectedPaymentMethod)
           const payment_date = new Date().toISOString()
 
-          // Optional identifiers
+          // Optional identifiers: prefer a valid calendar/service id if we have one
           const assigned_user_id = effectiveStaffId || undefined
+          const primaryServiceId = (selectedServices[0]?.service?.id) || (additionalServices.find(s => (s.id && !String(s.id).startsWith('product-')))?.id)
+          const calendar_id = primaryServiceId || undefined
           const contact_id = effectiveIsGuestCheckout ? undefined : (selectedCustomer?.id || undefined)
 
           const createRes = await fetch('/api/bookings/create', {
@@ -1254,6 +1256,7 @@ export default function WalkInPage() {
               payment_date,
               total_paid: totalPaid,
               assigned_user_id,
+              calendar_id,
               contact_id,
             }),
           })
