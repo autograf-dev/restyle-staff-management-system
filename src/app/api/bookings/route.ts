@@ -138,6 +138,8 @@ export async function GET(req: NextRequest) {
         price: row.booking_price ? Number(row.booking_price) : undefined,
         // 👉 drives the PAID pill + disables Checkout in your UI
         payment_status,
+        // Walk-in tag
+        is_walk_in: Boolean(row.is_walk_in ?? false),
       }
     })
 
@@ -211,6 +213,60 @@ export async function PATCH(req: NextRequest) {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error"
     console.error('Error updating booking:', errorMessage)
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
+  }
+}
+
+// DELETE /api/bookings?id=<bookingId> - Only deletes walk-in bookings from Supabase
+export async function DELETE(req: NextRequest) {
+  try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Supabase environment variables are not configured')
+      return NextResponse.json({ 
+        error: "Supabase is not configured. Please check environment variables." 
+      }, { status: 500 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id') || undefined
+    if (!id) {
+      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+    }
+
+    // Fetch the booking to verify it's a walk-in
+    const { data: booking, error: fetchErr } = await supabaseAdmin
+      .from('restyle_bookings')
+      .select('id, is_walk_in')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (fetchErr) {
+      console.error('❌ Error fetching booking before delete:', fetchErr)
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+    }
+    if (!booking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
+    if (!booking.is_walk_in) {
+      // Safety: do not delete HL/regular appointments through this path
+      return NextResponse.json({ error: 'Only walk-in bookings can be deleted here' }, { status: 400 })
+    }
+
+    // Delete the booking row
+    const { error: delErr } = await supabaseAdmin
+      .from('restyle_bookings')
+      .delete()
+      .eq('id', id)
+
+    if (delErr) {
+      console.error('❌ Error deleting walk-in booking:', delErr)
+      return NextResponse.json({ error: delErr.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, message: 'Walk-in booking deleted' })
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    console.error('Error deleting walk-in booking:', errorMessage)
     return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

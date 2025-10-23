@@ -60,6 +60,7 @@ type Appointment = {
   contactName?: string
   contactPhone?: string
   payment_status?: 'pending' | 'paid' | 'failed'
+  is_walk_in?: boolean
 }
 
 type CalendarView = 'day' | 'month' | 'year'
@@ -172,6 +173,7 @@ function useAppointments(view: CalendarView, currentDate: Date) {
           contactPhone?: string;
           durationMinutes?: number;
           payment_status?: string;
+          is_walk_in?: boolean;
         }) => {
           // Calculate endTime from startTime + durationMinutes if endTime is missing
           let calculatedEndTime = booking.endTime
@@ -202,7 +204,9 @@ function useAppointments(view: CalendarView, currentDate: Date) {
             contactName: booking.contactName || "",
             contactPhone: booking.contactPhone || "",
             // Payment status from API response or default to pending
-            payment_status: booking.payment_status || 'pending'
+            payment_status: booking.payment_status || 'pending',
+            // Walk-in flag
+            is_walk_in: Boolean(booking.is_walk_in || false)
           }
         })
         
@@ -3639,6 +3643,11 @@ export default function CalendarPage() {
                           >
                             {selectedAppointment.appointment_status || selectedAppointment.status || 'Unknown'}
                           </Badge>
+                          {selectedAppointment.is_walk_in && (
+                            <Badge className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                              Walk-in
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-gray-600 mt-1">
                           {selectedAppointment.contactName}
@@ -3729,22 +3738,46 @@ export default function CalendarPage() {
                           <RefreshCcw className="h-4 w-4 mr-2" />
                           {selectedAppointment.payment_status === 'paid' ? "Paid" : "Reschedule"}
                         </Button>
-                        <Button 
-                          variant="outline"
-                          className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          onClick={() => handleCancelAppointment(selectedAppointment)}
-                          disabled={
-                            selectedAppointment.appointment_status === 'cancelled' || 
-                            cancelLoading || 
-                            isWithinTwoHours(selectedAppointment.startTime) ||
-                            isAppointmentEnded(selectedAppointment.endTime)
-                          }
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {cancelLoading ? "Cancelling..." : 
-                           isAppointmentEnded(selectedAppointment.endTime) ? "Ended" :
-                           isWithinTwoHours(selectedAppointment.startTime) ? "Too Late" : "Cancel"}
-                        </Button>
+                        {selectedAppointment.is_walk_in ? (
+                          <Button 
+                            variant="outline"
+                            className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/bookings?id=${encodeURIComponent(selectedAppointment.id)}`, { method: 'DELETE' })
+                                const json = await res.json().catch(() => ({}))
+                                if (!res.ok || json?.ok === false) throw new Error(json.error || 'Delete failed')
+                                toast.success('Walk-in appointment deleted')
+                                setDetailsOpen(false)
+                                setSelectedAppointment(null)
+                                await refresh()
+                              } catch (e) {
+                                console.error('Error deleting walk-in appointment:', e)
+                                toast.error('Could not delete walk-in appointment')
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline"
+                            className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 rounded-xl py-2.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleCancelAppointment(selectedAppointment)}
+                            disabled={
+                              selectedAppointment.appointment_status === 'cancelled' || 
+                              cancelLoading || 
+                              isWithinTwoHours(selectedAppointment.startTime) ||
+                              isAppointmentEnded(selectedAppointment.endTime)
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            {cancelLoading ? "Cancelling..." : 
+                             isAppointmentEnded(selectedAppointment.endTime) ? "Ended" :
+                             isWithinTwoHours(selectedAppointment.startTime) ? "Too Late" : "Cancel"}
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>

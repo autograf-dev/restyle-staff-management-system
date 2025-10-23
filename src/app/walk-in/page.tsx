@@ -1037,6 +1037,14 @@ export default function WalkInPage() {
     setProcessingCheckout(true)
     try {
       const transactionId = crypto.randomUUID()
+      // Generate a booking ID to link transaction <-> booking and to match calendar lookups
+      const genBookingId = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+        let out = ''
+        for (let i = 0; i < 20; i++) out += chars[Math.floor(Math.random() * chars.length)]
+        return out
+      }
+      const bookingId = genBookingId()
       
       // Use consistent subtotal calculation
       const subtotal = getCurrentSubtotal()
@@ -1126,6 +1134,8 @@ export default function WalkInPage() {
       const payload = {
         transaction: {
           id: transactionId,
+          // Link transaction to the booking so "View Payment" from calendar works
+          bookingId: bookingId,
           paymentDate: new Date().toISOString(),
           method: isSplitPayment ? 'split_payment' : isServiceSplit ? 'service_split' : selectedPaymentMethod,
           subtotal,
@@ -1242,6 +1252,8 @@ export default function WalkInPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              // provide id so it matches the transaction.bookingId we already stored
+              id: bookingId,
               start_time,
               end_time,
               booking_duration,
@@ -1255,6 +1267,7 @@ export default function WalkInPage() {
               assigned_user_id,
               calendar_id,
               contact_id,
+              is_walk_in: true,
             }),
           })
           if (!createRes.ok) {

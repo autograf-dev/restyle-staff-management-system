@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
       contact_id,
       assigned_user_id,
       calendar_id,
+      // walk-in marker
+      is_walk_in,
     } = body || {}
 
     const durationNumber = typeof booking_duration === 'number' ? booking_duration : Number(booking_duration)
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
       status: 'booked',
       payment_status,
       appointment_status,
+      is_walk_in: Boolean(is_walk_in) || false,
     }
 
     if (contact_id !== undefined) insertData.contact_id = contact_id
