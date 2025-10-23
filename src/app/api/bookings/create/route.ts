@@ -30,10 +30,6 @@ export async function POST(req: NextRequest) {
       contact_id,
       assigned_user_id,
       calendar_id,
-      // optional payment meta
-      payment_method,
-      payment_date,
-      total_paid,
     } = body || {}
 
     const durationNumber = typeof booking_duration === 'number' ? booking_duration : Number(booking_duration)
@@ -60,9 +56,6 @@ export async function POST(req: NextRequest) {
     if (contact_id !== undefined) insertData.contact_id = contact_id
     if (assigned_user_id !== undefined) insertData.assigned_user_id = assigned_user_id
     if (calendar_id !== undefined) insertData.calendar_id = calendar_id
-    if (payment_method !== undefined) insertData.payment_method = payment_method
-    if (payment_date !== undefined) insertData.payment_date = payment_date
-    if (total_paid !== undefined) insertData.total_paid = total_paid
 
     const { data, error } = await supabaseAdmin
       .from("restyle_bookings")
