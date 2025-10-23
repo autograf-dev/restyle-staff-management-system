@@ -1002,13 +1002,13 @@ export default function WalkInPage() {
 
   // Process walk-in checkout
   const processWalkIn = async () => {
-    // Use default guest customer if none selected
+    // Use default guest customer if none selected (calendar + payments)
     const effectiveCustomer = selectedCustomer || {
       id: null,
       fullName: 'Guest',
       firstName: 'Guest',
       lastName: '',
-      phone: '7807093875',
+      phone: '5879681213', // requested default guest phone
       email: null
     }
     
@@ -1222,7 +1222,10 @@ export default function WalkInPage() {
             ...additionalServices.map(s => s.name),
           ].filter(Boolean)
           const service_name = allServiceNames.length > 0 ? allServiceNames.join(', ') : 'Walk-in'
-          const assigned_barber_name = appointmentDetails.staffId ? getStaffName(appointmentDetails.staffId) : ''
+          // Resolve effective staff id and name with robust fallbacks
+          const fallbackStaffFromServices = selectedServices[0]?.staff?.ghl_id || additionalServices[0]?.staffIds?.[0]
+          const effectiveStaffId = appointmentDetails.staffId || fallbackStaffFromServices || undefined
+          const assigned_barber_name = effectiveStaffId ? getStaffName(effectiveStaffId) : ''
           const booking_price = subtotal
           const customer_name_ = (selectedCustomer?.fullName || (effectiveIsGuestCheckout ? effectiveCustomer.fullName : '')) || 'Walk-in Customer'
 
@@ -1230,10 +1233,10 @@ export default function WalkInPage() {
           const payment_date = new Date().toISOString()
 
           // Optional identifiers
-          const assigned_user_id = appointmentDetails.staffId || undefined
+          const assigned_user_id = effectiveStaffId || undefined
           const contact_id = effectiveIsGuestCheckout ? undefined : (selectedCustomer?.id || undefined)
 
-          await fetch('/api/bookings/create', {
+          const createRes = await fetch('/api/bookings/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1241,6 +1244,7 @@ export default function WalkInPage() {
               end_time,
               booking_duration,
               service_name,
+              title: service_name || 'Walk-in',
               booking_price,
               customer_name_,
               assigned_barber_name,
@@ -1252,12 +1256,16 @@ export default function WalkInPage() {
               assigned_user_id,
               contact_id,
             }),
-          }).catch((e) => {
-            console.warn('Failed to create walk-in booking record:', e)
           })
+          if (!createRes.ok) {
+            const errText = await createRes.text().catch(() => '')
+            console.warn('Failed to create walk-in booking record:', errText)
+            toast.error('Saved payment, but adding to calendar failed. Please refresh the calendar.')
+          }
         }
       } catch (e) {
         console.warn('Walk-in calendar booking creation skipped/failed:', e)
+        toast.error('Saved payment, but adding to calendar failed. Please refresh the calendar.')
       }
 
       // Redirect to success page (same as checkout page)
