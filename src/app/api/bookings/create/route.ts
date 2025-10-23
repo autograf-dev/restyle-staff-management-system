@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
+      // optional caller-specified id (rare). If not provided, we'll generate one.
+      id,
       // required for calendar visibility
       start_time,
       end_time,
@@ -39,7 +41,21 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
+    // Generate a 20-char base62 ID (A-Za-z0-9) to match existing booking id style
+    const genId = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+      let out = ''
+      for (let i = 0; i < 20; i++) {
+        const idx = Math.floor(Math.random() * chars.length)
+        out += chars[idx]
+      }
+      return out
+    }
+    const finalId = (typeof id === 'string' && id.trim().length > 0) ? id : genId()
+
     const insertData: Record<string, unknown> = {
+      id: finalId,
+      apptId: finalId,
       start_time,
       end_time,
       booking_duration: durationNumber,
@@ -49,6 +65,8 @@ export async function POST(req: NextRequest) {
       booking_price: booking_price ?? null,
       customer_name_: customer_name_ ?? null,
       assigned_barber_name: assigned_barber_name ?? null,
+      // keep consistent with existing data
+      status: 'booked',
       payment_status,
       appointment_status,
     }
