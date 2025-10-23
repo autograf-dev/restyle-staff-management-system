@@ -204,6 +204,23 @@ export default function WalkInPage() {
     staffId?: string
     staffName?: string
   } | null>(null)
+  // Top-level appointment details (used for booking insertion); prefilled from calendar when present
+  const [appointmentDetails, setAppointmentDetails] = useState<{
+    date: string
+    time: string // HH:mm 24h in local (Denver wall time)
+    staffId?: string
+  } | null>(null)
+
+  const minutesToHHMM = (mins: number) => {
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+  const hhmmToMinutes = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    if (isNaN(h) || isNaN(m)) return 0
+    return h * 60 + m
+  }
   
   // New customer dialog state
   const [newCustomerDialogOpen, setNewCustomerDialogOpen] = useState(false)
@@ -619,6 +636,23 @@ export default function WalkInPage() {
 
   // Handle service click
   const handleServiceClick = (service: Service) => {
+    // If appointment staff is set (prefilled or chosen), add directly without redundant staff selection
+    if (appointmentDetails?.staffId) {
+      const staffId = appointmentDetails.staffId
+      const staffName = getStaffName(staffId)
+      setSelectedServices(prev => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          service,
+          staff: { ghl_id: staffId, name: staffName },
+        },
+      ])
+      toast.success(`${service.name} added for ${staffName}`)
+      setAddServiceDialogOpen(false)
+      return
+    }
+    // Fallback to existing staff selection flow when no appointment staff chosen
     setSelectedService(service)
     setShowStaffSelection(true)
     setSelectedStaffIds([]) // No default selection
@@ -668,18 +702,21 @@ export default function WalkInPage() {
       toast.error('Please enter a valid price for the product')
       return
     }
-    
-    if (productStaffIds.length === 0) {
-      toast.error('Please select at least one staff member')
+    // If appointment staff is set, use it implicitly; otherwise require selection
+    const effectiveStaffIds = (productStaffIds.length > 0
+      ? productStaffIds
+      : (appointmentDetails?.staffId ? [appointmentDetails.staffId] : []))
+    if (effectiveStaffIds.length === 0) {
+      toast.error('Please select a staff member (or set appointment staff)')
       return
     }
     
     const price = parseFloat(productPrice)
-    const staffNames = productStaffIds.map(id => getStaffName(id))
-    const pricePerStaff = calculatePriceDistribution(price, productStaffIds.length)
+  const staffNames = effectiveStaffIds.map(id => getStaffName(id))
+  const pricePerStaff = calculatePriceDistribution(price, effectiveStaffIds.length)
     
     // Create price distribution for each staff member
-    const priceDistribution = productStaffIds.map((staffId, index) => ({
+    const priceDistribution = effectiveStaffIds.map((staffId, index) => ({
       staffId,
       staffName: getStaffName(staffId),
       amount: pricePerStaff[index]
@@ -691,7 +728,7 @@ export default function WalkInPage() {
       name: productName || 'Product',
       price: price,
       duration: 0, // Products don't have duration
-      staffIds: productStaffIds,
+      staffIds: effectiveStaffIds,
       staffNames: staffNames,
       priceDistribution: priceDistribution
     }
@@ -699,7 +736,7 @@ export default function WalkInPage() {
     setAdditionalServices(prev => [...prev, newProduct])
     
     console.log('Adding product:', productName, 'with staff:', staffNames.join(', '), 'price:', price)
-    toast.success(`${productName || 'Product'} added with ${productStaffIds.length} staff member${productStaffIds.length > 1 ? 's' : ''}`)
+  toast.success(`${productName || 'Product'} added with ${effectiveStaffIds.length} staff member${effectiveStaffIds.length > 1 ? 's' : ''}`)
     
     // Reset states and close sheet
     setProductName('Product')
@@ -1140,9 +1177,9 @@ export default function WalkInPage() {
         sessionStorage.setItem(`tx:${transactionId}`, JSON.stringify(payload))
       } catch {}
 
-      // If this walk-in was launched from the Calendar with a selected time/staff, also create a booking row
+      // Create a booking row using the appointment details (no slot fetch)
       try {
-  if (calendarPrefill?.date && calendarPrefill.startMinutes !== undefined) {
+        if (appointmentDetails?.date && appointmentDetails.time) {
           // Helpers to convert Denver wall time to UTC ISO (copy of calendar logic)
           const getTimeZoneOffsetInMs = (timeZone: string, date: Date) => {
             const parts = new Intl.DateTimeFormat('en-US', {
@@ -1160,21 +1197,21 @@ export default function WalkInPage() {
             return new Date(baseUtc.getTime() - offset).toISOString()
           }
 
-          const [y, m, d] = calendarPrefill.date.split('-').map(n => parseInt(n, 10))
-          const sh = Math.floor(calendarPrefill.startMinutes / 60)
-          const sm = calendarPrefill.startMinutes % 60
+          const [y, m, d] = appointmentDetails.date.split('-').map(n => parseInt(n, 10))
+          const startMins = hhmmToMinutes(appointmentDetails.time)
+          const sh = Math.floor(startMins / 60)
+          const sm = startMins % 60
           const start_time = denverWallTimeToUtcIso(y, m, d, sh, sm)
 
-          // Calculate duration from selected services (fallback to selected slot length if none)
+          // Calculate duration from selected services (fallback to 30 if none)
           const serviceDurationTotal =
             selectedServices.reduce((sum, item) => sum + (item.service.duration || 0), 0) +
             additionalServices.reduce((sum, s) => sum + (s.duration || 0), 0)
 
-          const fallbackDuration = Math.max(0, (calendarPrefill.endMinutes ?? calendarPrefill.startMinutes) - calendarPrefill.startMinutes)
-          const booking_duration = Math.max(0, serviceDurationTotal || fallbackDuration || 30) // minutes
+          const booking_duration = Math.max(0, serviceDurationTotal || 30) // minutes
 
           // Compute end time by adding duration minutes to start wall-time
-          const endTotalMinutes = calendarPrefill.startMinutes + booking_duration
+          const endTotalMinutes = startMins + booking_duration
           const eh = Math.floor(endTotalMinutes / 60)
           const em = endTotalMinutes % 60
           const end_time = denverWallTimeToUtcIso(y, m, d, eh, em)
@@ -1185,7 +1222,7 @@ export default function WalkInPage() {
             ...additionalServices.map(s => s.name),
           ].filter(Boolean)
           const service_name = allServiceNames.length > 0 ? allServiceNames.join(', ') : 'Walk-in'
-          const assigned_barber_name = calendarPrefill.staffName || (calendarPrefill.staffId ? getStaffName(calendarPrefill.staffId) : '')
+          const assigned_barber_name = appointmentDetails.staffId ? getStaffName(appointmentDetails.staffId) : ''
           const booking_price = subtotal
           const customer_name_ = (selectedCustomer?.fullName || (effectiveIsGuestCheckout ? effectiveCustomer.fullName : '')) || 'Walk-in Customer'
 
@@ -1193,7 +1230,7 @@ export default function WalkInPage() {
           const payment_date = new Date().toISOString()
 
           // Optional identifiers
-          const assigned_user_id = calendarPrefill.staffId || undefined
+          const assigned_user_id = appointmentDetails.staffId || undefined
           const contact_id = effectiveIsGuestCheckout ? undefined : (selectedCustomer?.id || undefined)
 
           await fetch('/api/bookings/create', {
@@ -1263,6 +1300,11 @@ export default function WalkInPage() {
             staffId,
             staffName,
           })
+          setAppointmentDetails({
+            date,
+            time: minutesToHHMM(startMinutes ? Number(startMinutes) : 0),
+            staffId,
+          })
         }
       }
     } catch {}
@@ -1308,6 +1350,71 @@ export default function WalkInPage() {
           </header>
 
           <div className="flex flex-1 flex-col gap-6 p-6 bg-neutral-50">
+            {/* Appointment Details (prefilled when launched from Calendar) */}
+            <div className="mx-auto w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[13px] font-medium text-neutral-500">Appointment Details</p>
+                  <h2 className="mt-1 text-[18px] font-semibold leading-tight text-neutral-900">
+                    {appointmentDetails ? 'Set staff and time for this walk-in' : 'Select staff and time'}
+                  </h2>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Date (readable) */}
+                <div>
+                  <Label className="text-[13px]">Date</Label>
+                  <Input
+                    type="date"
+                    value={appointmentDetails?.date || ''}
+                    onChange={(e) => setAppointmentDetails(prev => ({
+                      ...(prev || { date: e.target.value, time: '09:00' }),
+                      date: e.target.value,
+                    }))}
+                    className="rounded-xl"
+                  />
+                </div>
+                {/* Time (editable) */}
+                <div>
+                  <Label className="text-[13px]">Start Time</Label>
+                  <Input
+                    type="time"
+                    value={appointmentDetails?.time || ''}
+                    onChange={(e) => setAppointmentDetails(prev => ({
+                      ...(prev || { date: new Date().toISOString().slice(0,10), time: e.target.value }),
+                      time: e.target.value,
+                    }))}
+                    className="rounded-xl"
+                  />
+                </div>
+                {/* Staff */}
+                <div>
+                  <Label className="text-[13px]">Staff</Label>
+                  <Select
+                    value={appointmentDetails?.staffId || ''}
+                    onValueChange={(v) => setAppointmentDetails(prev => ({
+                      ...(prev || { date: new Date().toISOString().slice(0,10), time: '09:00' }),
+                      staffId: v,
+                    }))}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Select staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffData.map(s => (
+                        <SelectItem key={s.ghl_id} value={s.ghl_id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {calendarPrefill && (
+                <div className="mt-3 text-xs text-neutral-500">
+                  Prefilled from calendar selection. You can adjust time or staff here.
+                </div>
+              )}
+            </div>
+
             {/* HERO CARD — Customer Selection */}
             <div className="mx-auto w-full max-w-6xl rounded-2xl border border-neutral-200 bg-white px-6 py-5">
               <p className="text-[13px] font-medium text-neutral-500">Walk-in Customer</p>
