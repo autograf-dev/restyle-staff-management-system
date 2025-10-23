@@ -252,7 +252,53 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Only walk-in bookings can be deleted here' }, { status: 400 })
     }
 
-    // Delete the booking row
+    // Also delete any Transactions (and their items) linked to this booking id
+    // Transactions table uses "Booking/ID" to reference restyle_bookings.id
+    // 1) Find all transaction IDs for this booking
+    const { data: txRows, error: txFetchErr } = await supabaseAdmin
+      .from('Transactions')
+      .select('"🔒 Row ID"')
+      .eq('"Booking/ID"', id)
+
+    if (txFetchErr) {
+      console.error('❌ Error fetching transactions for booking before delete:', txFetchErr)
+      return NextResponse.json({ error: txFetchErr.message }, { status: 500 })
+    }
+
+    let deletedItemCount = 0
+    let deletedTxCount = 0
+    if (txRows && txRows.length > 0) {
+  type TxRow = { ['🔒 Row ID']: string }
+  const txIds = (txRows as TxRow[]).map((r) => String(r['🔒 Row ID']))
+
+      // 2) Delete all Transaction Items for these transactions
+      const { data: delItems, error: itemsErr } = await supabaseAdmin
+        .from('Transaction Items')
+        .delete()
+        .in('"Payment/ID"', txIds)
+        .select()
+
+      if (itemsErr) {
+        console.error('❌ Error deleting transaction items for booking:', itemsErr)
+        return NextResponse.json({ error: itemsErr.message }, { status: 500 })
+      }
+      deletedItemCount = delItems?.length || 0
+
+      // 3) Delete the Transactions themselves
+      const { data: delTx, error: delTxErr } = await supabaseAdmin
+        .from('Transactions')
+        .delete()
+        .in('"🔒 Row ID"', txIds)
+        .select()
+
+      if (delTxErr) {
+        console.error('❌ Error deleting transactions for booking:', delTxErr)
+        return NextResponse.json({ error: delTxErr.message }, { status: 500 })
+      }
+      deletedTxCount = delTx?.length || 0
+    }
+
+    // Finally, delete the booking row
     const { error: delErr } = await supabaseAdmin
       .from('restyle_bookings')
       .delete()
@@ -263,7 +309,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: delErr.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, message: 'Walk-in booking deleted' })
+    return NextResponse.json({ ok: true, message: 'Walk-in booking and payment deleted', deletedTransactions: deletedTxCount, deletedTransactionItems: deletedItemCount })
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     console.error('Error deleting walk-in booking:', errorMessage)

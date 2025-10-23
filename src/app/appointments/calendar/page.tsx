@@ -1769,12 +1769,19 @@ const StaffOverviewView = ({
                           {appointment.serviceName}
                         </div>
                         
-                        {/* Status indicator - only show paid when applicable */}
-                        {appointment.payment_status === 'paid' && (
-                          <div className="absolute top-1 right-1">
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500 text-white font-medium">
-                              PAID
-                            </span>
+                        {/* Status indicators (stack) - show Walk-in and/or Paid */}
+                        {(appointment.is_walk_in || appointment.payment_status === 'paid') && (
+                          <div className="absolute top-1 right-1 flex flex-col items-end gap-1">
+                            {appointment.is_walk_in && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+                                WALK-IN
+                              </span>
+                            )}
+                            {appointment.payment_status === 'paid' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500 text-white font-medium">
+                                PAID
+                              </span>
+                            )}
                           </div>
                         )}
                         
@@ -3747,7 +3754,7 @@ export default function CalendarPage() {
                                 const res = await fetch(`/api/bookings?id=${encodeURIComponent(selectedAppointment.id)}`, { method: 'DELETE' })
                                 const json = await res.json().catch(() => ({}))
                                 if (!res.ok || json?.ok === false) throw new Error(json.error || 'Delete failed')
-                                toast.success('Walk-in appointment deleted')
+                                toast.success('Walk-in appointment and payment deleted')
                                 setDetailsOpen(false)
                                 setSelectedAppointment(null)
                                 await refresh()
