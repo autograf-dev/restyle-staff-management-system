@@ -1258,14 +1258,22 @@ export default function WalkInPage() {
             }),
           })
           if (!createRes.ok) {
-            const errText = await createRes.text().catch(() => '')
-            console.warn('Failed to create walk-in booking record:', errText)
-            toast.error('Saved payment, but adding to calendar failed. Please refresh the calendar.')
+            let errMsg = ''
+            try {
+              const maybeJson = await createRes.json()
+              errMsg = maybeJson?.error || maybeJson?.message || ''
+            } catch {
+              const errText = await createRes.text().catch(() => '')
+              errMsg = errText
+            }
+            console.warn('Failed to create walk-in booking record:', errMsg || createRes.statusText)
+            toast.error(`Saved payment, but adding to calendar failed${errMsg ? `: ${errMsg}` : ''}`)
           }
         }
       } catch (e) {
+        const msg = e instanceof Error ? e.message : ''
         console.warn('Walk-in calendar booking creation skipped/failed:', e)
-        toast.error('Saved payment, but adding to calendar failed. Please refresh the calendar.')
+        toast.error(`Saved payment, but adding to calendar failed${msg ? `: ${msg}` : ''}`)
       }
 
       // Redirect to success page (same as checkout page)

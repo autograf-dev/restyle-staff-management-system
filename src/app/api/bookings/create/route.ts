@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       end_time,
       booking_duration,
       // descriptive fields
+      title,
       service_name,
       booking_price,
       customer_name_,
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
       total_paid,
     } = body || {}
 
-    if (!start_time || !end_time || typeof booking_duration !== 'number') {
+    const durationNumber = typeof booking_duration === 'number' ? booking_duration : Number(booking_duration)
+    if (!start_time || !end_time || !Number.isFinite(durationNumber)) {
       return NextResponse.json({ 
         error: "start_time, end_time and booking_duration are required" 
       }, { status: 400 })
@@ -44,7 +46,9 @@ export async function POST(req: NextRequest) {
     const insertData: Record<string, unknown> = {
       start_time,
       end_time,
-      booking_duration,
+      booking_duration: durationNumber,
+      // include title if provided, otherwise set a sensible default
+      title: (title ?? null) || 'Walk-in',
       service_name: service_name ?? null,
       booking_price: booking_price ?? null,
       customer_name_: customer_name_ ?? null,
