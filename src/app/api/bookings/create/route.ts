@@ -53,9 +53,16 @@ export async function POST(req: NextRequest) {
     }
     const finalId = (typeof id === 'string' && id.trim().length > 0) ? id : genId()
 
+    // Resolve contact id: use provided, else env, else last-resort fallback (to avoid NOT NULL errors on guest walk-ins)
+    const envGuestId = process.env.GUEST_CONTACT_ID || process.env.NEXT_PUBLIC_GUEST_CONTACT_ID
+    const finalContactId = (typeof contact_id === 'string' && contact_id.trim().length > 0)
+      ? contact_id
+      : (envGuestId && envGuestId.trim().length > 0 ? envGuestId.trim() : 'OER8NNUr22uURWHAFFsW')
+
     const insertData: Record<string, unknown> = {
       id: finalId,
       apptId: finalId,
+      contact_id: finalContactId,
       start_time,
       end_time,
       booking_duration: durationNumber,
