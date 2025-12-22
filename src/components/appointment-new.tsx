@@ -44,6 +44,7 @@ export type AppointmentNewProps = {
   slots: TimeSlot[]
   selectedTime: string
   onTimeSelect: (time: string) => void
+  workingSlots?: Record<string, string[]> // Available slots by date
   // contact
   contactForm: { firstName: string; lastName: string; phone: string; optIn: boolean }
   setContactForm: React.Dispatch<React.SetStateAction<{ firstName: string; lastName: string; phone: string; optIn: boolean }>>
@@ -82,6 +83,7 @@ export function AppointmentNew(props: AppointmentNewProps) {
     slots,
     selectedTime,
     onTimeSelect,
+    workingSlots,
     contactForm,
     setContactForm,
     submitting,
@@ -92,7 +94,7 @@ export function AppointmentNew(props: AppointmentNewProps) {
 
   return (
     <ConfirmDialog open={open} onOpenChange={onOpenChange}>
-      <ConfirmContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
+      <ConfirmContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto">
         <ConfirmHeader className="pb-6">
           <ConfirmTitle className="text-2xl font-semibold">Create New Appointment</ConfirmTitle>
           <p className="text-base text-gray-600 mt-2">
@@ -100,7 +102,7 @@ export function AppointmentNew(props: AppointmentNewProps) {
           </p>
         </ConfirmHeader>
 
-        <div className="space-y-6 overflow-hidden">
+        <div className="space-y-6">
           {currentStep === 1 && (
             <div className="w-full">
               {loadingDepts ? (
@@ -323,28 +325,162 @@ export function AppointmentNew(props: AppointmentNewProps) {
                       <span className="text-lg">Loading available dates...</span>
                     </div>
                   ) : dates.length > 0 ? (
-                    <div className="flex items-center justify-between mb-6">
-                      <button
-                        onClick={() => {
-                          const currentIndex = dates.findIndex(d => d.dateString === selectedDate)
-                          if (currentIndex > 0) {
-                            const prevDate = dates[Math.max(0, currentIndex - 1)]
-                            onDateSelect(prevDate.dateString)
-                          }
-                        }}
-                        disabled={!selectedDate || dates.findIndex(d => d.dateString === selectedDate) === 0}
-                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <ChevronLeft className="h-5 w-5 text-neutral-600" />
-                      </button>
+                    <>
+                      {/* Calendar Widget Button */}
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-medium text-gray-700">Select Date</h4>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const calendarPopup = document.getElementById('calendar-widget-popup')
+                            if (calendarPopup) {
+                              calendarPopup.classList.toggle('hidden')
+                            }
+                          }}
+                          className="text-xs"
+                        >
+                          <Calendar className="h-3 w-3 mr-1" />
+                          Jump to Date
+                        </Button>
+                      </div>
 
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:mx-4">
+                      {/* Calendar Widget Popup - Compact Version */}
+                      <div id="calendar-widget-popup" className="hidden mb-4 p-3 border-2 border-[#7b1d1d] rounded-lg bg-white shadow-lg max-w-xs mx-auto">
                         {(() => {
-                          const currentIndex = dates.findIndex(d => d.dateString === selectedDate)
-                          const startIndex = currentIndex > 0 ? Math.max(0, currentIndex - 1) : 0
-                          const datesToShow = dates.slice(startIndex, startIndex + 3)
-                          if (currentIndex === -1 && dates.length > 0) {
-                            return dates.slice(0, 3).map((dateInfo) => (
+                          const [viewMonth, setViewMonth] = React.useState(() => {
+                            const selected = dates.find(d => d.dateString === selectedDate)
+                            return selected?.date || new Date()
+                          })
+                          
+                          const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1)
+                          const startDate = new Date(monthStart)
+                          startDate.setDate(startDate.getDate() - startDate.getDay())
+                          
+                          const calendarDays = []
+                          const currentDate = new Date(startDate)
+                          for (let i = 0; i < 42; i++) {
+                            calendarDays.push(new Date(currentDate))
+                            currentDate.setDate(currentDate.getDate() + 1)
+                          }
+                          
+                          return (
+                            <>
+                              {/* Month Navigation */}
+                              <div className="flex items-center justify-between mb-2">
+                                <button
+                                  onClick={() => {
+                                    const newMonth = new Date(viewMonth)
+                                    newMonth.setMonth(newMonth.getMonth() - 1)
+                                    setViewMonth(newMonth)
+                                  }}
+                                  className="p-1 rounded hover:bg-neutral-100 transition-colors"
+                                >
+                                  <ChevronLeft className="h-4 w-4 text-neutral-600" />
+                                </button>
+                                <h3 className="text-xs font-semibold text-neutral-900">
+                                  {viewMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                </h3>
+                                <button
+                                  onClick={() => {
+                                    const newMonth = new Date(viewMonth)
+                                    newMonth.setMonth(newMonth.getMonth() + 1)
+                                    setViewMonth(newMonth)
+                                  }}
+                                  className="p-1 rounded hover:bg-neutral-100 transition-colors"
+                                >
+                                  <ChevronRight className="h-4 w-4 text-neutral-600" />
+                                </button>
+                              </div>
+                              
+                              {/* Weekday Headers */}
+                              <div className="grid grid-cols-7 gap-0.5 mb-1">
+                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                                  <div key={i} className="text-center text-[10px] font-medium text-gray-500 py-0.5">
+                                    {day}
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {/* Calendar Grid */}
+                              <div className="grid grid-cols-7 gap-0.5">
+                                {calendarDays.map((day, idx) => {
+                                  const dateString = day.toISOString().split('T')[0]
+                                  const isSelected = dateString === selectedDate
+                                  const isCurrentMonth = day.getMonth() === viewMonth.getMonth()
+                                  const isToday = dateString === new Date().toISOString().split('T')[0]
+                                  const isPast = day < new Date(new Date().setHours(0,0,0,0))
+                                  const hasSlots = (workingSlots && workingSlots[dateString]?.length > 0) || false
+                                  const isUnavailable = !isPast && !hasSlots
+                                  
+                                  return (
+                                    <button
+                                      key={idx}
+                                      onClick={() => {
+                                        if (!isPast && hasSlots) {
+                                          onDateSelect(dateString)
+                                          document.getElementById('calendar-widget-popup')?.classList.add('hidden')
+                                        }
+                                      }}
+                                      disabled={isPast || isUnavailable}
+                                      className={`
+                                        aspect-square p-0.5 rounded text-[11px] transition-all
+                                        ${!isCurrentMonth ? 'text-gray-300' : ''}
+                                        ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
+                                        ${isUnavailable ? 'opacity-40 cursor-not-allowed text-gray-400 line-through' : ''}
+                                        ${!isPast && !isUnavailable ? 'hover:bg-[#7b1d1d]/10 cursor-pointer' : ''}
+                                        ${isSelected ? 'bg-[#7b1d1d] text-white font-bold' : ''}
+                                        ${isToday && !isSelected ? 'border border-[#7b1d1d] font-semibold' : ''}
+                                        ${!isSelected && !isPast && !isUnavailable && isCurrentMonth ? 'text-gray-900' : ''}
+                                      `}
+                                    >
+                                      {day.getDate()}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </>
+                          )
+                        })()}
+                      </div>
+
+                      {/* Original Linear Date Selector */}
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => {
+                            const currentIndex = dates.findIndex(d => d.dateString === selectedDate)
+                            if (currentIndex > 0) {
+                              const prevDate = dates[Math.max(0, currentIndex - 1)]
+                              onDateSelect(prevDate.dateString)
+                            }
+                          }}
+                          disabled={!selectedDate || dates.findIndex(d => d.dateString === selectedDate) === 0}
+                          className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronLeft className="h-5 w-5 text-neutral-600" />
+                        </button>
+
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:mx-4">
+                          {(() => {
+                            const currentIndex = dates.findIndex(d => d.dateString === selectedDate)
+                            const startIndex = currentIndex > 0 ? Math.max(0, currentIndex - 1) : 0
+                            const datesToShow = dates.slice(startIndex, startIndex + 3)
+                            if (currentIndex === -1 && dates.length > 0) {
+                              return dates.slice(0, 3).map((dateInfo) => (
+                                <div
+                                  key={dateInfo.dateString}
+                                  onClick={() => onDateSelect(dateInfo.dateString)}
+                                  className={`p-4 rounded-lg border-2 transition-all duration-200 text-center cursor-pointer hover:shadow-md ${
+                                    selectedDate === dateInfo.dateString ? 'border-[#7b1d1d] bg-[#7b1d1d]/10' : 'border-neutral-200 bg-neutral-50 hover:border-[#7b1d1d]/30'
+                                  }`}
+                                >
+                                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{dateInfo.label}</div>
+                                  <div className="font-bold text-lg text-black">{dateInfo.dayName}</div>
+                                  <div className="text-sm text-gray-600">{dateInfo.dateDisplay}</div>
+                                </div>
+                              ))
+                            }
+                            return datesToShow.map((dateInfo) => (
                               <div
                                 key={dateInfo.dateString}
                                 onClick={() => onDateSelect(dateInfo.dateString)}
@@ -357,37 +493,24 @@ export function AppointmentNew(props: AppointmentNewProps) {
                                 <div className="text-sm text-gray-600">{dateInfo.dateDisplay}</div>
                               </div>
                             ))
-                          }
-                          return datesToShow.map((dateInfo) => (
-                            <div
-                              key={dateInfo.dateString}
-                              onClick={() => onDateSelect(dateInfo.dateString)}
-                              className={`p-4 rounded-lg border-2 transition-all duration-200 text-center cursor-pointer hover:shadow-md ${
-                                selectedDate === dateInfo.dateString ? 'border-[#7b1d1d] bg-[#7b1d1d]/10' : 'border-neutral-200 bg-neutral-50 hover:border-[#7b1d1d]/30'
-                              }`}
-                            >
-                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{dateInfo.label}</div>
-                              <div className="font-bold text-lg text-black">{dateInfo.dayName}</div>
-                              <div className="text-sm text-gray-600">{dateInfo.dateDisplay}</div>
-                            </div>
-                          ))
-                        })()}
-                      </div>
+                          })()}
+                        </div>
 
-                      <button
-                        onClick={() => {
-                          const currentIndex = dates.findIndex(d => d.dateString === selectedDate)
-                          if (currentIndex < dates.length - 1) {
-                            const nextDate = dates[currentIndex + 1]
-                            onDateSelect(nextDate.dateString)
-                          }
-                        }}
-                        disabled={!selectedDate || dates.findIndex(d => d.dateString === selectedDate) === dates.length - 1}
-                        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <ChevronRight className="h-5 w-5 text-neutral-600" />
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => {
+                            const currentIndex = dates.findIndex(d => d.dateString === selectedDate)
+                            if (currentIndex < dates.length - 1) {
+                              const nextDate = dates[currentIndex + 1]
+                              onDateSelect(nextDate.dateString)
+                            }
+                          }}
+                          disabled={!selectedDate || dates.findIndex(d => d.dateString === selectedDate) === dates.length - 1}
+                          className="p-2 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronRight className="h-5 w-5 text-neutral-600" />
+                        </button>
+                      </div>
+                    </>
                   ) : (
                     <div className="text-center py-12">
                       <div className="p-4 rounded-full bg-neutral-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
@@ -517,19 +640,77 @@ export function AppointmentNew(props: AppointmentNewProps) {
                 <div className="space-y-4">
                   <h3 className="font-bold text-xl text-black mb-4">Appointment Summary</h3>
                   <div className="space-y-4">
-                    <div className="p-6 rounded-xl border border-gray-200 bg-white">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <Calendar className="text-xl text-red-700" />
-                          <span className="font-semibold text-black">{formatSelectedDate(selectedDate) || 'Select Date'}</span>
+                    <div className="p-6 rounded-xl border-2 border-gray-200 bg-white hover:border-[#7b1d1d]/30 transition-colors">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Calendar className="text-xl text-red-700" />
+                            <div>
+                              <div className="text-xs text-gray-500 uppercase">Date</div>
+                              <Input
+                                type="date"
+                                value={selectedDate || ''}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    onDateSelect(e.target.value)
+                                  }
+                                }}
+                                min={new Date().toISOString().split('T')[0]}
+                                className="w-40 h-8 text-sm font-semibold border-gray-300 focus:border-[#7b1d1d] focus:ring-[#7b1d1d]"
+                              />
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => goToPrevStep()}
+                            className="text-xs hover:bg-[#7b1d1d]/10"
+                          >
+                            More Options
+                          </Button>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Clock className="text-xl text-red-700" />
-                          <span className="font-semibold text-black">{selectedTime || 'Select Time'} MST</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Clock className="text-xl text-red-700" />
+                            <div>
+                              <div className="text-xs text-gray-500 uppercase">Time</div>
+                              <Input
+                                type="time"
+                                value={(() => {
+                                  if (!selectedTime) return ''
+                                  // Convert "3:00 PM" to "15:00"
+                                  const match = selectedTime.match(/(\d+):(\d+)\s*(AM|PM)/i)
+                                  if (!match) return ''
+                                  let hour = parseInt(match[1])
+                                  const minute = match[2]
+                                  const ampm = match[3].toUpperCase()
+                                  if (ampm === 'PM' && hour !== 12) hour += 12
+                                  if (ampm === 'AM' && hour === 12) hour = 0
+                                  return `${String(hour).padStart(2, '0')}:${minute}`
+                                })()}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const [hours, minutes] = e.target.value.split(':')
+                                    const hour = parseInt(hours)
+                                    const ampm = hour >= 12 ? 'PM' : 'AM'
+                                    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+                                    const formattedTime = `${displayHour}:${minutes} ${ampm}`
+                                    onTimeSelect(formattedTime)
+                                  }
+                                }}
+                                className="w-32 h-8 text-sm font-semibold border-gray-300 focus:border-[#7b1d1d] focus:ring-[#7b1d1d]"
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <User className="text-xl text-red-700" />
-                          <span className="text-gray-700">with {staff.find(s => s.value === selectedStaff)?.label || 'Select Staff'}</span>
+                        <div className="pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-3">
+                            <User className="text-xl text-red-700" />
+                            <div>
+                              <div className="text-xs text-gray-500 uppercase">Staff Member</div>
+                              <div className="font-medium text-gray-900">{staff.find(s => s.value === selectedStaff)?.label || 'Select Staff'}</div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

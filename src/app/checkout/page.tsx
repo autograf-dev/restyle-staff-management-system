@@ -2372,8 +2372,8 @@ function CheckoutContent() {
 
           {/* Split Payment Dialog */}
           <Dialog open={showSplitDialog} onOpenChange={setShowSplitDialog}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
+              <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
                 <DialogTitle className="text-xl font-semibold flex items-center gap-2">
                   <Split className="h-5 w-5 text-[#7b1d1d]" />
                   Split Payment Options
@@ -2383,7 +2383,7 @@ function CheckoutContent() {
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="space-y-6">
+              <div className="space-y-6 overflow-y-auto px-6 flex-1">
                 {/* Split Mode Selection */}
                 <div className="grid grid-cols-2 gap-4">
                   <button
@@ -2768,45 +2768,45 @@ function CheckoutContent() {
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* Dialog Actions */}
-                <div className="flex justify-between pt-4 border-t border-neutral-200">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowSplitDialog(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <div className="flex gap-2">
-                    {splitMode === 'payment' && (
-                      <Button
-                        onClick={() => {
-                          setIsSplitPayment(true)
-                          setShowSplitDialog(false)
-                          toast.success('Split payment enabled')
-                        }}
-                        disabled={Math.abs(getRemainingAmount()) > 0.01}
-                        className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
-                      >
-                        Apply Split Payment
-                      </Button>
-                    )}
-                    {splitMode === 'service' && (
-                      <Button
-                        onClick={() => {
-                          if (serviceSplits.length === 0) {
-                            initializeServiceSplits()
-                          }
-                          setIsServiceSplit(true)
-                          setShowSplitDialog(false)
-                          toast.success('Service split enabled - each service can be paid separately')
-                        }}
-                        className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
-                      >
-                        Apply Service Split
-                      </Button>
-                    )}
-                  </div>
+              {/* Dialog Actions - Fixed at bottom */}
+              <div className="flex justify-between px-6 py-4 border-t border-neutral-200 shrink-0 bg-white">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSplitDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <div className="flex gap-2">
+                  {splitMode === 'payment' && (
+                    <Button
+                      onClick={() => {
+                        setIsSplitPayment(true)
+                        setShowSplitDialog(false)
+                        toast.success('Split payment enabled')
+                      }}
+                      disabled={Math.abs(getRemainingAmount()) > 0.01}
+                      className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                    >
+                      Apply Split Payment
+                    </Button>
+                  )}
+                  {splitMode === 'service' && (
+                    <Button
+                      onClick={() => {
+                        if (serviceSplits.length === 0) {
+                          initializeServiceSplits()
+                        }
+                        setIsServiceSplit(true)
+                        setShowSplitDialog(false)
+                        toast.success('Service split enabled - each service can be paid separately')
+                      }}
+                      className="bg-[#7b1d1d] hover:bg-[#6b1717] text-white"
+                    >
+                      Apply Service Split
+                    </Button>
+                  )}
                 </div>
               </div>
             </DialogContent>

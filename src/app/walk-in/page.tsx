@@ -971,7 +971,7 @@ export default function WalkInPage() {
   }
 
   // Handle guest checkout setup
-  const handleGuestCheckout = (e: React.FormEvent) => {
+  const handleGuestCheckout = async (e: React.FormEvent) => {
     e.preventDefault()
     const name = guestForm.name.trim()
     const phone = guestForm.phone.trim()
@@ -981,8 +981,57 @@ export default function WalkInPage() {
       return
     }
 
-    // Create temporary guest customer object for UI consistency
-    const guestCustomer: Customer = {
+    // If both name and phone are provided, save to customer list
+    let savedCustomer: Customer | null = null
+    if (name && phone) {
+      try {
+        // Check if customer with this phone already exists
+        const checkRes = await fetch(`/api/customers/search-last4?last4=${phone.slice(-4)}`)
+        const checkData = await checkRes.json()
+        const existingCustomer = checkData.customers?.find((c: Customer) => c.phone === phone)
+        
+        if (!existingCustomer) {
+          // Create new customer in GHL
+          const createRes = await fetch('https://restyle-api.netlify.app/.netlify/functions/createContact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              firstName: name.split(' ')[0] || name,
+              lastName: name.split(' ').slice(1).join(' ') || '',
+              name,
+              phone,
+              email: '' // Optional
+            })
+          })
+          
+          if (createRes.ok) {
+            const createData = await createRes.json()
+            savedCustomer = {
+              id: createData.contact?.id || 'guest-' + Date.now(),
+              fullName: name,
+              firstName: name.split(' ')[0] || name,
+              lastName: name.split(' ').slice(1).join(' ') || '',
+              phone,
+              email: '',
+              dateAdded: new Date().toISOString(),
+            }
+            // toast.success(`Customer ${name} saved to customer list`)
+          } else {
+            throw new Error('Failed to create customer')
+          }
+        } else {
+          // Use existing customer
+          savedCustomer = existingCustomer
+          // toast.info(`Using existing customer: ${existingCustomer.fullName}`)
+        }
+      } catch (error) {
+        console.error('Failed to save guest as customer:', error)
+        // toast.warning(`Could not save to customer list, proceeding with guest checkout`)
+      }
+    }
+
+    // Create customer object (either saved or temporary guest)
+    const guestCustomer: Customer = savedCustomer || {
       id: 'guest-' + Date.now(),
       fullName: name,
       firstName: name.split(' ')[0] || name,
@@ -993,11 +1042,13 @@ export default function WalkInPage() {
     }
     
     setSelectedCustomer(guestCustomer)
-    setIsGuestCheckout(true)
+    setIsGuestCheckout(!savedCustomer) // Only mark as guest if not saved
     setShowSuggestions(false)
     setGuestDialogOpen(false)
     
-    toast.success(`Guest checkout set up for ${name}`)
+    if (!savedCustomer) {
+      // toast.success(`Guest checkout set up for ${name}`)
+    }
   }
 
   // Process walk-in checkout

@@ -673,8 +673,12 @@ const StaffOverviewView = ({
 
   // Get staff appointments for the current day
   const getStaffAppointments = (staffGhlId: string) => {
-    // Filter from the appointments prop (already filtered to current day)
-    const filtered = appointments.filter((apt: Appointment) => apt.assigned_user_id === staffGhlId)
+    // Filter from the appointments prop (already filtered to current day) and exclude cancelled appointments
+    const filtered = appointments.filter((apt: Appointment) => 
+      apt.assigned_user_id === staffGhlId && 
+      apt.appointment_status !== 'cancelled' && 
+      apt.appointment_status !== 'canceled'
+    )
  
     return filtered
   }
@@ -1311,7 +1315,26 @@ const StaffOverviewView = ({
                       className="px-3 py-2 text-sm hover:bg-neutral-50 text-left relative z-[1001]"
                       onClick={() => {
                         setSelectionMenu((m) => ({ ...m, open: false }))
-                        if (selectionMenu.startAbs !== undefined) {
+                        if (selectionMenu.startAbs !== undefined && selectionMenu.endAbs !== undefined && selectionMenu.staffId) {
+                          const hours = Math.floor(selectionMenu.startAbs / 60)
+                          const mins = selectionMenu.startAbs % 60
+                          const endHours = Math.floor(selectionMenu.endAbs / 60)
+                          const endMins = selectionMenu.endAbs % 60
+                          const dateStr = currentDate.toISOString().slice(0,10)
+                          // Pass staff info along with time
+                          const staffMember = staff.find(s => s.ghl_id === selectionMenu.staffId)
+                          window.dispatchEvent(new CustomEvent('open-new-appointment', { 
+                            detail: { 
+                              dateStr, 
+                              hours, 
+                              mins,
+                              endHours,
+                              endMins,
+                              staffId: selectionMenu.staffId,
+                              staffName: staffMember?.name || 'Unknown'
+                            } 
+                          }))
+                        } else if (selectionMenu.startAbs !== undefined) {
                           const hours = Math.floor(selectionMenu.startAbs / 60)
                           const mins = selectionMenu.startAbs % 60
                           const dateStr = currentDate.toISOString().slice(0,10)
@@ -1991,6 +2014,7 @@ export default function CalendarPage() {
   const [newAppLoadingDates, setNewAppLoadingDates] = React.useState(false)
   const desiredNewAppDateRef = React.useRef<string | null>(null)
   const desiredNewAppTimeRef = React.useRef<string | null>(null)
+  const prefilledStaffRef = React.useRef<{ id: string; name: string } | null>(null)
 
   const formatServiceDuration = (durationMinutes?: number) => {
     if (!durationMinutes || durationMinutes <= 0) return '—'
@@ -2030,6 +2054,7 @@ export default function CalendarPage() {
     setNewAppWorkingSlots({})
     desiredNewAppDateRef.current = null
     desiredNewAppTimeRef.current = null
+    prefilledStaffRef.current = null
   }
 
   const goToNextNewAppStep = () => setNewAppCurrentStep(prev => Math.min(prev + 1, 4))
@@ -2062,9 +2087,12 @@ export default function CalendarPage() {
   const handleNewAppDepartmentSelect = (departmentId: string) => {
     setNewAppSelectedDepartment(departmentId)
     setNewAppSelectedService("")
-    setNewAppSelectedStaff("")
+    // Don't clear staff if it was pre-filled from calendar drag-select
+    if (!prefilledStaffRef.current) {
+      setNewAppSelectedStaff("")
+      setNewAppStaff([])
+    }
     setNewAppServices([])
-    setNewAppStaff([])
     fetchNewAppServices(departmentId)
   }
 
@@ -2129,9 +2157,37 @@ export default function CalendarPage() {
 
   const handleNewAppServiceSelect = (serviceId: string) => {
     setNewAppSelectedService(serviceId)
-    setNewAppSelectedStaff("")
-    fetchNewAppStaff(serviceId)
-    setNewAppCurrentStep(2)
+    // If staff is already pre-filled (from drag-select), skip directly to contact/summary
+    if (newAppSelectedStaff && desiredNewAppDateRef.current && desiredNewAppTimeRef.current) {
+      // Set the date and time from prefilled values - NO VALIDATION/FALLBACK
+      setNewAppSelectedDate(desiredNewAppDateRef.current)
+      setNewAppSelectedTime(desiredNewAppTimeRef.current)
+      // Create a manual date entry for the selected date (ensures it's available even if API doesn't return it)
+      const [year, month, day] = desiredNewAppDateRef.current.split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+      const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      setNewAppDates([{ 
+        dateString: desiredNewAppDateRef.current, 
+        dayName, 
+        dateDisplay, 
+        label: '', 
+        date 
+      }])
+      // Set the manual slot for the selected time
+      setNewAppSlots([{ time: desiredNewAppTimeRef.current, isPast: false }])
+      // Skip directly to contact/summary page WITHOUT fetching slots
+      setNewAppCurrentStep(4)
+    } else if (newAppSelectedStaff) {
+      // Staff prefilled but no time - show date/time selection
+      fetchNewAppWorkingSlots()
+      setNewAppCurrentStep(3)
+    } else {
+      // No staff prefilled - show staff selection
+      setNewAppSelectedStaff("")
+      fetchNewAppStaff(serviceId)
+      setNewAppCurrentStep(2)
+    }
   }
 
   const fetchNewAppStaff = async (serviceId: string) => {
@@ -2173,6 +2229,7 @@ export default function CalendarPage() {
   }
 
   const handleNewAppStaffSelect = (staffId: string) => {
+    console.log('👤 Staff selected:', staffId)
     setNewAppSelectedStaff(staffId)
     fetchNewAppWorkingSlots()
   }
@@ -2182,37 +2239,80 @@ export default function CalendarPage() {
     setNewAppLoadingDates(true)
     const userId = newAppSelectedStaff && newAppSelectedStaff !== 'any' ? newAppSelectedStaff : null
     try {
-      // Get service duration from selected service
+      // Generate 12 weeks (84 days) of dates manually
+      const today = new Date()
+      const generatedDates: Array<{ dateString: string; dayName: string; dateDisplay: string; label: string; date: Date }> = []
+      
+      for (let i = 0; i < 84; i++) {
+        const date = new Date(today)
+        date.setDate(today.getDate() + i)
+        const dateString = date.toISOString().split('T')[0]
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+        const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        
+        // Add label for special dates
+        let label = ''
+        if (i === 0) label = 'Today'
+        else if (i === 1) label = 'Tomorrow'
+        else if (i < 7) label = 'This Week'
+        else if (i < 14) label = 'Next Week'
+        
+        generatedDates.push({ dateString, dayName, dateDisplay, label, date })
+      }
+      
+      setNewAppDates(generatedDates)
+      
+      // Fetch API slots for showing available times using internalStaffSlots endpoint (paginated)
       const selectedServiceObj = newAppServices.find(s => s.value === newAppSelectedService)
       const serviceDuration = selectedServiceObj?.duration || 120
       
-      let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/staffSlotss?calendarId=${newAppSelectedService}`
-      if (userId) apiUrl += `&userId=${userId}`
-      apiUrl += `&serviceDuration=${serviceDuration}`
+      // Fetch all pages (endpoint returns 7 days per page, total 90 days available)
+      let allSlots = {}
+      let page = 1
+      let hasMore = true
+      const maxPages = 13 // 13 pages * 7 days = 91 days (covers 12+ weeks)
       
-      const response = await fetch(apiUrl)
-      const data = await response.json()
-      if (data.slots) {
-        const workingDates = Object.keys(data.slots).sort()
-        const dates = workingDates.map((dateString) => {
-          const [year, month, day] = dateString.split('-').map(Number)
-          const date = new Date(year, month - 1, day)
-          const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
-          const dateDisplay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          return { dateString, dayName, dateDisplay, label: '', date }
-        })
-        setNewAppDates(dates)
-        setNewAppWorkingSlots(data.slots)
-        const desired = desiredNewAppDateRef.current
-        if (desired && dates.some(d => d.dateString === desired)) {
-          setNewAppSelectedDate(desired)
-          fetchNewAppSlotsForDate(desired)
-        } else if (dates.length > 0) {
-          const today = new Date().toISOString().split('T')[0]
-          const firstFutureDate = dates.find(d => d.dateString >= today) || dates[0]
-          setNewAppSelectedDate(firstFutureDate.dateString)
-          fetchNewAppSlotsForDate(firstFutureDate.dateString)
+      while (hasMore && page <= maxPages) {
+        let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/internalStaffSlots?calendarId=${newAppSelectedService}&page=${page}`
+        if (userId) apiUrl += `&userId=${userId}`
+        apiUrl += `&serviceDuration=${serviceDuration}`
+        
+        const response = await fetch(apiUrl)
+        const data = await response.json()
+        
+        // Debug logging
+        if (page === 1) {
+          console.log('🔍 internalStaffSlots API Response (page 1):', {
+            userId,
+            calendarId: newAppSelectedService,
+            debug: data.debug,
+            sampleSlots: Object.keys(data.slots || {}).slice(0, 5).map(date => ({
+              date,
+              slots: data.slots[date]?.slice(0, 3)
+            }))
+          })
         }
+        
+        if (data.slots) {
+          // Merge slots from this page
+          allSlots = { ...allSlots, ...data.slots }
+        }
+        
+        hasMore = data.hasMore || false
+        page++
+      }
+      
+      setNewAppWorkingSlots(allSlots)
+      
+      // Auto-select desired date or today
+      const desired = desiredNewAppDateRef.current
+      if (desired) {
+        setNewAppSelectedDate(desired)
+        fetchNewAppSlotsForDate(desired)
+      } else {
+        const todayStr = today.toISOString().split('T')[0]
+        setNewAppSelectedDate(todayStr)
+        fetchNewAppSlotsForDate(todayStr)
       }
     } catch (e) {
       console.error('fetchNewAppWorkingSlots', e)
@@ -2222,17 +2322,27 @@ export default function CalendarPage() {
   }
 
   const fetchNewAppSlotsForDate = (dateString: string) => {
+    // Use ONLY API slots from internalStaffSlots endpoint - no fallback
     if (newAppWorkingSlots[dateString]) {
       const slotsForSelectedDate = newAppWorkingSlots[dateString]
+      console.log(`📅 Fetching slots for ${dateString}:`, {
+        dayOfWeek: new Date(dateString).toLocaleDateString('en-US', { weekday: 'long' }),
+        slotCount: slotsForSelectedDate.length,
+        firstFewSlots: slotsForSelectedDate.slice(0, 3),
+        staffId: newAppSelectedStaff
+      })
       const slotsWithStatus = slotsForSelectedDate.map((slot: string) => ({ time: slot, isPast: isSlotInPast(slot, dateString) }))
       const availableSlots = slotsWithStatus.filter((slot) => !slot.isPast)
       setNewAppSlots(availableSlots)
+      
       const desiredTime = desiredNewAppTimeRef.current
       if (desiredTime && availableSlots.some(s => s.time === desiredTime)) {
         setNewAppSelectedTime(desiredTime)
         setNewAppCurrentStep(4)
       }
     } else {
+      // No slots available from API = staff is unavailable or no working hours
+      console.log(`📅 No slots available for ${dateString}`)
       setNewAppSlots([])
     }
   }
@@ -2537,17 +2647,48 @@ export default function CalendarPage() {
   // Global event to open new appointment from various UI spots in this page
   React.useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { dateStr?: string; hours?: number; mins?: number }
+      const detail = (e as CustomEvent).detail as { 
+        dateStr?: string; 
+        hours?: number; 
+        mins?: number;
+        endHours?: number;
+        endMins?: number;
+        staffId?: string;
+        staffName?: string;
+      }
+      
+      // If staff info is provided (drag-selected), pre-fill staff but start at service selection
+      const hasStaffPrefill = detail?.staffId && detail?.staffName
+      
       setNewAppointmentOpen(true)
-      setNewAppCurrentStep(1)
+      setNewAppCurrentStep(1) // Always start at step 1 (service selection)
       setNewAppSelectedDepartment("")
       setNewAppSelectedService("")
-      setNewAppSelectedStaff("")
       setNewAppSelectedDate("")
       setNewAppSelectedTime("")
+      
+      // Pre-fill staff if available and populate staff array so name shows in summary
+      if (hasStaffPrefill) {
+        prefilledStaffRef.current = { id: detail.staffId!, name: detail.staffName! }
+        setNewAppSelectedStaff(detail.staffId!)
+        setNewAppStaff([{
+          id: detail.staffId!,
+          value: detail.staffId!,
+          label: detail.staffName!,
+          name: detail.staffName!
+        }])
+      } else {
+        prefilledStaffRef.current = null
+        setNewAppSelectedStaff("")
+        setNewAppStaff([])
+      }
+      
       if (detail?.dateStr) {
         desiredNewAppDateRef.current = detail.dateStr
+      } else {
+        desiredNewAppDateRef.current = null
       }
+      
       if (typeof detail?.hours === 'number' && typeof detail?.mins === 'number') {
         const date = new Date()
         date.setHours(detail.hours, detail.mins, 0, 0)
@@ -2558,6 +2699,9 @@ export default function CalendarPage() {
       } else {
         desiredNewAppTimeRef.current = null
       }
+      
+      // Always trigger department fetch to show services
+      fetchNewAppDepartments()
     }
     window.addEventListener('open-new-appointment', handler as EventListener)
     return () => window.removeEventListener('open-new-appointment', handler as EventListener)
@@ -2779,17 +2923,33 @@ export default function CalendarPage() {
         serviceDuration = Math.round((end.getTime() - start.getTime()) / (60 * 1000))
       }
       
-      let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/staffSlotss?calendarId=${bookingToReschedule.calendar_id}`
-      if (userId) {
-        apiUrl += `&userId=${userId}`
+      // Fetch all pages (endpoint returns 7 days per page, total 90 days available)
+      let allSlots = {}
+      let page = 1
+      let hasMore = true
+      const maxPages = 13 // 13 pages * 7 days = 91 days (covers 12+ weeks)
+      
+      while (hasMore && page <= maxPages) {
+        let apiUrl = `https://restyle-backend.netlify.app/.netlify/functions/internalStaffSlots?calendarId=${bookingToReschedule.calendar_id}&page=${page}`
+        if (userId) {
+          apiUrl += `&userId=${userId}`
+        }
+        apiUrl += `&serviceDuration=${serviceDuration}`
+        
+        const response = await fetch(apiUrl, { signal: controller.signal })
+        const data = await response.json()
+        
+        if (data.slots) {
+          // Merge slots from this page
+          allSlots = { ...allSlots, ...data.slots }
+        }
+        
+        hasMore = data.hasMore || false
+        page++
       }
-      apiUrl += `&serviceDuration=${serviceDuration}`
       
-      const response = await fetch(apiUrl, { signal: controller.signal })
-      const data = await response.json()
-      
-      if (data.slots) {
-        const workingDates = Object.keys(data.slots).sort()
+      if (allSlots && Object.keys(allSlots).length > 0) {
+        const workingDates = Object.keys(allSlots).sort()
         
         const dates = workingDates.map((dateString) => {
           const [year, month, day] = dateString.split('-').map(Number)
@@ -2809,14 +2969,14 @@ export default function CalendarPage() {
         
         if (rescheduleOpen) {
           setAvailableDates(dates)
-          setWorkingSlots(data.slots)
+          setWorkingSlots(allSlots)
           
           // Auto-select first future date
           const today = new Date().toISOString().split('T')[0]
           const firstFutureDate = dates.find(d => d.dateString >= today)
           if (firstFutureDate) {
             setSelectedDate(firstFutureDate.dateString)
-            fetchSlotsForDate(firstFutureDate.dateString, data.slots)
+            fetchSlotsForDate(firstFutureDate.dateString, allSlots)
           }
         }
       }
@@ -3140,12 +3300,13 @@ export default function CalendarPage() {
     return items
   }
 
-  // Day view appointments - bypass all filtering for debugging
+  // Day view appointments - exclude cancelled appointments
   const dayAppointments = React.useMemo(() => {
     const dateKey = currentDate.toDateString()
-    // Use appointments directly like the appointments tab
+    // Use appointments directly like the appointments tab, excluding cancelled appointments
     const todaysAppointments = appointments.filter(appointment => {
       if (!appointment.startTime) return false
+      if (appointment.appointment_status === 'cancelled' || appointment.appointment_status === 'canceled') return false
       const appointmentDate = new Date(appointment.startTime).toDateString()
       return appointmentDate === dateKey
     })
@@ -3418,6 +3579,7 @@ export default function CalendarPage() {
             slots={newAppSlots}
             selectedTime={newAppSelectedTime}
             onTimeSelect={handleNewAppTimeSelect}
+            workingSlots={newAppWorkingSlots}
             contactForm={newAppContactForm}
             setContactForm={setNewAppContactForm}
             submitting={newAppLoading}
