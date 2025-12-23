@@ -13,6 +13,113 @@ type Staff = { id?: string; name?: string; email?: string; label?: string; value
 type DateInfo = { dateString: string; dayName: string; dateDisplay: string; label: string; date: Date }
 type TimeSlot = { time: string; isPast: boolean }
 
+// Calendar widget component to avoid hooks-in-callback issue
+function CalendarWidget({ 
+  dates, 
+  selectedDate, 
+  onDateSelect, 
+  workingSlots 
+}: { 
+  dates: DateInfo[]; 
+  selectedDate: string; 
+  onDateSelect: (dateString: string) => void; 
+  workingSlots?: Record<string, string[]> 
+}) {
+  const [viewMonth, setViewMonth] = React.useState(() => {
+    const selected = dates.find(d => d.dateString === selectedDate)
+    return selected?.date || new Date()
+  })
+  
+  const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1)
+  const startDate = new Date(monthStart)
+  startDate.setDate(startDate.getDate() - startDate.getDay())
+  
+  const calendarDays = []
+  const currentDate = new Date(startDate)
+  for (let i = 0; i < 42; i++) {
+    calendarDays.push(new Date(currentDate))
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+  
+  return (
+    <>
+      {/* Month Navigation */}
+      <div className="flex items-center justify-between mb-2">
+        <button
+          onClick={() => {
+            const newMonth = new Date(viewMonth)
+            newMonth.setMonth(newMonth.getMonth() - 1)
+            setViewMonth(newMonth)
+          }}
+          className="p-1 rounded hover:bg-neutral-100 transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4 text-neutral-600" />
+        </button>
+        <h3 className="text-xs font-semibold text-neutral-900">
+          {viewMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+        </h3>
+        <button
+          onClick={() => {
+            const newMonth = new Date(viewMonth)
+            newMonth.setMonth(newMonth.getMonth() + 1)
+            setViewMonth(newMonth)
+          }}
+          className="p-1 rounded hover:bg-neutral-100 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4 text-neutral-600" />
+        </button>
+      </div>
+      
+      {/* Weekday Headers */}
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+          <div key={i} className="text-center text-[10px] font-medium text-gray-500 py-0.5">
+            {day}
+          </div>
+        ))}
+      </div>
+      
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {calendarDays.map((day, idx) => {
+          const dateString = day.toISOString().split('T')[0]
+          const isSelected = dateString === selectedDate
+          const isCurrentMonth = day.getMonth() === viewMonth.getMonth()
+          const isToday = dateString === new Date().toISOString().split('T')[0]
+          const isPast = day < new Date(new Date().setHours(0,0,0,0))
+          const hasSlots = (workingSlots && workingSlots[dateString]?.length > 0) || false
+          const isUnavailable = !isPast && !hasSlots
+          
+          return (
+            <button
+              key={idx}
+              onClick={() => {
+                if (!isPast && hasSlots) {
+                  onDateSelect(dateString)
+                  document.getElementById('calendar-widget-popup')?.classList.add('hidden')
+                }
+              }}
+              disabled={isPast || isUnavailable}
+              className={`
+                aspect-square p-0.5 rounded text-[11px] transition-all
+                ${!isCurrentMonth ? 'text-gray-300' : ''}
+                ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
+                ${isUnavailable ? 'opacity-40 cursor-not-allowed text-gray-400 line-through' : ''}
+                ${!isPast && !isUnavailable ? 'hover:bg-[#7b1d1d]/10 cursor-pointer' : ''}
+                ${isSelected ? 'bg-[#7b1d1d] text-white font-bold' : ''}
+                ${isToday && !isSelected ? 'border border-[#7b1d1d] font-semibold' : ''}
+                ${!isSelected && !isPast && !isUnavailable && isCurrentMonth ? 'text-gray-900' : ''}
+              `}
+            >
+              {day.getDate()}
+            </button>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
 export type AppointmentNewProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -347,101 +454,12 @@ export function AppointmentNew(props: AppointmentNewProps) {
 
                       {/* Calendar Widget Popup - Compact Version */}
                       <div id="calendar-widget-popup" className="hidden mb-4 p-3 border-2 border-[#7b1d1d] rounded-lg bg-white shadow-lg max-w-xs mx-auto">
-                        {(() => {
-                          const [viewMonth, setViewMonth] = React.useState(() => {
-                            const selected = dates.find(d => d.dateString === selectedDate)
-                            return selected?.date || new Date()
-                          })
-                          
-                          const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1)
-                          const startDate = new Date(monthStart)
-                          startDate.setDate(startDate.getDate() - startDate.getDay())
-                          
-                          const calendarDays = []
-                          const currentDate = new Date(startDate)
-                          for (let i = 0; i < 42; i++) {
-                            calendarDays.push(new Date(currentDate))
-                            currentDate.setDate(currentDate.getDate() + 1)
-                          }
-                          
-                          return (
-                            <>
-                              {/* Month Navigation */}
-                              <div className="flex items-center justify-between mb-2">
-                                <button
-                                  onClick={() => {
-                                    const newMonth = new Date(viewMonth)
-                                    newMonth.setMonth(newMonth.getMonth() - 1)
-                                    setViewMonth(newMonth)
-                                  }}
-                                  className="p-1 rounded hover:bg-neutral-100 transition-colors"
-                                >
-                                  <ChevronLeft className="h-4 w-4 text-neutral-600" />
-                                </button>
-                                <h3 className="text-xs font-semibold text-neutral-900">
-                                  {viewMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                                </h3>
-                                <button
-                                  onClick={() => {
-                                    const newMonth = new Date(viewMonth)
-                                    newMonth.setMonth(newMonth.getMonth() + 1)
-                                    setViewMonth(newMonth)
-                                  }}
-                                  className="p-1 rounded hover:bg-neutral-100 transition-colors"
-                                >
-                                  <ChevronRight className="h-4 w-4 text-neutral-600" />
-                                </button>
-                              </div>
-                              
-                              {/* Weekday Headers */}
-                              <div className="grid grid-cols-7 gap-0.5 mb-1">
-                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                                  <div key={i} className="text-center text-[10px] font-medium text-gray-500 py-0.5">
-                                    {day}
-                                  </div>
-                                ))}
-                              </div>
-                              
-                              {/* Calendar Grid */}
-                              <div className="grid grid-cols-7 gap-0.5">
-                                {calendarDays.map((day, idx) => {
-                                  const dateString = day.toISOString().split('T')[0]
-                                  const isSelected = dateString === selectedDate
-                                  const isCurrentMonth = day.getMonth() === viewMonth.getMonth()
-                                  const isToday = dateString === new Date().toISOString().split('T')[0]
-                                  const isPast = day < new Date(new Date().setHours(0,0,0,0))
-                                  const hasSlots = (workingSlots && workingSlots[dateString]?.length > 0) || false
-                                  const isUnavailable = !isPast && !hasSlots
-                                  
-                                  return (
-                                    <button
-                                      key={idx}
-                                      onClick={() => {
-                                        if (!isPast && hasSlots) {
-                                          onDateSelect(dateString)
-                                          document.getElementById('calendar-widget-popup')?.classList.add('hidden')
-                                        }
-                                      }}
-                                      disabled={isPast || isUnavailable}
-                                      className={`
-                                        aspect-square p-0.5 rounded text-[11px] transition-all
-                                        ${!isCurrentMonth ? 'text-gray-300' : ''}
-                                        ${isPast ? 'opacity-30 cursor-not-allowed' : ''}
-                                        ${isUnavailable ? 'opacity-40 cursor-not-allowed text-gray-400 line-through' : ''}
-                                        ${!isPast && !isUnavailable ? 'hover:bg-[#7b1d1d]/10 cursor-pointer' : ''}
-                                        ${isSelected ? 'bg-[#7b1d1d] text-white font-bold' : ''}
-                                        ${isToday && !isSelected ? 'border border-[#7b1d1d] font-semibold' : ''}
-                                        ${!isSelected && !isPast && !isUnavailable && isCurrentMonth ? 'text-gray-900' : ''}
-                                      `}
-                                    >
-                                      {day.getDate()}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </>
-                          )
-                        })()}
+                        <CalendarWidget 
+                          dates={dates}
+                          selectedDate={selectedDate}
+                          onDateSelect={onDateSelect}
+                          workingSlots={workingSlots}
+                        />
                       </div>
 
                       {/* Original Linear Date Selector */}

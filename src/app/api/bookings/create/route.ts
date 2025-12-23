@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
-// POST /api`/bookings/create - Create a booking directly in Supabase (service role)
+// POST /api/bookings/create - Create a booking directly in Supabase (service role)
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      con`sole.error('Supabase environment variables are not configured')
+      console.error('Supabase environment variables are not configured')
       return NextResponse.json({ 
         error: "Supabase is not configured. Please check environment variables." 
       }, { status: 500 })
